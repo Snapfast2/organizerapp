@@ -1,0 +1,102 @@
+import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { BulkActionRequest } from '@/lib/types';
+import { moveToTrash } from '@/lib/trash';
+
+const execAsync = promisify(exec);
+
+export async function POST(request: NextRequest) {
+  try {
+    const body: BulkActionRequest = await request.json();
+    const { action, paths, destPath, newName } = body;
+
+    if (!paths || paths.length === 0) {
+      return NextResponse.json({ error: 'No paths provided' }, { status: 400 });
+    }
+
+    switch (action) {
+      case 'delete': {
+        const trashPaths: string[] = [];
+        for (const p of paths) {
+           trashPaths.push(moveToTrash(p));
+        }
+        return NextResponse.json({ success: true, trashPaths });
+      }
+
+      case 'move': {
+        if (!destPath) return NextResponse.json({ error: 'destPath required' }, { status: 400 });
+        const items = [];
+        for (const p of paths) {
+          const dest = path.join(destPath, path.basename(p));
+          fs.renameSync(p, dest);
+          items.push({ originalPath: p, newPath: dest });
+        }
+        return NextResponse.json({ success: true, items });
+      }
+
+      case 'copy': {
+        if (!destPath) return NextResponse.json({ error: 'destPath required' }, { status: 400 });
+        for (const p of paths) {
+          const dest = path.join(destPath, path.basename(p));
+          const stat = fs.statSync(p);
+          if (stat.isDirectory()) {
+             fs.cpSync(p, dest, { recursive: true });
+          } else {
+             fs.copyFileSync(p, dest);
+          }
+        }
+        return NextResponse.json({ success: true });
+      }
+
+      case 'group': {
+        if (!destPath || !newName) return NextResponse.json({ error: 'destPath and newName required' }, { status: 400 });
+        const newDir = path.join(destPath, newName);
+        fs.mkdirSync(newDir, { recursive: true });
+        const items = [];
+        for (const p of paths) {
+          const dest = path.join(newDir, path.basename(p));
+          fs.renameSync(p, dest);
+          items.push({ originalPath: p, newPath: dest });
+        }
+        return NextResponse.json({ success: true, newPath: newDir, items });
+      }
+
+      case 'rename': {
+        // Batch rename: BaseName_1.ext, BaseName_2.ext, etc.
+        if (!newName) return NextResponse.json({ error: 'newName required' }, { status: 400 });
+        let index = 1;
+        const items = [];
+        for (const p of paths) {
+          const dir = path.dirname(p);
+          const ext = path.extname(p);
+          const dest = path.join(dir, `${newName}_${index}${ext}`);
+          fs.renameSync(p, dest);
+          items.push({ originalPath: p, newPath: dest });
+          index++;
+        }
+        return NextResponse.json({ success: true, items });
+      }
+
+      case 'zip': {
+        if (!destPath || !newName) return NextResponse.json({ error: 'destPath and newName required' }, { status: 400 });
+        // Use PowerShell Compress-Archive
+        // Create an array of formatted paths
+        const formattedPaths = paths.map(p => `"${p}"`).join(',');
+        const outZip = path.join(destPath, newName.endsWith('.zip') ? newName : `${newName}.zip`);
+        
+        const command = `powershell Compress-Archive -Path ${formattedPaths} -DestinationPath "${outZip}" -Force`;
+        await execAsync(command);
+        
+        return NextResponse.json({ success: true, newPath: outZip });
+      }
+
+      default:
+        return NextResponse.json({ error: 'Unknown bulk action' }, { status: 400 });
+    }
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

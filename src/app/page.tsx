@@ -1,65 +1,553 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState, useEffect, useCallback, useRef, useDeferredValue } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Folder, File, Image as ImageIcon, Film, Music, FileText, Archive, Code, HardDrive,
+  Search, Grid, List, ChevronRight, HomeIcon, ArrowLeft, ArrowUp, ArrowDown, Plus,
+  Trash2, Trash, Edit2, RefreshCw, BarChart2, Wand2, X, CheckCircle, AlertCircle, 
+  Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
+  Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
+  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, MoreVertical
+} from 'lucide-react';
+import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
+import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
+import { 
+  InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail, FileListIcon,
+  VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal, BulkActionModal,
+  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast
+} from './components';
+
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'heic', 'tiff', 'tif']);
+const VIDEO_EXTS = new Set(['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'wmv', 'flv', 'm4v']);
+const DOC_EXTS = new Set(['pdf', 'psd']);
+const PREVIEWABLE = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...DOC_EXTS]);
+
+export default function FileOrgApp() {
+  const [currentPath, setCurrentPath] = useState<string>('');
+  const [listing, setListing] = useState<DirectoryListing | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  
+  // Drives and Quick Access
+  const [drives, setDrives] = useState<string[]>(['C:\\']);
+  const [quickAccess, setQuickAccess] = useState<{name: string, path: string}[]>([]);
+  
+  // Inline rename state
+  const [editingPath, setEditingPath] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+
+  // Preview state
+  const [previewPath, setPreviewPath] = useState<string | null>(null);
+  const closePreview = () => setPreviewEntry(null);
+
+  // Video Hover state
+  const [hoveredVideo, setHoveredVideo] = useState<string | null>(null);
+
+  // Context Menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, entry: FileEntry } | null>(null);
+  const closeContextMenu = () => setContextMenu(null);
+  
+  // Toasts
+  const [toasts, setToasts] = useState<{ id: string, message: string, type: 'success' | 'error' | 'info' }[]>([]);
+  const toast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Math.random().toString(36).substring(7);
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+  }, []);
+
+  // Undo System
+  type UndoAction = {
+    type: 'delete' | 'move' | 'rename' | 'mkdir';
+    items: { originalPath: string, newPath: string, trashPath?: string }[];
+  };
+  const [undoHistory, setUndoHistory] = useState<UndoAction[]>([]);
+  const [returningItems, setReturningItems] = useState<string[]>([]);
+  const [trashCount, setTrashCount] = useState(0);
+
+  const [trashItems, setTrashItems] = useState<any[] | null>(null);
+  const [isFetchingTrash, setIsFetchingTrash] = useState(false);
+  const [pathInput, setPathInput] = useState('');
+  const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null);
+  const [visibleCount, setVisibleCount] = useState(100);
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDesc, setSortDesc] = useState(false);
+  const searching = false;
+
+  const goUp = () => {
+    if (currentPath.length > 3) {
+      const parent = currentPath.substring(0, currentPath.lastIndexOf('\\')) || currentPath.substring(0, 3);
+      setCurrentPath(parent);
+    }
+  };
+
+  const handleClick = (entry: FileEntry) => {
+    if (entry.isDir) {
+      setCurrentPath(entry.path);
+    } else {
+      if (PREVIEWABLE.has(entry.ext)) {
+        setPreviewEntry(entry);
+      } else {
+        handleOpen(entry.path);
+      }
+    }
+  };
+
+  const onContextMenu = (e: React.MouseEvent, entry: FileEntry) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, entry });
+  };
+
+  const handleInlineRename = async (newName: string) => {
+    if (!inlineRenameEntry || newName === inlineRenameEntry.name) {
+      setInlineRenameEntry(null);
+      return;
+    }
+    const oldPath = inlineRenameEntry.path;
+    const basePath = oldPath.substring(0, oldPath.lastIndexOf('\\'));
+    const newPath = `${basePath}\\${newName}${inlineRenameEntry.ext ? '.' + inlineRenameEntry.ext : ''}`;
+    
+    try {
+      await doAction('rename', { paths: [oldPath], newPath });
+    } catch {}
+    setInlineRenameEntry(null);
+  };
+
+  const handleMkdir = async (name: string) => {
+    try {
+      await doAction('mkdir', { path: `${currentPath}\\${name}` });
+    } catch {}
+  };
+
+
+  const [previewEntry, setPreviewEntry] = useState<FileEntry | null>(null);
+  const [customPreviewList, setCustomPreviewList] = useState<FileEntry[] | null>(null);
+  
+  const [showMkdir, setShowMkdir] = useState(false);
+  const [renameEntry, setRenameEntry] = useState<FileEntry | null>(null);
+  const [deleteEntry, setDeleteEntry] = useState<FileEntry | null>(null);
+  const [showOrganize, setShowOrganize] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  
+  const [inlineRenameEntry, setInlineRenameEntry] = useState<FileEntry | null>(null);
+  const [bulkAction, setBulkAction] = useState<'group' | 'zip' | 'rename' | 'move' | 'copy' | 'delete' | null>(null);
+
+
+  const fetchTrashCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/fs/trash/count');
+      const data = await res.json();
+      setTrashCount(data.count || 0);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/fs/drives')
+      .then(r => r.json())
+      .then(d => { 
+        if (d.drives) setDrives(d.drives); 
+        if (d.quickAccess) setQuickAccess(d.quickAccess);
+      })
+      .catch(() => {});
+  }, []);
+
+  const refresh = useCallback(async () => {
+    if (!currentPath) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/fs?path=${encodeURIComponent(currentPath)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setListing(data);
+      }
+    } catch {}
+    setIsLoading(false);
+    fetchTrashCount();
+  }, [currentPath, fetchTrashCount]);
+
+  useEffect(() => {
+    if (!currentPath) setCurrentPath('C:\\');
+    else refresh();
+  }, [currentPath, refresh]);
+
+  // Handle Ctrl+Z Undo
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (undoHistory.length === 0) return;
+        const lastAction = undoHistory[undoHistory.length - 1];
+        setUndoHistory(prev => prev.slice(0, -1));
+        
+        const returningPaths = lastAction.items.map(item => item.originalPath);
+        setReturningItems(prev => [...prev, ...returningPaths]);
+        
+        try {
+          await fetch('/api/fs/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'undo', undoAction: lastAction })
+          });
+          toast('Acción deshecha exitosamente', 'success');
+          refresh();
+        } catch {
+          toast('Error al deshacer', 'error');
+        }
+        
+        setTimeout(() => {
+          setReturningItems(prev => prev.filter(p => !returningPaths.includes(p)));
+        }, 2000);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undoHistory, refresh, toast]);
+
+  const doAction = async (action: string, payload: any) => {
+    const res = await fetch('/api/fs/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...payload })
+    });
+    if (!res.ok) throw new Error('Action failed');
+    const data = await res.json();
+    if (data.undoAction) setUndoHistory(prev => [...prev, data.undoAction]);
+    refresh();
+    return data;
+  };
+
+  const toggleSelect = (path: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newSel = new Set(selected);
+    if (newSel.has(path)) newSel.delete(path);
+    else newSel.add(path);
+    setSelected(newSel);
+  };
+
+  const startRename = (path: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingPath(path);
+    setEditValue(name);
+  };
+
+  const commitRename = async () => {
+    if (!editingPath || !editValue.trim()) {
+      setEditingPath(null);
+      return;
+    }
+    const currentName = editingPath.split('\\').pop();
+    if (currentName === editValue) {
+      setEditingPath(null);
+      return;
+    }
+    try {
+      await doAction('rename', { path: editingPath, newName: editValue });
+      toast('Archivo renombrado', 'success');
+    } catch {}
+    setEditingPath(null);
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') commitRename();
+    if (e.key === 'Escape') setEditingPath(null);
+  };
+
+  const clearSelection = () => {
+    setSelected(new Set());
+    if (editingPath) commitRename();
+  };
+
+  const handleOpen = async (path: string) => {
+    try {
+      await doAction('open', { path });
+    } catch {}
+  };
+
+
+
+  const handleDelete = async (paths: string[]) => {
+    try {
+      const res = await fetch('/api/fs/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', paths })
+      });
+      if (!res.ok) throw new Error('Bulk delete failed');
+      const data = await res.json();
+      
+      setUndoHistory(prev => [...prev, {
+        type: 'delete',
+        items: paths.map((p, i) => ({ originalPath: p, newPath: '', trashPath: data.trashPaths[i] }))
+      }]);
+      
+      toast(paths.length === 1 ? 'Archivo enviado a la papelera' : `${paths.length} archivos enviados a la papelera`, 'success');
+      clearSelection();
+      refresh();
+    } catch {
+      toast('Error al eliminar', 'error');
+    }
+  };
+
+  // Modals state
+  const [showTrashModal, setShowTrashModal] = useState(false);
+  const [showOrgModal, setShowOrgModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const deferredListing = useDeferredValue(listing);
+  const displayedEntries = deferredListing?.entries || [];
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="app-shell" onClick={() => { clearSelection(); closeContextMenu(); }}>
+      {/* ─── HEADER ─── */}
+      <header className="header">
+        <div className="header-logo"><FolderOpen size={20} color="var(--accent)" strokeWidth={2.5} /> FileOrganizer</div>
+        <div className="header-search">
+          <Search size={14} className="header-search-icon" />
+          <input 
+            type="text" 
+            placeholder="Buscar en todos lados..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="header-actions">
+          <button className="btn btn-ghost btn-icon" onClick={() => setShowStats(true)} title="Estadísticas de disco"><BarChart2 size={16} /></button>
+          <button className="btn btn-primary" style={{ padding: '0 12px', height: 30, fontSize: 11.5 }} onClick={() => setShowOrganize(true)}>
+            <Wand2 size={13} /> Auto-Organizar
+          </button>
+        </div>
+      </header>
+
+      {/* ─── SIDEBAR ─── */}
+      <aside className="sidebar">
+        <div className="sidebar-section-title">Ubicaciones</div>
+        <div className="sidebar-tree">
+          <div className={`tree-item ${currentPath === 'C:\\Users' ? 'active' : ''}`} onClick={() => setCurrentPath('C:\\Users')}>
+            <HomeIcon size={14} /> <div className="tree-item-name">Inicio</div>
+          </div>
+          {drives.map(d => (
+            <div key={d} className={`tree-item ${currentPath === d ? 'active' : ''}`} onClick={() => setCurrentPath(d)}>
+              <HardDrive size={14} /> <div className="tree-item-name">{d}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="sidebar-section-title">Accesos Rápidos</div>
+        <div className="sidebar-tree">
+          {quickAccess.map(qa => {
+            let Icon = Folder;
+            if (qa.name === 'Escritorio') Icon = Monitor;
+            else if (qa.name === 'Descargas') Icon = ArrowDown;
+            else if (qa.name === 'Documentos') Icon = FileText;
+            else if (qa.name === 'Imágenes') Icon = ImageIcon;
+            else if (qa.name === 'Videos') Icon = Film;
+            else if (qa.name === 'Música') Icon = Music;
+
+            return (
+              <div key={qa.path} className={`tree-item ${currentPath === qa.path ? 'active' : ''}`} onClick={() => setCurrentPath(qa.path)}>
+                <Icon size={14} />
+                <div className="tree-item-name">{qa.name}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="sidebar-section-title">Papelera</div>
+        <div className="sidebar-tree" style={{ flex: 'none', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+          <div className="tree-item" onClick={() => setShowTrashModal(true)} style={{ color: 'var(--danger)' }}>
+            <Trash size={14} /> 
+            <div className="tree-item-name">Papelera</div>
+            {trashCount > 0 && (
+              <span style={{ background: 'var(--danger-bg)', padding: '2px 6px', borderRadius: 10, fontSize: 10 }}>{trashCount}</span>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* ─── MAIN AREA ─── */}
+      <main className="main-area" onContextMenu={e => e.preventDefault()}>
+        <div className="path-input-row">
+          <button className="btn btn-ghost btn-icon" onClick={goUp} disabled={!currentPath || currentPath.length <= 3}><ArrowUp size={16} /></button>
+          <button className="btn btn-ghost btn-icon" onClick={refresh}><RefreshCw size={14} className={isLoading ? 'spinning' : ''} /></button>
+          <input className="path-input" value={pathInput} onChange={e => setPathInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && setCurrentPath(pathInput)} />
+        </div>
+
+        <div className="toolbar">
+          <div className="toolbar-group">
+            <button className="btn btn-default" onClick={() => setShowMkdir(true)}><FolderPlus size={14} /> Nueva Carpeta</button>
+          </div>
+          <div className="toolbar-divider" />
+          <div className="toolbar-group">
+            <button className={`btn btn-ghost btn-icon ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}><Grid size={16}/></button>
+            <button className={`btn btn-ghost btn-icon ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}><List size={16}/></button>
+          </div>
+        </div>
+
+        <div className="file-content" onClick={clearSelection}>
+          <AnimatePresence mode="popLayout">
+            {listing?.entries.length === 0 && !searching && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="empty-state">
+                <FolderOpen size={48} color="var(--border)" />
+                <div>Carpeta vacía</div>
+              </motion.div>
+            )}
+
+            <div className={viewMode === 'grid' ? 'file-grid' : 'file-list'}>
+              {(searchResults || listing?.entries || []).slice(0, visibleCount).map((entry, idx) => {
+                const isSelected = selected.has(entry.path);
+                const isReturning = returningItems.includes(entry.path);
+                const isEditing = inlineRenameEntry?.path === entry.path;
+                const isDoc = DOC_EXTS.has(entry.ext);
+                const isImage = IMAGE_EXTS.has(entry.ext);
+                const isVideo = VIDEO_EXTS.has(entry.ext);
+                const useCoverLayout = !entry.isDir && (isImage || isVideo || isDoc);
+
+                if (viewMode === 'grid') {
+                  return (
+                    <motion.div
+                      layout
+                      key={entry.path}
+                      className={`file-card ${isSelected ? 'selected' : ''} ${useCoverLayout ? 'video-card' : ''}`}
+                      onClick={e => { e.stopPropagation(); handleClick(entry); }}
+                      onContextMenu={e => onContextMenu(e, entry)}
+                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0, boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' }}
+                      transition={{ delay: idx * 0.015 }}
+                    >
+                      <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
+                      
+                      {useCoverLayout ? (
+                        <>
+                          <div className="file-thumb-cover">
+                            {isVideo && <VideoThumb src={`/api/preview?path=${encodeURIComponent(entry.path)}`} cover />}
+                            {isImage && <ImageCover src={`/api/preview?path=${encodeURIComponent(entry.path)}`} name={entry.name} ext={entry.ext} />}
+                            {isDoc && <DocCover src={entry.path} name={entry.name} ext={entry.ext} />}
+                          </div>
+                          <div className="video-card-info">
+                            {isEditing ? (
+                              <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
+                            ) : (
+                              <div className="video-card-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</div>
+                            )}
+                            <div className="video-card-meta">
+                              {formatSize(entry.size)}
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <FileThumbnail entry={entry} size={56} />
+                          {isEditing ? (
+                            <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
+                          ) : (
+                            <div className="file-card-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</div>
+                          )}
+                        </>
+                      )}
+                    </motion.div>
+                  );
+                }
+
+                // List mode
+                return (
+                  <motion.div
+                    layout
+                    key={entry.path}
+                    className={`file-list-item ${isSelected ? 'selected' : ''}`}
+                    onClick={e => { e.stopPropagation(); handleClick(entry); }}
+                    onContextMenu={e => onContextMenu(e, entry)}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
+                    <FileListIcon entry={entry} />
+                    {isEditing ? (
+                      <div style={{ flex: 1 }}><InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} /></div>
+                    ) : (
+                      <span className="file-list-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</span>
+                    )}
+                    <span className="file-list-ext">{entry.ext}</span>
+                    <span className="file-list-size">{formatSize(entry.size)}</span>
+                    <span className="file-list-date">{formatDate(entry.modified)}</span>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </AnimatePresence>
         </div>
       </main>
+
+      {/* ─── MODALS ─── */}
+      <AnimatePresence>
+        {contextMenu && (
+          <ContextMenu 
+            x={contextMenu.x} y={contextMenu.y} entry={contextMenu.entry}
+            onClose={() => setContextMenu(null)}
+            onRename={() => { setInlineRenameEntry(contextMenu.entry); setContextMenu(null); }}
+            onDelete={() => { setDeleteEntry(contextMenu.entry); setContextMenu(null); }}
+            onMkdir={() => { setShowMkdir(true); setContextMenu(null); }}
+            onOpen={() => { if(contextMenu.entry) handleOpen(contextMenu.entry.path); setContextMenu(null); }}
+            onPreview={() => { if(contextMenu.entry) setPreviewEntry(contextMenu.entry); setContextMenu(null); }}
+            onOpenLocation={() => { if(contextMenu.entry) doAction('open-location', { path: contextMenu.entry.path }); setContextMenu(null); }}
+            sortBy={sortBy} sortDesc={sortDesc} onSort={setSortBy}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {previewEntry && (
+          <PreviewModal 
+            entry={previewEntry}
+            allPreviewable={customPreviewList || (searchResults || listing?.entries || []).filter(e => !e.isDir && PREVIEWABLE.has(e.ext))}
+            onClose={() => { setPreviewEntry(null); setCustomPreviewList(null); }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {deleteEntry && (
+          <DeleteModal entry={deleteEntry} onCancel={() => setDeleteEntry(null)} onConfirm={() => { handleDelete([deleteEntry.path]); setDeleteEntry(null); }} />
+        )}
+        {showMkdir && (
+          <MkdirModal onCancel={() => setShowMkdir(false)} onConfirm={name => { handleMkdir(name); setShowMkdir(false); }} />
+        )}
+      </AnimatePresence>
+
+      {showOrganize && <OrganizeModal currentPath={currentPath} onClose={() => setShowOrganize(false)} toast={toast} />}
+      {showStats && <StatsPanel path={currentPath} onClose={() => setShowStats(false)} />}
+
+      {/* Bulk Action Bar */}
+      <AnimatePresence>
+        {selected.size > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }}
+            className="bulk-action-bar"
+          >
+            <div className="bulk-count">{selected.size} seleccionados</div>
+            <div className="bulk-actions">
+              <button className="btn btn-ghost" onClick={() => handleDelete(Array.from(selected))} style={{ color: 'var(--danger)' }}>
+                <Trash2 size={14} /> Eliminar
+              </button>
+              <button className="btn btn-ghost" onClick={clearSelection}>
+                <X size={14} /> Cancelar
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Toasts */}
+      <div className="toast-container">
+        <AnimatePresence>
+          {toasts.map(t => (
+            <motion.div key={t.id} initial={{ opacity: 0, y: 50, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.9 }} className={`toast ${t.type}`}>
+              {t.type === 'success' ? <CheckCircle size={18} className="toast-icon success" /> : t.type === 'error' ? <AlertCircle size={18} className="toast-icon error" /> : <Info size={18} />}
+              <span style={{ fontSize: '13px', fontWeight: 500 }}>{t.message}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

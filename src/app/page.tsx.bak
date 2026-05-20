@@ -1,0 +1,673 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef, useDeferredValue } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Folder, File, Image as ImageIcon, Film, Music, FileText, Archive, Code, HardDrive,
+  Search, Grid, List, ChevronRight, HomeIcon, ArrowLeft, ArrowUp, ArrowDown, Plus,
+  Trash2, Trash, Edit2, RefreshCw, BarChart2, Wand2, X, CheckCircle, AlertCircle, 
+  Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
+  Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
+  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, MoreVertical
+} from 'lucide-react';
+import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
+import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
+
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'heic', 'tiff', 'tif']);
+const VIDEO_EXTS = new Set(['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'wmv', 'flv', 'm4v']);
+const DOC_EXTS = new Set(['pdf', 'psd']);
+const PREVIEWABLE = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...DOC_EXTS]);
+
+// --- Concurrency Limiter for Thumbnails ---
+let activeThumbWorkers = 0;
+const MAX_THUMB_WORKERS = 4;
+const thumbQueue: (() => void)[] = [];
+
+async function acquireThumbSlot(): Promise<void> {
+  if (activeThumbWorkers < MAX_THUMB_WORKERS) {
+    activeThumbWorkers++;
+    return Promise.resolve();
+  }
+  return new Promise<void>(resolve => {
+    thumbQueue.push(resolve);
+  });
+}
+
+function releaseThumbSlot() {
+  activeThumbWorkers--;
+  if (thumbQueue.length > 0) {
+    const next = thumbQueue.shift();
+    if (next) {
+      activeThumbWorkers++;
+      next();
+    }
+  }
+}
+
+const thumbCache = new Map<string, string>();
+
+function VideoThumb({ src, path }: { src: string, path: string }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [thumbUrl, setThumbUrl] = useState<string | null>(thumbCache.get(path) ?? null);
+  const [hovering, setHovering] = useState(false);
+
+  useEffect(() => {
+    if (thumbCache.has(path)) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    
+    let cancelled = false;
+    const obs = new IntersectionObserver(
+      async ([entry]) => {
+        if (!entry.isIntersecting) return;
+        obs.disconnect(); // Only fetch once when visible
+        
+        await acquireThumbSlot();
+        if (cancelled) { releaseThumbSlot(); return; }
+        
+        try {
+          const res = await fetch(src);
+          if (!res.ok || cancelled) return;
+          const blob = await res.blob();
+          if (cancelled) return;
+          
+          const url = URL.createObjectURL(blob);
+          thumbCache.set(path, url);
+          setThumbUrl(url);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          releaseThumbSlot();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    
+    obs.observe(el);
+    return () => { 
+      cancelled = true; 
+      obs.disconnect(); 
+    };
+  }, [src, path]);
+
+  return (
+    <div 
+      ref={wrapRef} 
+      className="file-thumb-cover" 
+      style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      {hovering ? (
+        <video 
+          src={`/api/preview?path=${encodeURIComponent(path)}`} 
+          autoPlay loop muted 
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+        />
+      ) : thumbUrl ? (
+        <img src={thumbUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : (
+        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#080d08' }}>
+          <Film size={32} color="#1a3a1a" />
+        </div>
+      )}
+      {!hovering && thumbUrl && (
+        <div className="file-thumb-play" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Play size={32} color="rgba(255,255,255,0.7)" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function FileOrgApp() {
+  const [currentPath, setCurrentPath] = useState<string>('');
+  const [listing, setListing] = useState<DirectoryListing | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  
+  // Drives and Quick Access
+  const [drives, setDrives] = useState<string[]>(['C:\\']);
+  const [quickAccess, setQuickAccess] = useState<{name: string, path: string}[]>([]);
+  
+  // Inline rename state
+  const [editingPath, setEditingPath] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+
+  // Preview state
+  const [previewPath, setPreviewPath] = useState<string | null>(null);
+  const closePreview = () => setPreviewPath(null);
+
+  // Video Hover state
+  const [hoveredVideo, setHoveredVideo] = useState<string | null>(null);
+
+  // Context Menu state
+  const [contextMenu, setContextMenu] = useState<{ path: string, x: number, y: number } | null>(null);
+  const closeContextMenu = () => setContextMenu(null);
+  
+  // Toasts
+  const [toasts, setToasts] = useState<{ id: string, message: string, type: 'success' | 'error' | 'info' }[]>([]);
+  const toast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Math.random().toString(36).substring(7);
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+  }, []);
+
+  // Undo System
+  type UndoAction = {
+    type: 'delete' | 'move' | 'rename' | 'mkdir';
+    items: { originalPath: string, newPath: string, trashPath?: string }[];
+  };
+  const [undoHistory, setUndoHistory] = useState<UndoAction[]>([]);
+  const [returningItems, setReturningItems] = useState<string[]>([]);
+  const [trashCount, setTrashCount] = useState(0);
+
+  const fetchTrashCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/fs/trash/count');
+      const data = await res.json();
+      setTrashCount(data.count || 0);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/fs/drives')
+      .then(r => r.json())
+      .then(d => { 
+        if (d.drives) setDrives(d.drives); 
+        if (d.quickAccess) setQuickAccess(d.quickAccess);
+      })
+      .catch(() => {});
+  }, []);
+
+  const refresh = useCallback(async () => {
+    if (!currentPath) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/fs?path=${encodeURIComponent(currentPath)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setListing(data);
+      }
+    } catch {}
+    setIsLoading(false);
+    fetchTrashCount();
+  }, [currentPath, fetchTrashCount]);
+
+  useEffect(() => {
+    if (!currentPath) setCurrentPath('C:\\');
+    else refresh();
+  }, [currentPath, refresh]);
+
+  // Handle Ctrl+Z Undo
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (undoHistory.length === 0) return;
+        const lastAction = undoHistory[undoHistory.length - 1];
+        setUndoHistory(prev => prev.slice(0, -1));
+        
+        const returningPaths = lastAction.items.map(item => item.originalPath);
+        setReturningItems(prev => [...prev, ...returningPaths]);
+        
+        try {
+          await fetch('/api/fs/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'undo', undoAction: lastAction })
+          });
+          toast('Acción deshecha exitosamente', 'success');
+          refresh();
+        } catch {
+          toast('Error al deshacer', 'error');
+        }
+        
+        setTimeout(() => {
+          setReturningItems(prev => prev.filter(p => !returningPaths.includes(p)));
+        }, 2000);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undoHistory, refresh, toast]);
+
+  const doAction = async (action: string, payload: any) => {
+    const res = await fetch('/api/fs/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...payload })
+    });
+    if (!res.ok) throw new Error('Action failed');
+    const data = await res.json();
+    if (data.undoAction) setUndoHistory(prev => [...prev, data.undoAction]);
+    refresh();
+    return data;
+  };
+
+  const toggleSelect = (path: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newSel = new Set(selected);
+    if (newSel.has(path)) newSel.delete(path);
+    else newSel.add(path);
+    setSelected(newSel);
+  };
+
+  const startRename = (path: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingPath(path);
+    setEditValue(name);
+  };
+
+  const commitRename = async () => {
+    if (!editingPath || !editValue.trim()) {
+      setEditingPath(null);
+      return;
+    }
+    const currentName = editingPath.split('\\').pop();
+    if (currentName === editValue) {
+      setEditingPath(null);
+      return;
+    }
+    try {
+      await doAction('rename', { path: editingPath, newName: editValue });
+      toast('Archivo renombrado', 'success');
+    } catch {}
+    setEditingPath(null);
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') commitRename();
+    if (e.key === 'Escape') setEditingPath(null);
+  };
+
+  const clearSelection = () => {
+    setSelected(new Set());
+    if (editingPath) commitRename();
+  };
+
+  const handleOpen = async (path: string) => {
+    const ext = path.split('.').pop()?.toLowerCase() || '';
+    if (PREVIEWABLE.has(ext)) {
+      setPreviewPath(path);
+      return;
+    }
+    try {
+      await doAction('open', { path });
+    } catch {}
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, path: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ path, x: e.clientX, y: e.clientY });
+  };
+
+  const handleDelete = async (paths: string[]) => {
+    try {
+      const res = await fetch('/api/fs/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', paths })
+      });
+      if (!res.ok) throw new Error('Bulk delete failed');
+      const data = await res.json();
+      
+      setUndoHistory(prev => [...prev, {
+        type: 'delete',
+        items: paths.map((p, i) => ({ originalPath: p, newPath: '', trashPath: data.trashPaths[i] }))
+      }]);
+      
+      toast(paths.length === 1 ? 'Archivo enviado a la papelera' : `${paths.length} archivos enviados a la papelera`, 'success');
+      clearSelection();
+      refresh();
+    } catch {
+      toast('Error al eliminar', 'error');
+    }
+  };
+
+  // Modals state
+  const [showTrashModal, setShowTrashModal] = useState(false);
+  const [showOrgModal, setShowOrgModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const deferredListing = useDeferredValue(listing);
+  const displayedEntries = deferredListing?.entries || [];
+
+  return (
+    <div className="app-shell" onClick={() => { clearSelection(); closeContextMenu(); }}>
+      {/* HEADER */}
+      <header className="header">
+        <div className="header-logo">
+          <Folder size={20} color="var(--accent)" />
+          <span>File Organizer Pro</span>
+        </div>
+        <div className="header-search">
+          <Search size={16} className="header-search-icon" />
+          <input 
+            type="text" 
+            placeholder="Buscar archivos..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div className="header-actions">
+          <button className="btn btn-outline" onClick={() => setShowOrgModal(true)}>
+            <Wand2 size={14} /> Organizar con IA
+          </button>
+        </div>
+      </header>
+
+      {/* SIDEBAR */}
+      <aside className="sidebar">
+        <div className="sidebar-section-title">Ubicaciones</div>
+        <div className="sidebar-tree" style={{ marginBottom: '10px', flex: '0 0 auto' }}>
+          {drives.map(drive => (
+            <div key={drive} className={`tree-item ${currentPath.startsWith(drive) ? 'active' : ''}`} onClick={() => setCurrentPath(drive)}>
+              <HardDrive size={16} />
+              <span className="tree-item-name">Disco Local ({drive.replace('\\', '')})</span>
+            </div>
+          ))}
+          <div className="tree-item" onClick={() => setCurrentPath('C:\\')}>
+            <HomeIcon size={16} />
+            <span className="tree-item-name">Inicio</span>
+          </div>
+        </div>
+
+        <div className="sidebar-section-title">Accesos Rápidos</div>
+        <div className="sidebar-tree">
+          {quickAccess.map(qa => {
+            let Icon = Folder;
+            if (qa.name === 'Escritorio') Icon = Monitor;
+            else if (qa.name === 'Descargas') Icon = ArrowDown;
+            else if (qa.name === 'Documentos') Icon = FileText;
+            else if (qa.name === 'Imágenes') Icon = ImageIcon;
+            else if (qa.name === 'Videos') Icon = Film;
+            else if (qa.name === 'Música') Icon = Music;
+
+            return (
+              <div key={qa.path} className={`tree-item ${currentPath === qa.path ? 'active' : ''}`} onClick={() => setCurrentPath(qa.path)}>
+                <Icon size={16} />
+                <span className="tree-item-name">{qa.name}</span>
+              </div>
+            );
+          })}
+        </div>
+        
+        <div style={{ marginTop: 'auto', padding: 10 }}>
+          <div className="tree-item" style={{ color: 'var(--danger)' }} onClick={() => setShowTrashModal(true)}>
+            <Trash2 size={16} />
+            <span className="tree-item-name">Papelera ({trashCount})</span>
+          </div>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT */}
+      <main className="main-area">
+        {/* TOOLBAR */}
+        <div className="toolbar">
+          <div className="toolbar-group">
+            <button className="btn btn-ghost btn-icon" onClick={() => {
+              const parts = currentPath.split('\\').filter(Boolean);
+              if (parts.length > 1) {
+                parts.pop();
+                setCurrentPath(parts.join('\\') + '\\');
+              }
+            }}><ArrowLeft size={16}/></button>
+            <button className="btn btn-ghost btn-icon" onClick={refresh}><RefreshCw size={16}/></button>
+          </div>
+          <div className="toolbar-divider" />
+          <div className="breadcrumbs">
+            {currentPath.split('\\').filter(Boolean).map((part, i, arr) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <span className="breadcrumb-item" onClick={() => setCurrentPath(arr.slice(0, i+1).join('\\') + '\\')}>{part}</span>
+                {i < arr.length - 1 && <span className="breadcrumb-sep"><ChevronRight size={14}/></span>}
+              </div>
+            ))}
+          </div>
+          <div className="toolbar-group" style={{ marginLeft: 'auto' }}>
+            <button className={`btn btn-ghost btn-icon ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}><Grid size={16}/></button>
+            <button className={`btn btn-ghost btn-icon ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}><List size={16}/></button>
+          </div>
+        </div>
+
+        {/* FILE CONTENT */}
+        <div className="file-content" style={{ opacity: isLoading ? 0.5 : 1 }}>
+          <AnimatePresence>
+            {displayedEntries.length === 0 ? (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <FolderOpen size={48} style={{ margin: '0 auto 10px', opacity: 0.5 }} />
+                <div>Esta carpeta está vacía</div>
+              </motion.div>
+            ) : (
+              <motion.div className={viewMode === 'grid' ? 'file-grid' : 'file-list'} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                {displayedEntries
+                  .filter(e => e.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((entry, idx) => {
+                  const isSelected = selected.has(entry.path);
+                  const isReturning = returningItems.includes(entry.path);
+                  const info = getFileTypeInfo(entry.ext);
+                  const color = entry.isDir ? 'var(--accent)' : info.color;
+                  
+                  let Icon = File;
+                  if (entry.isDir) Icon = Folder;
+                  else if (info.category === 'image') Icon = ImageIcon;
+                  else if (info.category === 'video') Icon = Film;
+                  else if (info.category === 'audio') Icon = Music;
+                  else if (info.category === 'document') Icon = FileText;
+                  else if (info.category === 'archive') Icon = Archive;
+                  else if (info.category === 'code') Icon = Code;
+
+                  if (viewMode === 'grid') {
+                    const isVideo = info.category === 'video';
+                    const isImage = info.category === 'image';
+                    const isDocPreview = info.category === 'document' && DOC_EXTS.has(entry.ext);
+                    const useCoverLayout = isVideo || isImage || isDocPreview;
+                    
+                    return (
+                      <motion.div
+                        key={entry.path}
+                        layoutId={`item-${entry.path}`}
+                        className={`file-card ${useCoverLayout ? 'video-card' : ''} ${isSelected ? 'selected' : ''}`}
+                        onClick={e => { e.stopPropagation(); toggleSelect(entry.path, e); }}
+                        onDoubleClick={() => entry.isDir ? setCurrentPath(entry.path) : handleOpen(entry.path)}
+                        onContextMenu={e => handleContextMenu(e, entry.path)}
+                        onMouseEnter={() => { if (isVideo) setHoveredVideo(entry.path); }}
+                        onMouseLeave={() => setHoveredVideo(null)}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ 
+                          opacity: 1, 
+                          scale: 1,
+                          boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none',
+                          borderColor: isReturning ? 'rgba(0,255,100,0.8)' : (isSelected ? 'var(--accent)' : 'transparent')
+                        }}
+                        transition={{ delay: idx * 0.015 }}
+                      >
+                        <div 
+                          className="file-checkbox" 
+                          onClick={e => toggleSelect(entry.path, e)}
+                          style={{
+                            position: 'absolute', top: 8, left: 8, zIndex: 10,
+                            background: isSelected ? 'var(--accent)' : 'rgba(0,0,0,0.5)',
+                            borderRadius: '4px', width: 20, height: 20, display: 'flex', 
+                            alignItems: 'center', justifyContent: 'center',
+                            opacity: isSelected ? 1 : 0.6, cursor: 'pointer',
+                            border: isSelected ? 'none' : '1px solid rgba(255,255,255,0.3)'
+                          }}
+                        >
+                          {isSelected && <CheckCircle size={14} color="#fff" />}
+                        </div>
+
+                        {useCoverLayout ? (
+                          <>
+                            <div className="file-thumb-cover">
+                              {isVideo ? (
+                                <VideoThumb src={`/api/thumb?path=${encodeURIComponent(entry.path)}`} path={entry.path} />
+                              ) : (
+                                <img src={isDocPreview ? `/api/thumb-doc?path=${encodeURIComponent(entry.path)}` : `/api/thumb-img?path=${encodeURIComponent(entry.path)}`} loading="lazy" />
+                              )}
+                            </div>
+                            <div className="video-card-info">
+                              {editingPath === entry.path ? (
+                                <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={commitRename} onKeyDown={handleRenameKeyDown} onClick={e => e.stopPropagation()} style={{ width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--accent)', color: 'var(--text-primary)', outline: 'none', borderRadius: '4px', fontSize: '11px', padding: '2px' }} />
+                              ) : (
+                                <div className="video-card-name" title={entry.name} onClick={e => { if(isSelected) startRename(entry.path, entry.name, e); }}>{entry.name}</div>
+                              )}
+                              <div className="video-card-meta">
+                                <Icon size={10} color="var(--accent)" /> {formatSize(entry.size)}
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="file-thumb" style={{ background: entry.isDir ? 'var(--bg-elevated)' : info.bgColor }}>
+                              <div className="file-thumb-icon"><Icon size={32} color={color} strokeWidth={1.5} /></div>
+                            </div>
+                            {editingPath === entry.path ? (
+                              <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={commitRename} onKeyDown={handleRenameKeyDown} onClick={e => e.stopPropagation()} style={{ width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--accent)', color: 'var(--text-primary)', outline: 'none', textAlign: 'center', borderRadius: '4px', fontSize: '11.5px', padding: '2px' }} />
+                            ) : (
+                              <div className="file-card-name" title={entry.name} onClick={e => { if(isSelected) startRename(entry.path, entry.name, e); }}>{entry.name}</div>
+                            )}
+                          </>
+                        )}
+                      </motion.div>
+                    );
+                  }
+
+                  return (
+                    <motion.div
+                      key={entry.path}
+                      className={`file-list-item ${isSelected ? 'selected' : ''}`}
+                      onClick={e => { e.stopPropagation(); toggleSelect(entry.path, e); }}
+                      onDoubleClick={() => entry.isDir ? setCurrentPath(entry.path) : handleOpen(entry.path)}
+                      onContextMenu={e => handleContextMenu(e, entry.path)}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ 
+                        opacity: 1, 
+                        x: 0,
+                        backgroundColor: isReturning ? 'rgba(0,255,100,0.1)' : undefined
+                      }}
+                      transition={{ delay: idx * 0.005 }}
+                    >
+                      <div 
+                        onClick={e => toggleSelect(entry.path, e)}
+                        style={{
+                          marginRight: 8,
+                          background: isSelected ? 'var(--accent)' : 'transparent',
+                          border: isSelected ? 'none' : '1px solid var(--border)',
+                          borderRadius: '4px', width: 16, height: 16, display: 'flex', 
+                          alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                        }}
+                      >
+                        {isSelected && <CheckCircle size={12} color="#fff" />}
+                      </div>
+                      <div className="file-list-icon" style={{ background: entry.isDir ? 'var(--bg-elevated)' : info.bgColor }}>
+                        <Icon size={16} color={color} strokeWidth={2} />
+                      </div>
+                      {editingPath === entry.path ? (
+                        <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={commitRename} onKeyDown={handleRenameKeyDown} onClick={e => e.stopPropagation()} style={{ flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--accent)', color: 'var(--text-primary)', outline: 'none', borderRadius: '4px', fontSize: '12.5px', padding: '0 4px', height: '24px' }} />
+                      ) : (
+                        <div className="file-list-name" title={entry.name} onClick={e => { if(isSelected) startRename(entry.path, entry.name, e); }}>{entry.name}</div>
+                      )}
+                      <div className="file-list-date">{formatDate(entry.modified)}</div>
+                      <div className="file-list-size">{!entry.isDir ? formatSize(entry.size) : '--'}</div>
+                      <div className="file-list-ext" style={{ background: info.bgColor, color: info.color }}>
+                        {entry.isDir ? 'DIR' : entry.ext.toUpperCase()}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </main>
+
+      {/* Preview Modal */}
+      <AnimatePresence>
+        {previewPath && (
+          <motion.div className="modal-overlay" style={{ zIndex: 1100 }} onClick={closePreview} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}>
+            <motion.div className="modal" style={{ maxWidth: '90%', width: 'auto', padding: 10, background: 'rgba(0,0,0,0.8)' }} onClick={e => e.stopPropagation()} initial={{scale:0.95}} animate={{scale:1}} exit={{scale:0.95}}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: 10 }}>
+                <button className="btn btn-ghost btn-icon" onClick={closePreview}><X size={20}/></button>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300, minWidth: 300 }}>
+                {VIDEO_EXTS.has(previewPath.split('.').pop()?.toLowerCase() || '') ? (
+                  <video src={`/api/preview?path=${encodeURIComponent(previewPath)}`} controls autoPlay style={{ maxWidth: '100%', maxHeight: '80vh' }} />
+                ) : DOC_EXTS.has(previewPath.split('.').pop()?.toLowerCase() || '') ? (
+                  <img src={`/api/thumb-doc?path=${encodeURIComponent(previewPath)}&size=800`} style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} />
+                ) : (
+                  <img src={`/api/preview?path=${encodeURIComponent(previewPath)}`} style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} />
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Context Menu */}
+      <AnimatePresence>
+        {contextMenu && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            style={{
+              position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 9999,
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: '8px', padding: '4px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+              minWidth: '160px'
+            }}
+          >
+            <div className="menu-item" onClick={() => { handleOpen(contextMenu.path); closeContextMenu(); }} style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, borderRadius: 4 }}>
+              <ExternalLink size={16} /> Abrir
+            </div>
+            <div className="menu-item" onClick={(e) => { startRename(contextMenu.path, contextMenu.path.split('\\').pop() || '', e); closeContextMenu(); }} style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, borderRadius: 4 }}>
+              <Edit2 size={16} /> Renombrar
+            </div>
+            <div className="menu-item" onClick={() => { handleDelete([contextMenu.path]); closeContextMenu(); }} style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, borderRadius: 4, color: 'var(--danger)' }}>
+              <Trash2 size={16} /> Mover a Papelera
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Action Bar */}
+      <AnimatePresence>
+        {selected.size > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }}
+            style={{
+              position: 'fixed', bottom: 30, left: '50%', transform: 'translateX(-50%)',
+              background: 'var(--bg-surface)', border: '1px solid var(--accent)',
+              borderRadius: '30px', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 20,
+              boxShadow: '0 10px 30px rgba(0,255,100,0.2)', zIndex: 1000
+            }}
+          >
+            <div style={{ fontWeight: 600, color: 'var(--accent)' }}>{selected.size} seleccionados</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-primary" onClick={() => handleDelete(Array.from(selected))} style={{ background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' }}>
+                <Trash2 size={16} /> Borrar
+              </button>
+              <button className="btn btn-outline" onClick={clearSelection}>
+                <X size={16} /> Cancelar
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Toasts */}
+      <div className="toast-container" style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <AnimatePresence>
+          {toasts.map(t => (
+            <motion.div key={t.id} initial={{ opacity: 0, y: 50, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.9 }} className="toast" style={{ padding: '12px 20px', background: t.type === 'error' ? 'var(--danger)' : 'var(--bg-elevated)', border: `1px solid ${t.type === 'error' ? 'var(--danger)' : 'var(--accent)'}`, color: '#fff', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+              {t.type === 'success' ? <CheckCircle size={18} color="var(--accent)"/> : t.type === 'error' ? <AlertCircle size={18} /> : <Info size={18} />}
+              <span style={{ fontSize: '13px', fontWeight: 500 }}>{t.message}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}

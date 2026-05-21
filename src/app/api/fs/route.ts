@@ -32,12 +32,23 @@ export async function GET(request: NextRequest) {
 
     const rawEntries = await fs.readdir(dirPath, { withFileTypes: true });
 
+    let metadata: Record<string, { color?: string; tags?: string[] }> = {};
+    try {
+      const metaPath = path.join(dirPath, '.fileorg.json');
+      const metaContent = await fs.readFile(metaPath, 'utf8');
+      metadata = JSON.parse(metaContent);
+    } catch {
+      // no metadata file
+    }
+
     const entries = (await statWithConcurrency(rawEntries, async (entry) => {
       try {
         const fullPath = path.join(dirPath, entry.name);
         const ext = entry.isDirectory() ? '' : path.extname(entry.name).replace('.', '').toLowerCase();
         
         const entryStat = await fs.stat(fullPath);
+        const fileMeta = metadata[entry.name];
+        
         return {
           name: entry.name,
           path: fullPath,
@@ -46,6 +57,8 @@ export async function GET(request: NextRequest) {
           modified: entryStat.mtime.toISOString(),
           created: entryStat.birthtime?.toISOString() || entryStat.mtime.toISOString(),
           ext,
+          color: fileMeta?.color,
+          tags: fileMeta?.tags,
         } as FileEntry;
       } catch {
         return null;

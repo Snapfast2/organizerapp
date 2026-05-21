@@ -7,7 +7,7 @@ import {
   Trash2, Trash, Edit2, RefreshCw, BarChart2, Wand2, X, CheckCircle, AlertCircle, 
   Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
   Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
-  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, Check
+  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, Check, Tag, Palette
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
@@ -733,11 +733,12 @@ export function PreviewModal({ entry, allPreviewable, onClose }: {
 }
 
 // ─── Context Menu ──────────────────────────────────────────
-export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, onMoveTo, onUnzip, sortBy, sortDesc, onSort }: {
+export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, onMoveTo, onUnzip, onMetadata, sortBy, sortDesc, onSort }: {
   x: number; y: number; entry: FileEntry | null;
   onClose: () => void; onRename: () => void; onDelete: () => void;
   onMkdir: () => void; onOpen: () => void; onPreview: () => void;
   onOpenLocation: () => void; onMoveTo: () => void; onUnzip: () => void;
+  onMetadata: () => void;
   sortBy: string; sortDesc: boolean; onSort: (field: string) => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -793,6 +794,9 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
           <div className="context-menu-sep" />
           <div className="context-menu-item" onClick={onRename}>
             <Edit2 size={13} /> Renombrar
+          </div>
+          <div className="context-menu-item" onClick={onMetadata}>
+            <Tag size={13} /> Etiquetas y Color
           </div>
           <div className="context-menu-item" onClick={e => { e.stopPropagation(); onMoveTo(); }}>
             <MoveRight size={13} /> Mover a…
@@ -1404,6 +1408,94 @@ export function TrashModal({ onClose, onRestore, toast }: {
               <Trash2 size={13} /> {emptying ? 'Vaciando…' : 'Vaciar papelera'}
             </button>
           )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Metadata Modal ─────────────────────────────────────────
+export function MetadataModal({
+  entry, onClose, onSave
+}: {
+  entry: FileEntry;
+  onClose: () => void;
+  onSave: (color: string | null, tags: string[]) => void;
+}) {
+  const [color, setColor] = useState<string | null>(entry.color || null);
+  const [tagsStr, setTagsStr] = useState<string>(entry.tags ? entry.tags.join(', ') : '');
+
+  const handleSave = () => {
+    const parsedTags = tagsStr.split(',').map(s => s.trim()).filter(Boolean);
+    onSave(color, parsedTags);
+    onClose();
+  };
+
+  const COLORS = [
+    { label: 'Rojo', value: '#ff4444' },
+    { label: 'Naranja', value: '#ff9800' },
+    { label: 'Amarillo', value: '#ffeb3b' },
+    { label: 'Verde', value: '#0EC900' },
+    { label: 'Azul', value: '#2196f3' },
+    { label: 'Morado', value: '#9c27b0' },
+  ];
+
+  return (
+    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.div className="modal" initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <Tag size={20} className="accent-text" />
+          <h2 style={{ fontSize: 16, fontWeight: 600 }}>Etiquetas y Color</h2>
+        </div>
+
+        <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
+          Editando: <strong style={{ color: 'var(--text-primary)' }}>{entry.name}</strong>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontSize: 12, marginBottom: 8, color: 'var(--text-muted)' }}>COLOR</label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              className="btn btn-ghost"
+              style={{ width: 32, height: 32, padding: 0, borderRadius: '50%', border: color === null ? '2px solid var(--accent)' : '2px solid transparent' }}
+              onClick={() => setColor(null)}
+              title="Sin color"
+            >
+              <X size={16} />
+            </button>
+            {COLORS.map(c => (
+              <button
+                key={c.value}
+                style={{
+                  width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                  background: c.value,
+                  boxShadow: color === c.value ? `0 0 0 3px var(--bg-surface), 0 0 0 5px ${c.value}` : 'none',
+                }}
+                onClick={() => setColor(c.value)}
+                title={c.label}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ display: 'block', fontSize: 12, marginBottom: 8, color: 'var(--text-muted)' }}>ETIQUETAS (separadas por coma)</label>
+          <input
+            className="input"
+            value={tagsStr}
+            onChange={e => setTagsStr(e.target.value)}
+            placeholder="ej. vacaciones, familia, importante"
+            autoFocus
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleSave();
+              if (e.key === 'Escape') onClose();
+            }}
+          />
+        </div>
+
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={handleSave}>Guardar</button>
         </div>
       </motion.div>
     </motion.div>

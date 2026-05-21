@@ -16,7 +16,7 @@ import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
 import { 
   InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail, FileListIcon,
   VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal, BulkActionModal,
-  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon
+  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, MetadataModal
 } from './components';
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'heic', 'tiff', 'tif']);
@@ -51,6 +51,7 @@ export default function FileOrgApp() {
   // Context Menu state
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, entry: FileEntry } | null>(null);
   const [showMoveTo, setShowMoveTo] = useState<string[] | null>(null); // paths to move
+  const [showMetadataEntry, setShowMetadataEntry] = useState<FileEntry | null>(null);
   const closeContextMenu = () => setContextMenu(null);
   
   // Toasts
@@ -203,7 +204,6 @@ export default function FileOrgApp() {
     }
   };
 
-
   const fetchTrashCount = useCallback(async () => {
     try {
       const res = await fetch('/api/fs/trash/count');
@@ -236,6 +236,20 @@ export default function FileOrgApp() {
     setIsLoading(false);
     fetchTrashCount();
   }, [currentPath, fetchTrashCount]);
+
+  const handleMetadataSave = useCallback(async (entry: FileEntry, color: string | null, tags: string[]) => {
+    try {
+      const res = await fetch('/api/fs/metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: entry.path, color, tags })
+      });
+      if (!res.ok) throw new Error('Failed to save metadata');
+      refresh();
+    } catch {
+      toast('Error al guardar etiquetas', 'error');
+    }
+  }, [toast, refresh]);
 
   // Sync path input with currentPath
   useEffect(() => {
@@ -847,6 +861,9 @@ export default function FileOrgApp() {
                     transition={{ duration: 0.15 }}
                   >
                     <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
+                    {entry.color && (
+                      <div className="file-color-dot" style={{ background: entry.color, position: 'absolute', top: 8, right: 8, width: 10, height: 10, borderRadius: '50%', zIndex: 10, boxShadow: '0 0 0 1.5px #050805' }} />
+                    )}
                     {useCoverLayout ? (
                       <>
                         <div className="file-thumb-cover">
@@ -860,7 +877,12 @@ export default function FileOrgApp() {
                           ) : (
                             <div className="video-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
                           )}
-                          <div className="video-card-meta">{formatSize(entry.size)}</div>
+                          <div className="video-card-meta">
+                            {formatSize(entry.size)}
+                            {entry.tags && entry.tags.length > 0 && (
+                              <span style={{ color: 'var(--accent)', marginLeft: 6 }}>• {entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</span>
+                            )}
+                          </div>
                         </div>
                       </>
                     ) : (
@@ -870,6 +892,9 @@ export default function FileOrgApp() {
                           <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
                         ) : (
                           <div className="file-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+                        )}
+                        {entry.tags && entry.tags.length > 0 && (
+                          <div style={{ fontSize: 10, color: 'var(--accent)', textAlign: 'center', marginTop: 2 }}>{entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</div>
                         )}
                       </>
                     )}
@@ -917,12 +942,20 @@ export default function FileOrgApp() {
                     >
                       <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
                       <FileListIcon entry={entry} />
+                      {entry.color && (
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: entry.color, marginRight: 8, flexShrink: 0 }} />
+                      )}
                       {isEditing ? (
                         <div style={{ flex: 1 }}><InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} /></div>
                       ) : (
-                        <span className="file-list-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</span>
+                        <div className="file-list-name" onDoubleClick={() => handleOpen(entry.path)} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
                       )}
-                      <span className="file-list-ext">{entry.ext}</span>
+                      {entry.tags && entry.tags.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4, marginRight: 16 }}>
+                          {entry.tags.map(t => <span key={t} className="badge">{t}</span>)}
+                        </div>
+                      )}
+                      <div className="file-list-ext">{entry.ext.toUpperCase() || 'Carpeta'}</div>
                       <span className="file-list-size">{formatSize(entry.size)}</span>
                       <span className="file-list-date">{formatDate(entry.modified)}</span>
                     </motion.div>
@@ -975,6 +1008,7 @@ export default function FileOrgApp() {
             onOpen={() => { if(contextMenu.entry) handleOpen(contextMenu.entry.path); setContextMenu(null); }}
             onPreview={() => { if(contextMenu.entry) setPreviewEntry(contextMenu.entry); setContextMenu(null); }}
             onOpenLocation={() => { if(contextMenu.entry) doAction('open-location', { path: contextMenu.entry.path }); setContextMenu(null); }}
+            onMetadata={() => { if(contextMenu.entry) setShowMetadataEntry(contextMenu.entry); setContextMenu(null); }}
             onMoveTo={() => { if(contextMenu.entry) setShowMoveTo([contextMenu.entry.path]); setContextMenu(null); }}
             onUnzip={() => { if(contextMenu.entry) handleUnzip(contextMenu.entry.path); setContextMenu(null); }}
             sortBy={sortBy} sortDesc={sortDesc} onSort={handleSort}
@@ -1048,6 +1082,14 @@ export default function FileOrgApp() {
             sourcePaths={showMoveTo}
             onConfirm={handleMoveTo}
             onCancel={() => setShowMoveTo(null)}
+          />
+        )}
+        
+        {showMetadataEntry && (
+          <MetadataModal
+            entry={showMetadataEntry}
+            onClose={() => setShowMetadataEntry(null)}
+            onSave={(color, tags) => handleMetadataSave(showMetadataEntry, color, tags)}
           />
         )}
       </AnimatePresence>

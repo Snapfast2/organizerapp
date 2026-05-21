@@ -6,6 +6,8 @@ export interface FileEntry {
   modified: string;
   created: string;
   ext: string;
+  color?: string;
+  tags?: string[];
 }
 
 export interface DirectoryListing {

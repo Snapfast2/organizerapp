@@ -1502,8 +1502,8 @@ export function MetadataModal({
   );
 }
 
-// ─── Duplicate Finder Modal ─────────────────────────────────────────
-export function DuplicateModal({
+// ─── Duplicate Finder View ─────────────────────────────────────────
+export function DuplicateView({
   cwd, onClose, onSuccess
 }: {
   cwd: string;
@@ -1580,18 +1580,22 @@ export function DuplicateModal({
   };
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="modal" style={{ width: 600, maxWidth: '90vw' }} initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <Copy size={20} className="accent-text" />
-          <h2 style={{ fontSize: 16, fontWeight: 600 }}>Buscador de Duplicados</h2>
-        </div>
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }} 
+      animate={{ opacity: 1, y: 0 }} 
+      exit={{ opacity: 0, y: 20 }} 
+      style={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <Copy size={24} className="accent-text" />
+        <h2 style={{ fontSize: 20, fontWeight: 600 }}>Buscador de Duplicados</h2>
+      </div>
 
-        <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
-          Escaneando: <strong style={{ color: 'var(--text-primary)' }}>{cwd}</strong>
-        </div>
+      <div style={{ marginBottom: 24, fontSize: 14, color: 'var(--text-secondary)' }}>
+        Escaneando: <strong style={{ color: 'var(--text-primary)' }}>{cwd}</strong>
+      </div>
 
-        <div style={{ minHeight: 200, maxHeight: 400, overflowY: 'auto', margin: '0 -4px', padding: '0 4px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', paddingRight: 8, margin: '0 -8px', paddingLeft: 8 }}>
           {loading && (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
               <div style={{ marginBottom: 12 }}>{progressMsg}</div>
@@ -1647,12 +1651,11 @@ export function DuplicateModal({
               </div>
             </div>
           ))}
-        </div>
+      </div>
 
-        <div className="modal-actions" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 12 }}>
-          <button className="btn btn-primary" onClick={onClose}>Cerrar</button>
-        </div>
-      </motion.div>
+      <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+        <button className="btn btn-primary" onClick={onClose}>Cerrar Buscador</button>
+      </div>
     </motion.div>
   );
 }

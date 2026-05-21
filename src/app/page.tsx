@@ -16,7 +16,7 @@ import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
 import { 
   InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail, FileListIcon,
   VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal, BulkActionModal,
-  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, MetadataModal, DuplicateModal
+  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, MetadataModal, DuplicateView
 } from './components';
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'heic', 'tiff', 'tif']);
@@ -768,7 +768,8 @@ export default function FileOrgApp() {
           <input className="path-input" value={pathInput} onChange={e => setPathInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && setCurrentPath(pathInput)} />
         </div>
 
-        <div className="toolbar">
+        {!showDuplicates && (
+          <div className="toolbar">
           <div className="toolbar-group">
             <button className="btn btn-default" onClick={() => setShowMkdir(true)}><FolderPlus size={14} /> Nueva Carpeta</button>
             <button className="btn btn-ghost" onClick={() => setShowDuplicates(true)} title="Buscar Duplicados"><Copy size={16} /> Duplicados</button>
@@ -798,10 +799,15 @@ export default function FileOrgApp() {
             <button className={`btn btn-ghost btn-icon ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}><Grid size={16}/></button>
             <button className={`btn btn-ghost btn-icon ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}><List size={16}/></button>
           </div>
-        </div>
+          </div>
+        )}
 
         <div className="file-content" ref={fileContentRef} onClick={clearSelection}>
-          <AnimatePresence mode="popLayout">
+          {showDuplicates ? (
+            <DuplicateView cwd={currentPath} onClose={() => setShowDuplicates(false)} onSuccess={() => { refresh(); fetchTrashCount(); }} />
+          ) : (
+            <>
+              <AnimatePresence mode="popLayout">
             {listing?.entries.length === 0 && !searching && (
               <motion.div key="empty-state" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="empty-state">
                 <FolderOpen size={48} color="var(--border)" />
@@ -971,10 +977,12 @@ export default function FileOrgApp() {
           {/* Infinite scroll sentinel */}
           <div ref={sentinelRef} style={{ height: 1 }} />
           {/* Counter when not all entries are visible */}
-          {visibleCount < totalEntries && (
-            <div style={{ textAlign: 'center', padding: '12px 0 4px', fontSize: 11.5, color: 'var(--text-muted)' }}>
-              Mostrando {Math.min(visibleCount, totalEntries)} de {totalEntries} — seguí bajando para ver más
-            </div>
+            {visibleCount < totalEntries && (
+              <div style={{ textAlign: 'center', padding: '12px 0 4px', fontSize: 11.5, color: 'var(--text-muted)' }}>
+                Mostrando {Math.min(visibleCount, totalEntries)} de {totalEntries} — seguí bajando para ver más
+              </div>
+            )}
+            </>
           )}
         </div>
 
@@ -1095,13 +1103,7 @@ export default function FileOrgApp() {
           />
         )}
 
-        {showDuplicates && (
-          <DuplicateModal
-            cwd={currentPath}
-            onClose={() => setShowDuplicates(false)}
-            onSuccess={() => { refresh(); }}
-          />
-        )}
+
       </AnimatePresence>
 
       {/* Toasts */}

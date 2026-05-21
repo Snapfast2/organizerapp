@@ -61,7 +61,14 @@ export function AnimatedTrashIcon({ count, size = 14 }: { count: number, size?: 
         strokeLinejoin="round" 
         style={{ color: isFilled ? 'var(--danger)' : 'currentColor' }}
       >
-        {/* The liquid / content fill - positioned perfectly inside the bin */}
+        {/* Trash outline and inner lines drawn first */}
+        <path d="M3 6h18" />
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
+
+        {/* The solid fill drawn on top to physically cover the lines as it fills */}
         <motion.rect
           x="8"
           width="8"
@@ -73,15 +80,7 @@ export function AnimatedTrashIcon({ count, size = 14 }: { count: number, size?: 
             y: 20 - (fillRatio * 12)
           }}
           transition={{ type: 'spring', bounce: 0.5, damping: 12 }}
-          style={{ opacity: 0.25 }}
         />
-
-        <motion.path d="M10 11v6" animate={{ opacity: fillRatio > 0.4 ? 0.2 : 1 }} />
-        <motion.path d="M14 11v6" animate={{ opacity: fillRatio > 0.4 ? 0.2 : 1 }} />
-
-        <path d="M3 6h18" />
-        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
       </svg>
     </div>
   );

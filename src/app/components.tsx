@@ -1504,11 +1504,12 @@ export function MetadataModal({
 
 // ─── Duplicate Finder View ─────────────────────────────────────────
 export function DuplicateView({
-  cwd, onClose, onSuccess
+  cwd, onClose, onSuccess, onOpenLocation
 }: {
   cwd: string;
   onClose: () => void;
   onSuccess: () => void;
+  onOpenLocation?: (path: string) => void;
 }) {
   const [duplicates, setDuplicates] = useState<{ hash: string; files: { path: string; size: number }[] }[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1635,6 +1636,14 @@ export function DuplicateView({
                         <FileListIcon entry={mockEntry} />
                       </div>
                       <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.path}>{name}</span>
+                      <button 
+                        className="btn btn-ghost btn-icon" 
+                        title="Ver en carpeta"
+                        style={{ width: 24, height: 24, padding: 0 }}
+                        onClick={() => onOpenLocation && onOpenLocation(f.path)}
+                      >
+                        <ExternalLink size={14} />
+                      </button>
                     </div>
                   );
                 })}

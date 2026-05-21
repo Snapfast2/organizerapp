@@ -804,7 +804,12 @@ export default function FileOrgApp() {
 
         <div className="file-content" ref={fileContentRef} onClick={clearSelection}>
           {showDuplicates ? (
-            <DuplicateView cwd={currentPath} onClose={() => setShowDuplicates(false)} onSuccess={() => { refresh(); fetchTrashCount(); }} />
+            <DuplicateView 
+              cwd={currentPath} 
+              onClose={() => setShowDuplicates(false)} 
+              onSuccess={() => { refresh(); fetchTrashCount(); }}
+              onOpenLocation={(path) => doAction('open-location', { path })}
+            />
           ) : (
             <>
               <AnimatePresence mode="popLayout">

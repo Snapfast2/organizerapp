@@ -3,12 +3,26 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { FileEntry, DirectoryListing } from '@/lib/types';
 
+// Limit parallel stat calls to avoid overwhelming the filesystem
+async function statWithConcurrency<T>(
+  items: T[],
+  worker: (item: T) => Promise<FileEntry | null>,
+  limit = 32
+): Promise<(FileEntry | null)[]> {
+  const results: (FileEntry | null)[] = [];
+  for (let i = 0; i < items.length; i += limit) {
+    const batch = items.slice(i, i + limit);
+    const batchResults = await Promise.all(batch.map(worker));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   let dirPath = searchParams.get('path') || 'C:\\';
 
   try {
-    // Normalize path
     dirPath = path.normalize(dirPath);
 
     const stat = await fs.stat(dirPath);
@@ -18,47 +32,27 @@ export async function GET(request: NextRequest) {
 
     const rawEntries = await fs.readdir(dirPath, { withFileTypes: true });
 
-    // Concurrently fetch stats for all entries
-    const entriesPromise = rawEntries.map(async (entry) => {
+    const entries = (await statWithConcurrency(rawEntries, async (entry) => {
       try {
         const fullPath = path.join(dirPath, entry.name);
         const ext = entry.isDirectory() ? '' : path.extname(entry.name).replace('.', '').toLowerCase();
         
-        let size = 0;
-        let modified = new Date().toISOString();
-        let created = new Date().toISOString();
-        
-        // Only stat files (directories don't need size for our simple listing)
-        if (!entry.isDirectory()) {
-          const entryStat = await fs.stat(fullPath);
-          size = entryStat.size;
-          modified = entryStat.mtime.toISOString();
-          created = entryStat.birthtime?.toISOString() || modified;
-        } else {
-          // For directories we can quickly try to get modified date if needed, or just stat it
-          const entryStat = await fs.stat(fullPath);
-          modified = entryStat.mtime.toISOString();
-          created = entryStat.birthtime?.toISOString() || modified;
-        }
-
+        const entryStat = await fs.stat(fullPath);
         return {
           name: entry.name,
           path: fullPath,
           isDir: entry.isDirectory(),
-          size,
-          modified,
-          created,
+          size: entry.isDirectory() ? 0 : entryStat.size,
+          modified: entryStat.mtime.toISOString(),
+          created: entryStat.birthtime?.toISOString() || entryStat.mtime.toISOString(),
           ext,
         } as FileEntry;
       } catch {
-        return null; // Skip if access denied
+        return null;
       }
-    });
+    })).filter((e): e is FileEntry => e !== null);
 
-    const resolvedEntries = await Promise.all(entriesPromise);
-    const entries = resolvedEntries.filter((e): e is FileEntry => e !== null);
-
-    // Sort: directories first, then files
+    // Sort: directories first, then by name
     entries.sort((a, b) => {
       if (a.isDir && !b.isDir) return -1;
       if (!a.isDir && b.isDir) return 1;
@@ -69,13 +63,11 @@ export async function GET(request: NextRequest) {
       ? path.dirname(dirPath)
       : null;
 
-    const result: DirectoryListing = {
-      path: dirPath,
-      parent: parentPath,
-      entries,
-    };
+    const result: DirectoryListing = { path: dirPath, parent: parentPath, entries };
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: { 'Cache-Control': 'no-store' }
+    });
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || 'Failed to read directory', path: dirPath, parent: null, entries: [] },

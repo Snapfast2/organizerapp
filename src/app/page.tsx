@@ -24,7 +24,8 @@ const DOC_EXTS = new Set(['pdf', 'psd']);
 const PREVIEWABLE = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...DOC_EXTS]);
 
 export default function FileOrgApp() {
-  const [currentPath, setCurrentPath] = useState<string>('');
+  const [currentPath, setCurrentPath] = useState<string>('C:\\');
+
   const [listing, setListing] = useState<DirectoryListing | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -73,7 +74,9 @@ export default function FileOrgApp() {
   const [visibleCount, setVisibleCount] = useState(100);
   const [sortBy, setSortBy] = useState('name');
   const [sortDesc, setSortDesc] = useState(false);
-  const searching = false;
+  const [isSearching, setIsSearching] = useState(false);
+  const searching = isSearching;
+  const [searchQuery, setSearchQuery] = useState('');
 
   const goUp = () => {
     if (currentPath.length > 3) {
@@ -161,19 +164,48 @@ export default function FileOrgApp() {
       if (res.ok) {
         const data = await res.json();
         setListing(data);
+        setSearchResults(null);
       }
     } catch {}
     setIsLoading(false);
     fetchTrashCount();
   }, [currentPath, fetchTrashCount]);
 
+  // Sync path input with currentPath
   useEffect(() => {
-    if (!currentPath) setCurrentPath('C:\\');
-    else refresh();
-  }, [currentPath, refresh]);
+    setPathInput(currentPath);
+  }, [currentPath]);
+
+  // Real search implementation
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&path=${encodeURIComponent(currentPath)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.results || []);
+        }
+      } catch {}
+      setIsSearching(false);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery, currentPath]);
+
 
   // Handle Ctrl+Z Undo
   useEffect(() => {
+    refresh();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPath]);
+
+  useEffect(() => {
+
     const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         if (undoHistory.length === 0) return;
@@ -292,7 +324,6 @@ export default function FileOrgApp() {
   // Modals state
   const [showTrashModal, setShowTrashModal] = useState(false);
   const [showOrgModal, setShowOrgModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   const deferredListing = useDeferredValue(listing);
   const displayedEntries = deferredListing?.entries || [];
@@ -411,9 +442,9 @@ export default function FileOrgApp() {
                       className={`file-card ${isSelected ? 'selected' : ''} ${useCoverLayout ? 'video-card' : ''}`}
                       onClick={e => { e.stopPropagation(); handleClick(entry); }}
                       onContextMenu={e => onContextMenu(e, entry)}
-                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0, boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' }}
-                      transition={{ delay: idx * 0.015 }}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1, boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' }}
+                      transition={{ duration: 0.15 }}
                     >
                       <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
                       

@@ -125,17 +125,16 @@ export default function FileOrgApp() {
     setContextMenu({ x: e.clientX, y: e.clientY, entry });
   };
 
-  const handleInlineRename = async (path: string, newName: string) => {
+  const handleInlineRename = async (filePath: string, newName: string) => {
     const entry = inlineRenameEntry;
     setInlineRenameEntry(null);
-    if (!entry || newName === entry.name || !newName.trim()) return;
-    const basePath = path.substring(0, path.lastIndexOf('\\'));
-    // Keep extension if the user didn't type it
+    if (!entry || !newName.trim()) return;
+    // Build the final filename: if user typed without extension, keep original ext
     const hasExt = newName.includes('.');
     const finalName = hasExt ? newName : `${newName}${entry.ext ? '.' + entry.ext : ''}`;
-    const newPath = `${basePath}\\${finalName}`;
+    if (finalName === entry.name) return;
     try {
-      await doAction('rename', { paths: [path], newPath });
+      await doAction('rename', { path: filePath, newName: finalName });
     } catch {}
   };
 

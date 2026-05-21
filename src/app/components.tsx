@@ -59,23 +59,19 @@ export function AnimatedTrashIcon({ count, size = 14 }: { count: number, size?: 
         strokeWidth="2" 
         strokeLinecap="round" 
         strokeLinejoin="round" 
-        style={{ color: isFilled ? 'var(--danger)' : 'currentColor', overflow: 'visible' }}
+        style={{ color: isFilled ? 'var(--danger)' : 'currentColor' }}
       >
-        <defs>
-          <clipPath id="trash-clip">
-            <path d="M7 6h10v14c0 1-.9 2-2 2H9c-1.1 0-2-.9-2-2V6z" />
-          </clipPath>
-        </defs>
-
+        {/* The liquid / content fill - positioned perfectly inside the bin */}
         <motion.rect
-          x="5"
-          width="14"
-          height="18"
+          x="8"
+          width="8"
           fill="currentColor"
           stroke="none"
-          clipPath="url(#trash-clip)"
           initial={false}
-          animate={{ y: 22 - (fillRatio * 15) }}
+          animate={{ 
+            height: fillRatio * 12,
+            y: 20 - (fillRatio * 12)
+          }}
           transition={{ type: 'spring', bounce: 0.5, damping: 12 }}
           style={{ opacity: 0.25 }}
         />

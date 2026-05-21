@@ -445,6 +445,55 @@ export default function FileOrgApp() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, focusedPath, selected, listing, searchResults, viewMode, handleDelete, currentPath]);
 
+  // Drag & Drop Handlers
+  const handleDragStart = (e: React.DragEvent, entry: FileEntry) => {
+    const paths = selected.has(entry.path) ? Array.from(selected) : [entry.path];
+    e.dataTransfer.setData('application/json', JSON.stringify({ paths }));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, entry: FileEntry) => {
+    if (entry.isDir) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetEntry: FileEntry) => {
+    e.preventDefault();
+    if (!targetEntry.isDir) return;
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('application/json'));
+      if (data.paths && data.paths.length > 0) {
+        const pathsToMove = data.paths.filter((p: string) => p !== targetEntry.path);
+        if (pathsToMove.length === 0) return;
+        
+        const res = await fetch('/api/fs/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'move', paths: pathsToMove, dest: targetEntry.path })
+        });
+        if (res.ok) {
+          const d = await res.json();
+          if (d.undoAction) setUndoHistory(prev => [...prev, d.undoAction]);
+          refresh();
+          toast(`Movidos ${pathsToMove.length} items a ${targetEntry.name}`, 'success');
+          clearSelection();
+        }
+      }
+    } catch {}
+  };
+
+  const handleTrashDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('application/json'));
+      if (data.paths && data.paths.length > 0) {
+        handleDelete(data.paths);
+      }
+    } catch {}
+  };
+
   const toggleSelect = (path: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const newSel = new Set(selected);
@@ -610,6 +659,8 @@ export default function FileOrgApp() {
         <div className="sidebar-section-title">Papelera</div>
         <div className="sidebar-tree" style={{ flex: 'none', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
           <div className="tree-item" onClick={() => setShowTrashModal(true)} 
+               onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+               onDrop={handleTrashDrop}
                style={{ 
                  color: trashCount > 0 ? 'var(--danger)' : 'var(--text-secondary)', 
                  padding: '10px 12px', 
@@ -718,6 +769,10 @@ export default function FileOrgApp() {
                     key={entry.path}
                     data-path={entry.path}
                     className={`file-card ${isSelected ? 'selected' : ''} ${focusedPath === entry.path ? 'focused' : ''} ${useCoverLayout ? 'video-card' : ''}`}
+                    draggable={true}
+                    onDragStart={(e: any) => handleDragStart(e, entry)}
+                    onDragOver={(e: any) => handleDragOver(e, entry)}
+                    onDrop={(e: any) => handleDrop(e, entry)}
                     onClick={e => { e.stopPropagation(); setFocusedPath(entry.path); handleClick(e, entry); }}
                     onContextMenu={e => onContextMenu(e, entry)}
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -784,6 +839,10 @@ export default function FileOrgApp() {
                       key={entry.path}
                       data-path={entry.path}
                       className={`file-list-item ${isSelected ? 'selected' : ''} ${focusedPath === entry.path ? 'focused' : ''}`}
+                      draggable={true}
+                      onDragStart={(e: any) => handleDragStart(e, entry)}
+                      onDragOver={(e: any) => handleDragOver(e, entry)}
+                      onDrop={(e: any) => handleDrop(e, entry)}
                       onClick={e => { e.stopPropagation(); setFocusedPath(entry.path); handleClick(e, entry); }}
                       onContextMenu={e => onContextMenu(e, entry)}
                       initial={{ opacity: 0, y: 5 }}

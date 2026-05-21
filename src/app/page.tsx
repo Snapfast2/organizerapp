@@ -495,11 +495,19 @@ export default function FileOrgApp() {
 
         <div className="sidebar-section-title">Papelera</div>
         <div className="sidebar-tree" style={{ flex: 'none', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
-          <div className="tree-item" onClick={() => setShowTrashModal(true)} style={{ color: trashCount > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>
-            <AnimatedTrashIcon count={trashCount} size={14} /> 
-            <div className="tree-item-name">Papelera</div>
+          <div className="tree-item" onClick={() => setShowTrashModal(true)} 
+               style={{ 
+                 color: trashCount > 0 ? 'var(--danger)' : 'var(--text-secondary)', 
+                 padding: '10px 12px', 
+                 gap: 12, 
+                 marginTop: 4,
+                 borderRadius: 8, 
+                 background: trashCount > 0 ? 'rgba(255, 68, 68, 0.08)' : 'transparent' 
+               }}>
+            <AnimatedTrashIcon count={trashCount} size={24} /> 
+            <div className="tree-item-name" style={{ fontSize: 13, fontWeight: 600 }}>Papelera</div>
             {trashCount > 0 && (
-              <span style={{ background: 'var(--danger-bg)', padding: '2px 6px', borderRadius: 10, fontSize: 10 }}>{trashCount}</span>
+              <span style={{ background: 'var(--danger)', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{trashCount}</span>
             )}
           </div>
         </div>

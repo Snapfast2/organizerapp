@@ -1202,8 +1202,8 @@ function TrashThumb({ item }: { item: any }) {
   }
   if (TRASH_VID_EXTS.has(ext)) {
     return (
-      <div style={{ width: 44, height: 44, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Film size={20} style={{ color: 'var(--accent)', opacity: 0.7 }} />
+      <div style={{ width: 44, height: 44, flexShrink: 0, position: 'relative' }}>
+        <VideoThumb src={src} size={44} mini={true} cover={true} />
       </div>
     );
   }

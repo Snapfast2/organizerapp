@@ -851,7 +851,7 @@ export default function FileOrgApp() {
                       <>
                         <div className="file-thumb-cover">
                           {isVideo && <VideoThumb src={`/api/preview?path=${encodeURIComponent(entry.path)}`} cover />}
-                          {isImage && <ImageCover src={`/api/preview?path=${encodeURIComponent(entry.path)}`} name={entry.name} ext={entry.ext} />}
+                          {isImage && <ImageCover src={`/api/image-thumb?path=${encodeURIComponent(entry.path)}`} name={entry.name} ext={entry.ext} />}
                           {isDoc && <DocCover src={entry.path} name={entry.name} ext={entry.ext} />}
                         </div>
                         <div className="video-card-info">

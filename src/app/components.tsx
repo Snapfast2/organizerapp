@@ -458,10 +458,12 @@ export function FileThumbnail({ entry, size = 56 }: { entry: FileEntry; size?: n
   const iconBg = entry.isDir ? 'rgba(0,200,160,0.12)' : info.bgColor + '28';
   const previewUrl = `/api/preview?path=${encodeURIComponent(entry.path)}`;
 
+  const thumbUrl = `/api/image-thumb?path=${encodeURIComponent(entry.path)}`;
+
   if (!entry.isDir && isImage && !imgError) {
     return (
       <div className="file-thumb" style={{ width: size, height: size }}>
-        <img src={previewUrl} alt={entry.name} onError={() => setImgError(true)} loading="lazy" />
+        <img src={thumbUrl} alt={entry.name} onError={() => setImgError(true)} loading="lazy" />
       </div>
     );
   }
@@ -488,10 +490,12 @@ export function FileListIcon({ entry }: { entry: FileEntry }) {
   const iconBg = entry.isDir ? 'rgba(0,200,160,0.12)' : info.bgColor + '28';
   const previewUrl = `/api/preview?path=${encodeURIComponent(entry.path)}`;
 
+  const thumbUrl = `/api/image-thumb?path=${encodeURIComponent(entry.path)}`;
+
   if (!entry.isDir && isImage && !imgError) {
     return (
       <div className="file-list-icon" style={{ background: 'transparent' }}>
-        <img src={previewUrl} alt="" onError={() => setImgError(true)} loading="lazy"
+        <img src={thumbUrl} alt="" onError={() => setImgError(true)} loading="lazy"
           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 4 }} />
       </div>
     );

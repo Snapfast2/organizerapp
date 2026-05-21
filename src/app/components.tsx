@@ -781,7 +781,7 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
           <div className="context-menu-item" onClick={onOpenLocation}>
             <ExternalLink size={13} /> Abrir origen
           </div>
-          {entry.ext === '.zip' && (
+          {entry.ext === 'zip' && (
             <div className="context-menu-item" onClick={onUnzip}>
               <FileArchive size={13} /> Extraer Aquí
             </div>

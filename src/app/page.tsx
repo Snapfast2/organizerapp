@@ -158,7 +158,7 @@ export default function FileOrgApp() {
 
   const handleMkdir = async (name: string) => {
     try {
-      await doAction('mkdir', { path: `${currentPath}\\${name}` });
+      await doAction('mkdir', { path: currentPath, newName: name });
     } catch {}
   };
 

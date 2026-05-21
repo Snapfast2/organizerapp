@@ -336,6 +336,36 @@ export default function FileOrgApp() {
     }
   }, [toast, clearSelection, refresh]);
 
+  const deferredListing = useDeferredValue(listing);
+
+  // Sort entries
+  const displayedEntries = useMemo(() => {
+    const base = searchResults || deferredListing?.entries || [];
+    return [...base].sort((a, b) => {
+      // Dirs always first regardless of sort
+      if (a.isDir && !b.isDir) return -1;
+      if (!a.isDir && b.isDir) return 1;
+      let cmp = 0;
+      switch (sortBy) {
+        case 'name':     cmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }); break;
+        case 'type':     cmp = (a.ext || '').localeCompare(b.ext || '', undefined, { sensitivity: 'base' }); break;
+        case 'size':     cmp = a.size - b.size; break;
+        case 'created':  cmp = new Date(a.created).getTime() - new Date(b.created).getTime(); break;
+        case 'modified': cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime(); break;
+        default:         cmp = a.name.localeCompare(b.name); break;
+      }
+      return sortDesc ? -cmp : cmp;
+    });
+  }, [searchResults, deferredListing, sortBy, sortDesc]);
+
+  const visualEntries = useMemo(() => {
+    if (viewMode === 'list') return displayedEntries;
+    const dirs = displayedEntries.filter(e => e.isDir);
+    const coverFiles = displayedEntries.filter(e => !e.isDir && PREVIEWABLE.has(e.ext));
+    const otherFiles = displayedEntries.filter(e => !e.isDir && !PREVIEWABLE.has(e.ext));
+    return [...dirs, ...coverFiles, ...otherFiles];
+  }, [displayedEntries, viewMode]);
+
   // Keyboard Navigation & Undo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -350,7 +380,7 @@ export default function FileOrgApp() {
       }
       
       // Select All (Ctrl+A)
-      const entries = searchResults || listing?.entries || [];
+      const entries = visualEntries;
       if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
         e.preventDefault();
         setSelected(new Set(entries.map(x => x.path)));
@@ -456,7 +486,7 @@ export default function FileOrgApp() {
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, focusedPath, selected, listing, searchResults, viewMode, handleDelete, currentPath]);
+  }, [handleUndo, focusedPath, selected, visualEntries, viewMode, handleDelete, currentPath]);
 
   // Drag & Drop Handlers
   const handleDragStart = (e: React.DragEvent, entry: FileEntry) => {
@@ -553,27 +583,7 @@ export default function FileOrgApp() {
   const [showTrashModal, setShowTrashModal] = useState(false);
   const [showOrgModal, setShowOrgModal] = useState(false);
 
-  const deferredListing = useDeferredValue(listing);
 
-  // Sort entries
-  const displayedEntries = useMemo(() => {
-    const base = searchResults || deferredListing?.entries || [];
-    return [...base].sort((a, b) => {
-      // Dirs always first regardless of sort
-      if (a.isDir && !b.isDir) return -1;
-      if (!a.isDir && b.isDir) return 1;
-      let cmp = 0;
-      switch (sortBy) {
-        case 'name':     cmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }); break;
-        case 'type':     cmp = (a.ext || '').localeCompare(b.ext || '', undefined, { sensitivity: 'base' }); break;
-        case 'size':     cmp = a.size - b.size; break;
-        case 'created':  cmp = new Date(a.created).getTime() - new Date(b.created).getTime(); break;
-        case 'modified': cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime(); break;
-        default:         cmp = a.name.localeCompare(b.name); break;
-      }
-      return sortDesc ? -cmp : cmp;
-    });
-  }, [searchResults, deferredListing, sortBy, sortDesc]);
 
   return (
     <div className="app-shell" onClick={() => { clearSelection(); closeContextMenu(); }}>

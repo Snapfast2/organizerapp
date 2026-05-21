@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
           try {
             const files = await fs.readdir(dir, { withFileTypes: true });
             for (const file of files) {
-              if (file.name === 'System Volume Information' || file.name === '$RECYCLE.BIN' || file.name.startsWith('.git')) continue;
+              if (file.name === 'System Volume Information' || file.name === '$RECYCLE.BIN' || file.name.startsWith('.') || file.name === 'node_modules') continue;
               
               const res = path.resolve(dir, file.name);
               if (file.isDirectory()) {

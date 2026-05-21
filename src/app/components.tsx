@@ -47,6 +47,7 @@ function releaseThumbSlot() {
 export function InlineRenameInput({ entry, onConfirm, onCancel }: { entry: FileEntry, onConfirm: (path: string, newName: string) => void, onCancel: () => void }) {
   const [name, setName] = useState(entry.name);
   const inputRef = useRef<HTMLInputElement>(null);
+  const confirmedRef = useRef(false); // prevent double-fire from Enter + blur
 
   useEffect(() => {
     if (inputRef.current) {
@@ -60,16 +61,28 @@ export function InlineRenameInput({ entry, onConfirm, onCancel }: { entry: FileE
     }
   }, [entry.name, entry.isDir]);
 
+  const confirm = (value: string) => {
+    if (confirmedRef.current) return;
+    confirmedRef.current = true;
+    onConfirm(entry.path, value);
+  };
+
+  const cancel = () => {
+    if (confirmedRef.current) return;
+    confirmedRef.current = true;
+    onCancel();
+  };
+
   return (
     <input
       ref={inputRef}
       value={name}
       onChange={e => setName(e.target.value)}
       onKeyDown={e => {
-        if (e.key === 'Enter') onConfirm(entry.path, name);
-        if (e.key === 'Escape') onCancel();
+        if (e.key === 'Enter') { e.preventDefault(); confirm(name); }
+        if (e.key === 'Escape') { e.preventDefault(); cancel(); }
       }}
-      onBlur={() => onConfirm(entry.path, name)}
+      onBlur={() => confirm(name)}
       onClick={e => e.stopPropagation()}
       onDoubleClick={e => e.stopPropagation()}
       className="inline-rename-input"
@@ -90,6 +103,7 @@ export function InlineRenameInput({ entry, onConfirm, onCancel }: { entry: FileE
     />
   );
 }
+
 
 // ─── File Checkbox ───────────────────────────────────────────
 export function FileCheckbox({ selected, onToggle }: { selected: boolean; onToggle: () => void }) {

@@ -9,7 +9,7 @@ import {
   Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
   Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
   FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, MoreVertical,
-  ChevronsUp, ArrowUpDown, SortAsc, SortDesc
+  ChevronsUp, ArrowUpDown, SortAsc, SortDesc, Undo
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
@@ -180,13 +180,22 @@ export default function FileOrgApp() {
     const paths = showMoveTo;
     setShowMoveTo(null);
     clearSelection();
-    let errors = 0;
-    for (const p of paths) {
-      try { await doAction('move', { path: p, newPath: destPath }); }
-      catch { errors++; }
+    
+    try {
+      const res = await fetch('/api/fs/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'move', paths, destPath })
+      });
+      if (!res.ok) throw new Error('Bulk move failed');
+      const data = await res.json();
+      
+      if (data.undoAction) setUndoHistory(prev => [...prev, data.undoAction]);
+      toast(paths.length === 1 ? 'Archivo movido' : `${paths.length} archivos movidos`, 'success');
+      refresh();
+    } catch {
+      toast('Error al mover archivos', 'error');
     }
-    if (errors === 0) toast(`${paths.length === 1 ? 'Archivo movido' : `${paths.length} archivos movidos`}`, 'success');
-    else toast(`Error al mover ${errors} archivo(s)`, 'error');
   };
 
 
@@ -256,37 +265,41 @@ export default function FileOrgApp() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPath]);
 
-  useEffect(() => {
+  const handleUndo = useCallback(async () => {
+    if (undoHistory.length === 0) return;
+    const lastAction = undoHistory[undoHistory.length - 1];
+    setUndoHistory(prev => prev.slice(0, -1));
+    
+    const returningPaths = lastAction.items.map(item => item.originalPath);
+    setReturningItems(prev => [...prev, ...returningPaths]);
+    
+    try {
+      await fetch('/api/fs/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'undo', undoAction: lastAction })
+      });
+      toast('Acción deshecha exitosamente', 'success');
+      refresh();
+    } catch {
+      toast('Error al deshacer', 'error');
+    }
+    
+    setTimeout(() => {
+      setReturningItems(prev => prev.filter(p => !returningPaths.includes(p)));
+    }, 2000);
+  }, [undoHistory, refresh, toast]);
 
-    const handleKeyDown = async (e: KeyboardEvent) => {
+  // Handle Ctrl+Z Undo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        if (undoHistory.length === 0) return;
-        const lastAction = undoHistory[undoHistory.length - 1];
-        setUndoHistory(prev => prev.slice(0, -1));
-        
-        const returningPaths = lastAction.items.map(item => item.originalPath);
-        setReturningItems(prev => [...prev, ...returningPaths]);
-        
-        try {
-          await fetch('/api/fs/action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'undo', undoAction: lastAction })
-          });
-          toast('Acción deshecha exitosamente', 'success');
-          refresh();
-        } catch {
-          toast('Error al deshacer', 'error');
-        }
-        
-        setTimeout(() => {
-          setReturningItems(prev => prev.filter(p => !returningPaths.includes(p)));
-        }, 2000);
+        handleUndo();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undoHistory, refresh, toast]);
+  }, [handleUndo]);
 
   const doAction = async (action: string, payload: any) => {
     const res = await fetch('/api/fs/action', {
@@ -360,10 +373,7 @@ export default function FileOrgApp() {
       if (!res.ok) throw new Error('Bulk delete failed');
       const data = await res.json();
       
-      setUndoHistory(prev => [...prev, {
-        type: 'delete',
-        items: paths.map((p, i) => ({ originalPath: p, newPath: '', trashPath: data.trashPaths[i] }))
-      }]);
+      if (data.undoAction) setUndoHistory(prev => [...prev, data.undoAction]);
       
       toast(paths.length === 1 ? 'Archivo enviado a la papelera' : `${paths.length} archivos enviados a la papelera`, 'success');
       clearSelection();
@@ -812,7 +822,19 @@ export default function FileOrgApp() {
           {toasts.map(t => (
             <motion.div key={t.id} initial={{ opacity: 0, y: 50, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.9 }} className={`toast ${t.type}`}>
               {t.type === 'success' ? <CheckCircle size={18} className="toast-icon success" /> : t.type === 'error' ? <AlertCircle size={18} className="toast-icon error" /> : <Info size={18} />}
-              <span style={{ fontSize: '13px', fontWeight: 500 }}>{t.message}</span>
+              <span style={{ fontSize: '13px', fontWeight: 500, flex: 1 }}>{t.message}</span>
+              {t.type === 'success' && undoHistory.length > 0 && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleUndo(); }}
+                  style={{ 
+                    background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 4, 
+                    color: 'inherit', padding: '4px 8px', fontSize: 12, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8
+                  }}
+                >
+                  <Undo size={12} /> Deshacer
+                </button>
+              )}
             </motion.div>
           ))}
         </AnimatePresence>

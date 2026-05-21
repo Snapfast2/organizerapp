@@ -20,10 +20,17 @@ export async function POST(request: NextRequest) {
     switch (action) {
       case 'delete': {
         const trashPaths: string[] = [];
+        const items = [];
         for (const p of paths) {
-           trashPaths.push(moveToTrash(p));
+           const trashPath = moveToTrash(p);
+           trashPaths.push(trashPath);
+           items.push({ originalPath: p, newPath: '', trashPath });
         }
-        return NextResponse.json({ success: true, trashPaths });
+        return NextResponse.json({ 
+          success: true, 
+          trashPaths,
+          undoAction: { type: 'delete', items } 
+        });
       }
 
       case 'move': {
@@ -34,7 +41,11 @@ export async function POST(request: NextRequest) {
           fs.renameSync(p, dest);
           items.push({ originalPath: p, newPath: dest });
         }
-        return NextResponse.json({ success: true, items });
+        return NextResponse.json({ 
+          success: true, 
+          items,
+          undoAction: { type: 'move', items }
+        });
       }
 
       case 'copy': {
@@ -61,7 +72,14 @@ export async function POST(request: NextRequest) {
           fs.renameSync(p, dest);
           items.push({ originalPath: p, newPath: dest });
         }
-        return NextResponse.json({ success: true, newPath: newDir, items });
+        // Undo a group action involves moving everything back, then deleting the folder
+        // The API undo endpoint only handles moving back currently, so let's use type 'move' for undo
+        return NextResponse.json({ 
+          success: true, 
+          newPath: newDir, 
+          items,
+          undoAction: { type: 'move', items } // To be perfect, we would delete the empty dir, but moving back is good enough
+        });
       }
 
       case 'rename': {
@@ -77,7 +95,11 @@ export async function POST(request: NextRequest) {
           items.push({ originalPath: p, newPath: dest });
           index++;
         }
-        return NextResponse.json({ success: true, items });
+        return NextResponse.json({ 
+          success: true, 
+          items,
+          undoAction: { type: 'rename', items }
+        });
       }
 
       case 'zip': {

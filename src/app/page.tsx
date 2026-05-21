@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useDeferredValue } from 'react';
+import { useState, useEffect, useCallback, useRef, useDeferredValue, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Folder, File, Image as ImageIcon, Film, Music, FileText, Archive, Code, HardDrive,
@@ -8,7 +8,8 @@ import {
   Trash2, Trash, Edit2, RefreshCw, BarChart2, Wand2, X, CheckCircle, AlertCircle, 
   Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
   Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
-  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, MoreVertical
+  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, MoreVertical,
+  ChevronsUp, ArrowUpDown, SortAsc, SortDesc
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
@@ -77,6 +78,8 @@ export default function FileOrgApp() {
   const [isSearching, setIsSearching] = useState(false);
   const searching = isSearching;
   const [searchQuery, setSearchQuery] = useState('');
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const fileContentRef = useRef<HTMLDivElement>(null);
 
   const goUp = () => {
     if (currentPath.length > 3) {
@@ -84,6 +87,25 @@ export default function FileOrgApp() {
       setCurrentPath(parent);
     }
   };
+
+  // Toggle sort column: same field → flip direction, new field → asc
+  const handleSort = useCallback((field: string) => {
+    if (sortBy === field) {
+      setSortDesc(prev => !prev);
+    } else {
+      setSortBy(field);
+      setSortDesc(false);
+    }
+  }, [sortBy]);
+
+  // Scroll listener for scroll-to-top button
+  useEffect(() => {
+    const el = fileContentRef.current;
+    if (!el) return;
+    const onScroll = () => setShowScrollTop(el.scrollTop > 300);
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
 
   const handleClick = (entry: FileEntry) => {
     if (entry.isDir) {
@@ -326,7 +348,26 @@ export default function FileOrgApp() {
   const [showOrgModal, setShowOrgModal] = useState(false);
 
   const deferredListing = useDeferredValue(listing);
-  const displayedEntries = deferredListing?.entries || [];
+
+  // Sort entries
+  const displayedEntries = useMemo(() => {
+    const base = searchResults || deferredListing?.entries || [];
+    return [...base].sort((a, b) => {
+      // Dirs always first regardless of sort
+      if (a.isDir && !b.isDir) return -1;
+      if (!a.isDir && b.isDir) return 1;
+      let cmp = 0;
+      switch (sortBy) {
+        case 'name':     cmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }); break;
+        case 'type':     cmp = (a.ext || '').localeCompare(b.ext || '', undefined, { sensitivity: 'base' }); break;
+        case 'size':     cmp = a.size - b.size; break;
+        case 'created':  cmp = new Date(a.created).getTime() - new Date(b.created).getTime(); break;
+        case 'modified': cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime(); break;
+        default:         cmp = a.name.localeCompare(b.name); break;
+      }
+      return sortDesc ? -cmp : cmp;
+    });
+  }, [searchResults, deferredListing, sortBy, sortDesc]);
 
   return (
     <div className="app-shell" onClick={() => { clearSelection(); closeContextMenu(); }}>
@@ -409,13 +450,33 @@ export default function FileOrgApp() {
             <button className="btn btn-default" onClick={() => setShowMkdir(true)}><FolderPlus size={14} /> Nueva Carpeta</button>
           </div>
           <div className="toolbar-divider" />
+          {/* Sort controls */}
+          <div className="toolbar-group">
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', userSelect: 'none' }}>Ordenar:</span>
+            {(['name','type','size','created','modified'] as const).map(field => {
+              const labels: Record<string,string> = { name:'Nombre', type:'Tipo', size:'Tamaño', created:'Creación', modified:'Modificado' };
+              const active = sortBy === field;
+              return (
+                <button
+                  key={field}
+                  className={`btn btn-ghost sort-btn ${active ? 'active' : ''}`}
+                  onClick={() => handleSort(field)}
+                  title={`Ordenar por ${labels[field]}`}
+                >
+                  {labels[field]}
+                  {active ? (sortDesc ? <SortDesc size={12}/> : <SortAsc size={12}/>) : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="toolbar-divider" />
           <div className="toolbar-group">
             <button className={`btn btn-ghost btn-icon ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}><Grid size={16}/></button>
             <button className={`btn btn-ghost btn-icon ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}><List size={16}/></button>
           </div>
         </div>
 
-        <div className="file-content" onClick={clearSelection}>
+        <div className="file-content" ref={fileContentRef} onClick={clearSelection}>
           <AnimatePresence mode="popLayout">
             {listing?.entries.length === 0 && !searching && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="empty-state">
@@ -424,8 +485,31 @@ export default function FileOrgApp() {
               </motion.div>
             )}
 
+            {/* List view column headers */}
+            {viewMode === 'list' && (
+              <div className="file-list-header">
+                <div style={{ width: 28 }} />{/* checkbox */}
+                <div style={{ width: 32 }} />{/* icon */}
+                {(['name','type','size','modified'] as const).map(field => {
+                  const labels: Record<string,string> = { name:'Nombre', type:'Tipo', size:'Tamaño', modified:'Modificado' };
+                  const active = sortBy === field;
+                  return (
+                    <div
+                      key={field}
+                      className={`file-list-header-col ${field === 'name' ? 'grow' : ''} ${active ? 'active' : ''}`}
+                      onClick={() => handleSort(field)}
+                    >
+                      {labels[field]}
+                      {active
+                        ? (sortDesc ? <ArrowDown size={11}/> : <ArrowUp size={11}/>)
+                        : <ArrowUpDown size={11} style={{ opacity: 0.3 }}/>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <div className={viewMode === 'grid' ? 'file-grid' : 'file-list'}>
-              {(searchResults || listing?.entries || []).slice(0, visibleCount).map((entry, idx) => {
+              {displayedEntries.slice(0, visibleCount).map((entry, idx) => {
                 const isSelected = selected.has(entry.path);
                 const isReturning = returningItems.includes(entry.path);
                 const isEditing = inlineRenameEntry?.path === entry.path;
@@ -507,6 +591,25 @@ export default function FileOrgApp() {
             </div>
           </AnimatePresence>
         </div>
+
+        {/* ─── Scroll to Top Floating Button ─── */}
+        <AnimatePresence>
+          {showScrollTop && (
+            <motion.button
+              className="scroll-top-btn"
+              onClick={() => fileContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+              initial={{ opacity: 0, scale: 0.5, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.5, y: 20 }}
+              transition={{ type: 'spring', damping: 18, stiffness: 300 }}
+              whileHover={{ scale: 1.15, boxShadow: '0 0 20px rgba(14,201,0,0.5)' }}
+              whileTap={{ scale: 0.88, backgroundColor: 'var(--accent-light)' }}
+              title="Volver arriba"
+            >
+              <ChevronsUp size={20} strokeWidth={2.5} />
+            </motion.button>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* ─── MODALS ─── */}
@@ -521,7 +624,7 @@ export default function FileOrgApp() {
             onOpen={() => { if(contextMenu.entry) handleOpen(contextMenu.entry.path); setContextMenu(null); }}
             onPreview={() => { if(contextMenu.entry) setPreviewEntry(contextMenu.entry); setContextMenu(null); }}
             onOpenLocation={() => { if(contextMenu.entry) doAction('open-location', { path: contextMenu.entry.path }); setContextMenu(null); }}
-            sortBy={sortBy} sortDesc={sortDesc} onSort={setSortBy}
+            sortBy={sortBy} sortDesc={sortDesc} onSort={handleSort}
           />
         )}
       </AnimatePresence>

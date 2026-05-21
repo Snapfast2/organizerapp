@@ -675,16 +675,32 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
   onOpenLocation: () => void;
   sortBy: string; sortDesc: boolean; onSort: (field: string) => void;
 }) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: x, top: y });
+
   useEffect(() => {
     const h = () => onClose();
     window.addEventListener('click', h, { once: true });
     return () => window.removeEventListener('click', h);
   }, [onClose]);
 
+  useEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    setPos({
+      left: rect.right > vw ? x - rect.width : x,
+      top: rect.bottom > vh ? y - rect.height : y,
+    });
+  }, [x, y]);
+
   return (
     <motion.div 
+      ref={menuRef}
       className="context-menu" 
-      style={{ left: x, top: y, transformOrigin: 'top left' }}
+      style={{ left: pos.left, top: pos.top, transformOrigin: 'top left' }}
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
@@ -712,6 +728,7 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
           <div className="context-menu-item danger" onClick={onDelete}>
             <Trash2 size={13} /> Eliminar
           </div>
+          <div className="context-menu-sep" />
         </>
       )}
       {!entry && (
@@ -720,23 +737,25 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
             <Plus size={13} /> Nueva carpeta
           </div>
           <div className="context-menu-sep" />
-          <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); onSort('name'); }}>
-            {sortBy === 'name' ? (sortDesc ? <ArrowDown size={13}/> : <ArrowUp size={13}/>) : <div style={{width:13}}/>} Ordenar por Nombre
-          </div>
-          <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); onSort('type'); }}>
-            {sortBy === 'type' ? (sortDesc ? <ArrowDown size={13}/> : <ArrowUp size={13}/>) : <div style={{width:13}}/>} Ordenar por Tipo
-          </div>
-          <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); onSort('size'); }}>
-            {sortBy === 'size' ? (sortDesc ? <ArrowDown size={13}/> : <ArrowUp size={13}/>) : <div style={{width:13}}/>} Ordenar por Tamaño
-          </div>
-          <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); onSort('created'); }}>
-            {sortBy === 'created' ? (sortDesc ? <ArrowDown size={13}/> : <ArrowUp size={13}/>) : <div style={{width:13}}/>} Ordenar por Creación
-          </div>
-          <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); onSort('modified'); }}>
-            {sortBy === 'modified' ? (sortDesc ? <ArrowDown size={13}/> : <ArrowUp size={13}/>) : <div style={{width:13}}/>} Ordenar por Modificación
-          </div>
         </>
       )}
+      {/* Sort section — always visible regardless of entry */}
+      <div className="context-menu-section-label">Ordenar por</div>
+      {(['name','type','size','created','modified'] as const).map((field) => {
+        const labels: Record<string, string> = { name: 'Nombre', type: 'Tipo', size: 'Tamaño', created: 'Creación', modified: 'Modificado' };
+        const active = sortBy === field;
+        return (
+          <div
+            key={field}
+            className={`context-menu-item ${active ? 'accent' : ''}`}
+            onClick={(e) => { e.stopPropagation(); onSort(field); }}
+          >
+            {active ? (sortDesc ? <ArrowDown size={13}/> : <ArrowUp size={13}/>) : <div style={{ width: 13 }}/>}
+            {labels[field]}
+            {active && <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.6 }}>{sortDesc ? '↓ Z→A' : '↑ A→Z'}</span>}
+          </div>
+        );
+      })}
     </motion.div>
   );
 }

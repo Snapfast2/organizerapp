@@ -412,6 +412,13 @@ export default function FileOrgApp() {
         handleUndo();
         return;
       }
+
+      // Navigate Up (Backspace)
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        goUp();
+        return;
+      }
       
       // Select All (Ctrl+A)
       const entries = visualEntries;

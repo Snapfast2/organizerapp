@@ -460,7 +460,7 @@ export function VideoPlayer({ src }: { src: string }) {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(true);
   const [showControls, setShowControls] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -506,7 +506,10 @@ export function VideoPlayer({ src }: { src: string }) {
 
   const toggleMute = () => {
     const v = videoRef.current; if (!v) return;
-    v.muted = !v.muted; setMuted(v.muted);
+    const newMuted = !muted;
+    v.muted = newMuted;
+    setMuted(newMuted);
+    if (!newMuted && volume === 0) { v.volume = 0.8; setVolume(0.8); }
   };
 
   const toggleFullscreen = () => {
@@ -525,8 +528,9 @@ export function VideoPlayer({ src }: { src: string }) {
         ref={videoRef}
         src={src}
         className="custom-player-video"
+        muted={muted}
         onTimeUpdate={e => setProgress(e.currentTarget.currentTime)}
-        onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
+        onLoadedMetadata={e => { setDuration(e.currentTarget.duration); }}
         onEnded={() => { setPlaying(false); setShowControls(true); }}
       />
       {!playing && (

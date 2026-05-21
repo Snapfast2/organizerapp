@@ -1512,26 +1512,47 @@ export function DuplicateModal({
 }) {
   const [duplicates, setDuplicates] = useState<{ hash: string; files: { path: string; size: number }[] }[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [progressMsg, setProgressMsg] = useState('Iniciando...');
+  const [progressPct, setProgressPct] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const { show: toast } = useToast();
 
   useEffect(() => {
     let active = true;
-    fetch(`/api/fs/duplicates?path=${encodeURIComponent(cwd)}`)
-      .then(r => r.json())
-      .then(d => {
-        if (active) {
-          setDuplicates(d.duplicates || []);
+    const es = new EventSource(`/api/fs/duplicates?path=${encodeURIComponent(cwd)}`);
+    
+    es.onmessage = (e) => {
+      if (!active) return;
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'progress') {
+          setProgressMsg(data.message);
+          if (data.total > 0) {
+            setProgressPct(Math.round((data.processed / data.total) * 100));
+          } else {
+            setProgressPct(null);
+          }
+        } else if (data.type === 'result') {
+          setDuplicates(data.duplicates || []);
           setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (active) {
+          es.close();
+        } else if (data.type === 'error') {
           setLoading(false);
-          toast('Error al buscar duplicados', 'error');
+          toast(data.message || 'Error', 'error');
+          es.close();
         }
-      });
-    return () => { active = false; };
+      } catch (err) {}
+    };
+
+    es.onerror = () => {
+      if (active && loading) {
+        setLoading(false);
+        toast('Error de conexión con el servidor', 'error');
+      }
+      es.close();
+    };
+
+    return () => { active = false; es.close(); };
   }, [cwd, toast]);
 
   const handleDelete = async (pathsToKeep: string[], groupFiles: string[]) => {
@@ -1572,7 +1593,18 @@ export function DuplicateModal({
 
         <div style={{ minHeight: 200, maxHeight: 400, overflowY: 'auto', margin: '0 -4px', padding: '0 4px' }}>
           {loading && (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Analizando hashes SHA-256...</div>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+              <div style={{ marginBottom: 12 }}>{progressMsg}</div>
+              {progressPct !== null && (
+                <div style={{ width: '100%', height: 4, background: 'var(--border-subtle)', borderRadius: 2, overflow: 'hidden' }}>
+                  <motion.div 
+                    initial={{ width: 0 }} 
+                    animate={{ width: `${progressPct}%` }} 
+                    style={{ height: '100%', background: 'var(--accent)' }} 
+                  />
+                </div>
+              )}
+            </div>
           )}
           
           {!loading && duplicates && duplicates.length === 0 && (
@@ -1591,9 +1623,13 @@ export function DuplicateModal({
                 {group.files.map(f => {
                   const parts = f.path.split(/[\\/]/);
                   const name = parts[parts.length - 1];
+                  const ext = name.split('.').pop()?.toLowerCase() || '';
+                  const mockEntry: FileEntry = { path: f.path, name, ext, isDir: false, size: f.size, modified: '', created: '' };
                   return (
-                    <div key={f.path} style={{ fontSize: 12, padding: '4px 8px', background: 'var(--bg-elevated)', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <File size={12} style={{ color: 'var(--text-secondary)' }} />
+                    <div key={f.path} style={{ fontSize: 13, padding: '6px 10px', background: 'var(--bg-elevated)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 24, height: 24 }}>
+                        <FileListIcon entry={mockEntry} />
+                      </div>
                       <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.path}>{name}</span>
                     </div>
                   );

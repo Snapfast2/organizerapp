@@ -58,67 +58,120 @@ export async function GET(request: NextRequest) {
   const dirPath = request.nextUrl.searchParams.get('path');
   if (!dirPath) return NextResponse.json({ error: 'path required' }, { status: 400 });
 
-  try {
-    const normalized = path.normalize(dirPath);
-    const allFiles = await walk(normalized);
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const sendEvent = (data: any) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      };
 
-    // 1. Group by size
-    const bySize = new Map<number, string[]>();
-    for (const f of allFiles) {
-      const group = bySize.get(f.size) || [];
-      group.push(f.path);
-      bySize.set(f.size, group);
-    }
-
-    // Keep only groups with > 1 file
-    const potentialDuplicates = Array.from(bySize.values()).filter(group => group.length > 1);
-
-    const exactDuplicates: { hash: string; files: { path: string; size: number }[] }[] = [];
-
-    // 2. Hash comparison
-    for (const group of potentialDuplicates) {
-      // Group by quick hash first (first 8KB) to save IO
-      const byQuickHash = new Map<string, string[]>();
-      for (const filePath of group) {
-        try {
-          const qHash = await getQuickHash(filePath);
-          const qGroup = byQuickHash.get(qHash) || [];
-          qGroup.push(filePath);
-          byQuickHash.set(qHash, qGroup);
-        } catch {}
-      }
-
-      const quickPotential = Array.from(byQuickHash.values()).filter(g => g.length > 1);
-
-      // Now do full hash for those that passed quick hash
-      for (const qGroup of quickPotential) {
-        const byFullHash = new Map<string, string[]>();
-        for (const filePath of qGroup) {
+      try {
+        const normalized = path.normalize(dirPath);
+        
+        sendEvent({ type: 'progress', message: 'Escaneando archivos...', processed: 0, total: 0 });
+        
+        // Scan directory (we could stream this if we wanted, but fs.readdir is fairly fast)
+        let scannedCount = 0;
+        const allFiles: FileInfo[] = [];
+        
+        async function walkStream(dir: string) {
           try {
-            const fHash = await getFullHash(filePath);
-            const fGroup = byFullHash.get(fHash) || [];
-            fGroup.push(filePath);
-            byFullHash.set(fHash, fGroup);
-          } catch {}
+            const files = await fs.readdir(dir, { withFileTypes: true });
+            for (const file of files) {
+              if (file.name === 'System Volume Information' || file.name === '$RECYCLE.BIN' || file.name.startsWith('.git')) continue;
+              
+              const res = path.resolve(dir, file.name);
+              if (file.isDirectory()) {
+                await walkStream(res);
+              } else {
+                try {
+                  const stat = await fs.stat(res);
+                  if (stat.size > 0) {
+                    allFiles.push({ path: res, size: stat.size });
+                    scannedCount++;
+                    if (scannedCount % 500 === 0) {
+                      sendEvent({ type: 'progress', message: `Escaneando archivos...`, processed: scannedCount, total: 0 });
+                    }
+                  }
+                } catch { }
+              }
+            }
+          } catch { }
+        }
+        
+        await walkStream(normalized);
+
+        // 1. Group by size
+        sendEvent({ type: 'progress', message: 'Agrupando por tamaño...', processed: 0, total: allFiles.length });
+        const bySize = new Map<number, string[]>();
+        for (const f of allFiles) {
+          const group = bySize.get(f.size) || [];
+          group.push(f.path);
+          bySize.set(f.size, group);
         }
 
-        // Add verified duplicates to results
-        for (const [hash, files] of byFullHash.entries()) {
-          if (files.length > 1) {
-            // Get size from the first file
-            const stat = await fs.stat(files[0]);
-            exactDuplicates.push({
-              hash,
-              files: files.map(p => ({ path: p, size: stat.size }))
-            });
+        const potentialDuplicates = Array.from(bySize.values()).filter(group => group.length > 1);
+        const totalPotential = potentialDuplicates.reduce((acc, g) => acc + g.length, 0);
+
+        const exactDuplicates: { hash: string; files: { path: string; size: number }[] }[] = [];
+
+        // 2. Hash comparison
+        let processedHashes = 0;
+        
+        for (const group of potentialDuplicates) {
+          const byQuickHash = new Map<string, string[]>();
+          for (const filePath of group) {
+            try {
+              const qHash = await getQuickHash(filePath);
+              const qGroup = byQuickHash.get(qHash) || [];
+              qGroup.push(filePath);
+              byQuickHash.set(qHash, qGroup);
+            } catch {}
+            processedHashes++;
+            if (processedHashes % 10 === 0) {
+               sendEvent({ type: 'progress', message: 'Analizando contenido (Quick Hash)...', processed: processedHashes, total: totalPotential });
+            }
+          }
+
+          const quickPotential = Array.from(byQuickHash.values()).filter(g => g.length > 1);
+
+          for (const qGroup of quickPotential) {
+            const byFullHash = new Map<string, string[]>();
+            for (const filePath of qGroup) {
+              try {
+                const fHash = await getFullHash(filePath);
+                const fGroup = byFullHash.get(fHash) || [];
+                fGroup.push(filePath);
+                byFullHash.set(fHash, fGroup);
+              } catch {}
+            }
+
+            for (const [hash, files] of byFullHash.entries()) {
+              if (files.length > 1) {
+                const stat = await fs.stat(files[0]);
+                exactDuplicates.push({
+                  hash,
+                  files: files.map(p => ({ path: p, size: stat.size }))
+                });
+              }
+            }
           }
         }
+
+        sendEvent({ type: 'result', duplicates: exactDuplicates });
+      } catch (error: any) {
+        sendEvent({ type: 'error', message: error.message });
+      } finally {
+        controller.close();
       }
     }
+  });
 
-    // Return the duplicates
-    return NextResponse.json({ duplicates: exactDuplicates });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
 }

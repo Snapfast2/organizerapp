@@ -686,11 +686,11 @@ export function PreviewModal({ entry, allPreviewable, onClose }: {
 }
 
 // ─── Context Menu ──────────────────────────────────────────
-export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, sortBy, sortDesc, onSort }: {
+export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, onMoveTo, sortBy, sortDesc, onSort }: {
   x: number; y: number; entry: FileEntry | null;
   onClose: () => void; onRename: () => void; onDelete: () => void;
   onMkdir: () => void; onOpen: () => void; onPreview: () => void;
-  onOpenLocation: () => void;
+  onOpenLocation: () => void; onMoveTo: () => void;
   sortBy: string; sortDesc: boolean; onSort: (field: string) => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -742,6 +742,9 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
           <div className="context-menu-item" onClick={onRename}>
             <Edit2 size={13} /> Renombrar
           </div>
+          <div className="context-menu-item" onClick={e => { e.stopPropagation(); onMoveTo(); }}>
+            <MoveRight size={13} /> Mover a…
+          </div>
           <div className="context-menu-sep" />
           <div className="context-menu-item danger" onClick={onDelete}>
             <Trash2 size={13} /> Eliminar
@@ -777,6 +780,157 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
     </motion.div>
   );
 }
+
+// ─── Move To Modal ─────────────────────────────────────────
+const QUICK_FOLDERS = [
+  { label: 'Escritorio',  path: `${typeof window !== 'undefined' ? '' : 'C:\\Users\\Public'}`, id: 'desktop' },
+  { label: 'Descargas',   path: '', id: 'downloads' },
+  { label: 'Documentos',  path: '', id: 'documents' },
+  { label: 'Imágenes',    path: '', id: 'pictures' },
+  { label: 'Videos',      path: '', id: 'videos' },
+  { label: 'Música',      path: '', id: 'music' },
+];
+
+export function MoveToModal({ sourcePaths, onConfirm, onCancel }: {
+  sourcePaths: string[];
+  onConfirm: (destPath: string) => void;
+  onCancel: () => void;
+}) {
+  const [browsePath, setBrowsePath] = useState('');
+  const [entries, setEntries] = useState<FileEntry[]>([]);
+  const [quickAccess, setQuickAccess] = useState<{ name: string; path: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
+
+  // Load quick access on mount
+  useEffect(() => {
+    fetch('/api/fs?path=__quick__')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.quickAccess) setQuickAccess(data.quickAccess); });
+  }, []);
+
+  const loadDir = async (path: string) => {
+    if (!path) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/fs?path=${encodeURIComponent(path)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setEntries((data.entries || []).filter((e: FileEntry) => e.isDir));
+        setBrowsePath(path);
+      }
+    } finally { setLoading(false); }
+  };
+
+  const navigate = (path: string) => {
+    setHistory(prev => browsePath ? [...prev, browsePath] : prev);
+    loadDir(path);
+  };
+
+  const goBack = () => {
+    const prev = history[history.length - 1];
+    if (!prev) return;
+    setHistory(h => h.slice(0, -1));
+    loadDir(prev);
+  };
+
+  const goUp = () => {
+    if (!browsePath || browsePath.length <= 3) return;
+    const parent = browsePath.substring(0, browsePath.lastIndexOf('\\')) || browsePath.substring(0, 3);
+    navigate(parent);
+  };
+
+  // Breadcrumb parts
+  const parts = browsePath ? browsePath.split('\\').filter(Boolean) : [];
+
+  const isSourceParent = sourcePaths.some(sp => {
+    const spParent = sp.substring(0, sp.lastIndexOf('\\'));
+    return spParent === browsePath;
+  });
+
+  return (
+    <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={e => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <motion.div className="modal moveto-modal" initial={{ scale: 0.95, opacity: 0, y: 10 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 10 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+      >
+        <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <MoveRight size={16} /> Mover a…
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
+            {sourcePaths.length} {sourcePaths.length === 1 ? 'elemento' : 'elementos'}
+          </span>
+        </div>
+
+        <div className="moveto-layout">
+          {/* Left: quick access */}
+          <div className="moveto-sidebar">
+            <div className="moveto-sidebar-title">Accesos rápidos</div>
+            {quickAccess.map(qa => (
+              <button key={qa.path} className={`moveto-quick-item ${browsePath === qa.path ? 'active' : ''}`}
+                onClick={() => navigate(qa.path)}>
+                <FolderOpen size={13} /> {qa.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Right: folder browser */}
+          <div className="moveto-browser">
+            {/* Nav row */}
+            <div className="moveto-nav">
+              <button className="btn btn-ghost btn-icon" onClick={goBack} disabled={history.length === 0} style={{ padding: '2px 5px' }}>
+                <ArrowLeft size={14} />
+              </button>
+              <button className="btn btn-ghost btn-icon" onClick={goUp} disabled={!browsePath || browsePath.length <= 3} style={{ padding: '2px 5px' }}>
+                <ArrowUp size={14} />
+              </button>
+              {/* Breadcrumb */}
+              <div className="moveto-breadcrumb">
+                {parts.length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Seleccioná una carpeta</span>}
+                {parts.map((part, i) => {
+                  const partPath = parts.slice(0, i + 1).join('\\') + (i === 0 ? '\\' : '');
+                  return (
+                    <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      {i > 0 && <ChevronRight size={11} style={{ opacity: 0.4 }} />}
+                      <button className="moveto-breadcrumb-btn" onClick={() => navigate(partPath)}>{part}</button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Folder list */}
+            <div className="moveto-entries">
+              {loading && <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Cargando…</div>}
+              {!loading && !browsePath && <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Elegí un acceso rápido o navegá</div>}
+              {!loading && browsePath && entries.length === 0 && <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Sin subcarpetas</div>}
+              {entries.map(e => (
+                <button key={e.path} className="moveto-folder-item" onDoubleClick={() => navigate(e.path)} onClick={() => setBrowsePath(e.path)}>
+                  <Folder size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>{e.name}</span>
+                  <ArrowRight size={11} style={{ opacity: 0.3, flexShrink: 0 }} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-actions" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 0 }}>
+          <button className="btn btn-ghost" onClick={onCancel}>Cancelar</button>
+          <button
+            className="btn btn-primary"
+            disabled={!browsePath || isSourceParent}
+            onClick={() => onConfirm(browsePath)}
+            title={isSourceParent ? 'El archivo ya está en esta carpeta' : ''}
+          >
+            <MoveRight size={14} /> Mover aquí
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 
 // ─── Rename Modal ──────────────────────────────────────────
 export function RenameModal({ entry, onCancel, onConfirm }: { entry: FileEntry; onCancel: () => void; onConfirm: (name: string) => void }) {

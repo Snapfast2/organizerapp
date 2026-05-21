@@ -16,7 +16,7 @@ import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
 import { 
   InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail, FileListIcon,
   VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal, BulkActionModal,
-  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast
+  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal
 } from './components';
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'heic', 'tiff', 'tif']);
@@ -49,6 +49,7 @@ export default function FileOrgApp() {
 
   // Context Menu state
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, entry: FileEntry } | null>(null);
+  const [showMoveTo, setShowMoveTo] = useState<string[] | null>(null); // paths to move
   const closeContextMenu = () => setContextMenu(null);
   
   // Toasts
@@ -173,6 +174,20 @@ export default function FileOrgApp() {
   
   const [inlineRenameEntry, setInlineRenameEntry] = useState<FileEntry | null>(null);
   const [bulkAction, setBulkAction] = useState<'group' | 'zip' | 'rename' | 'move' | 'copy' | 'delete' | null>(null);
+
+  const handleMoveTo = async (destPath: string) => {
+    if (!showMoveTo || !destPath) return;
+    const paths = showMoveTo;
+    setShowMoveTo(null);
+    clearSelection();
+    let errors = 0;
+    for (const p of paths) {
+      try { await doAction('move', { path: p, newPath: destPath }); }
+      catch { errors++; }
+    }
+    if (errors === 0) toast(`${paths.length === 1 ? 'Archivo movido' : `${paths.length} archivos movidos`}`, 'success');
+    else toast(`Error al mover ${errors} archivo(s)`, 'error');
+  };
 
 
   const fetchTrashCount = useCallback(async () => {
@@ -710,6 +725,7 @@ export default function FileOrgApp() {
             onOpen={() => { if(contextMenu.entry) handleOpen(contextMenu.entry.path); setContextMenu(null); }}
             onPreview={() => { if(contextMenu.entry) setPreviewEntry(contextMenu.entry); setContextMenu(null); }}
             onOpenLocation={() => { if(contextMenu.entry) doAction('open-location', { path: contextMenu.entry.path }); setContextMenu(null); }}
+            onMoveTo={() => { if(contextMenu.entry) setShowMoveTo([contextMenu.entry.path]); setContextMenu(null); }}
             sortBy={sortBy} sortDesc={sortDesc} onSort={handleSort}
           />
         )}
@@ -746,6 +762,9 @@ export default function FileOrgApp() {
           >
             <div className="bulk-count">{selected.size} seleccionados</div>
             <div className="bulk-actions">
+              <button className="btn btn-ghost" onClick={() => setShowMoveTo(Array.from(selected))}>
+                <MoveRight size={14} /> Mover a
+              </button>
               <button className="btn btn-ghost" onClick={() => handleDelete(Array.from(selected))} style={{ color: 'var(--danger)' }}>
                 <Trash2 size={14} /> Eliminar
               </button>
@@ -754,6 +773,17 @@ export default function FileOrgApp() {
               </button>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Move To Modal */}
+      <AnimatePresence>
+        {showMoveTo && (
+          <MoveToModal
+            sourcePaths={showMoveTo}
+            onConfirm={handleMoveTo}
+            onCancel={() => setShowMoveTo(null)}
+          />
         )}
       </AnimatePresence>
 

@@ -16,7 +16,7 @@ import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
 import { 
   InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail, FileListIcon,
   VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal, BulkActionModal,
-  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal
+  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon
 } from './components';
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'heic', 'tiff', 'tif']);
@@ -495,8 +495,8 @@ export default function FileOrgApp() {
 
         <div className="sidebar-section-title">Papelera</div>
         <div className="sidebar-tree" style={{ flex: 'none', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
-          <div className="tree-item" onClick={() => setShowTrashModal(true)} style={{ color: 'var(--danger)' }}>
-            <Trash size={14} /> 
+          <div className="tree-item" onClick={() => setShowTrashModal(true)} style={{ color: trashCount > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>
+            <AnimatedTrashIcon count={trashCount} size={14} /> 
             <div className="tree-item-name">Papelera</div>
             {trashCount > 0 && (
               <span style={{ background: 'var(--danger-bg)', padding: '2px 6px', borderRadius: 10, fontSize: 10 }}>{trashCount}</span>

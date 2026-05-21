@@ -423,6 +423,9 @@ export default function FileOrgApp() {
         
         const targetEntry = entries[nextIndex];
         if (targetEntry) {
+          if (nextIndex >= visibleCount) {
+            setVisibleCount(prev => Math.max(prev, nextIndex + 50));
+          }
           setFocusedPath(targetEntry.path);
           // If moving with arrows and no modifier is held, automatically select the focused item (native OS behavior)
           if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
@@ -435,7 +438,7 @@ export default function FileOrgApp() {
               // use auto to prevent jank when navigating fast
               el.scrollIntoView({ behavior: 'auto', block: 'nearest' });
             }
-          }, 0);
+          }, 50); // increased timeout slightly to allow React to render newly visible items
         }
       }
       
@@ -486,7 +489,7 @@ export default function FileOrgApp() {
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, focusedPath, selected, visualEntries, viewMode, handleDelete, currentPath]);
+  }, [handleUndo, focusedPath, selected, visualEntries, viewMode, handleDelete, currentPath, visibleCount]);
 
   // Drag & Drop Handlers
   const handleDragStart = (e: React.DragEvent, entry: FileEntry) => {
@@ -773,10 +776,10 @@ export default function FileOrgApp() {
               </motion.div>
             )}
             {viewMode === 'grid' ? (() => {
-              const sliced = displayedEntries.slice(0, visibleCount);
+              const sliced = visualEntries.slice(0, visibleCount);
               const dirs        = sliced.filter(e => e.isDir);
-              const coverFiles  = sliced.filter(e => !e.isDir && (IMAGE_EXTS.has(e.ext) || VIDEO_EXTS.has(e.ext) || DOC_EXTS.has(e.ext)));
-              const otherFiles  = sliced.filter(e => !e.isDir && !IMAGE_EXTS.has(e.ext) && !VIDEO_EXTS.has(e.ext) && !DOC_EXTS.has(e.ext));
+              const coverFiles  = sliced.filter(e => !e.isDir && PREVIEWABLE.has(e.ext));
+              const otherFiles  = sliced.filter(e => !e.isDir && !PREVIEWABLE.has(e.ext));
 
               const renderGridCard = (entry: typeof sliced[0]) => {
                 const isSelected = selected.has(entry.path);
@@ -853,7 +856,7 @@ export default function FileOrgApp() {
             })() : (
               /* ── LIST MODE ── */
               <motion.div key="list-view" className="file-list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                {displayedEntries.slice(0, visibleCount).map((entry) => {
+                {visualEntries.slice(0, visibleCount).map((entry) => {
                   const isSelected = selected.has(entry.path);
                   const isEditing = inlineRenameEntry?.path === entry.path;
                   return (

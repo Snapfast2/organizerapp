@@ -395,14 +395,34 @@ export default function FileOrgApp() {
       <aside className="sidebar">
         <div className="sidebar-section-title">Ubicaciones</div>
         <div className="sidebar-tree">
-          <div className={`tree-item ${currentPath === 'C:\\Users' ? 'active' : ''}`} onClick={() => setCurrentPath('C:\\Users')}>
-            <HomeIcon size={14} /> <div className="tree-item-name">Inicio</div>
-          </div>
-          {drives.map(d => (
-            <div key={d} className={`tree-item ${currentPath === d ? 'active' : ''}`} onClick={() => setCurrentPath(d)}>
-              <HardDrive size={14} /> <div className="tree-item-name">{d}</div>
-            </div>
-          ))}
+          {/* Inicio */}
+          {[{ path: 'C:\\Users', label: 'Inicio', Icon: HomeIcon }, ...drives.map(d => ({ path: d, label: d, Icon: HardDrive }))].map(({ path, label, Icon }) => {
+            const isActive = currentPath === path;
+            return (
+              <div key={path} className="tree-item-wrap" onClick={() => setCurrentPath(path)}>
+                {isActive && (
+                  <motion.div
+                    layoutId="sidebar-pill"
+                    className="tree-item-pill"
+                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                  />
+                )}
+                <motion.div
+                  className={`tree-item ${isActive ? 'active no-bg' : ''}`}
+                  whileTap={{ scale: 0.96 }}
+                >
+                  <motion.span
+                    animate={{ scale: isActive ? 1.2 : 1, color: isActive ? 'var(--accent)' : 'var(--text-secondary)' }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                    style={{ display: 'flex', lineHeight: 1 }}
+                  >
+                    <Icon size={14} />
+                  </motion.span>
+                  <div className="tree-item-name">{label}</div>
+                </motion.div>
+              </div>
+            );
+          })}
         </div>
 
         <div className="sidebar-section-title">Accesos Rápidos</div>
@@ -415,11 +435,29 @@ export default function FileOrgApp() {
             else if (qa.name === 'Imágenes') Icon = ImageIcon;
             else if (qa.name === 'Videos') Icon = Film;
             else if (qa.name === 'Música') Icon = Music;
-
+            const isActive = currentPath === qa.path;
             return (
-              <div key={qa.path} className={`tree-item ${currentPath === qa.path ? 'active' : ''}`} onClick={() => setCurrentPath(qa.path)}>
-                <Icon size={14} />
-                <div className="tree-item-name">{qa.name}</div>
+              <div key={qa.path} className="tree-item-wrap" onClick={() => setCurrentPath(qa.path)}>
+                {isActive && (
+                  <motion.div
+                    layoutId="sidebar-pill"
+                    className="tree-item-pill"
+                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                  />
+                )}
+                <motion.div
+                  className={`tree-item ${isActive ? 'active no-bg' : ''}`}
+                  whileTap={{ scale: 0.96 }}
+                >
+                  <motion.span
+                    animate={{ scale: isActive ? 1.2 : 1, color: isActive ? 'var(--accent)' : 'var(--text-secondary)' }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                    style={{ display: 'flex', lineHeight: 1 }}
+                  >
+                    <Icon size={14} />
+                  </motion.span>
+                  <div className="tree-item-name">{qa.name}</div>
+                </motion.div>
               </div>
             );
           })}

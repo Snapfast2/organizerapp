@@ -336,6 +336,40 @@ export default function FileOrgApp() {
     }
   }, [toast, clearSelection, refresh]);
 
+  const handleZip = useCallback(async (paths: string[]) => {
+    const newName = window.prompt("Nombre del archivo ZIP:", "Archivo.zip");
+    if (!newName) return;
+    try {
+      const res = await fetch('/api/fs/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'zip', paths, destPath: currentPath, newName })
+      });
+      if (!res.ok) throw new Error('Bulk zip failed');
+      toast('Archivos comprimidos exitosamente', 'success');
+      clearSelection();
+      refresh();
+    } catch {
+      toast('Error al comprimir archivos', 'error');
+    }
+  }, [currentPath, toast, clearSelection, refresh]);
+
+  const handleUnzip = useCallback(async (path: string) => {
+    try {
+      toast('Extrayendo archivo...', 'success');
+      const res = await fetch('/api/fs/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'unzip', paths: [path], destPath: currentPath })
+      });
+      if (!res.ok) throw new Error('Unzip failed');
+      toast('Archivo extraído exitosamente', 'success');
+      refresh();
+    } catch {
+      toast('Error al extraer archivo', 'error');
+    }
+  }, [currentPath, toast, refresh]);
+
   const deferredListing = useDeferredValue(listing);
 
   // Sort entries
@@ -935,6 +969,7 @@ export default function FileOrgApp() {
             onPreview={() => { if(contextMenu.entry) setPreviewEntry(contextMenu.entry); setContextMenu(null); }}
             onOpenLocation={() => { if(contextMenu.entry) doAction('open-location', { path: contextMenu.entry.path }); setContextMenu(null); }}
             onMoveTo={() => { if(contextMenu.entry) setShowMoveTo([contextMenu.entry.path]); setContextMenu(null); }}
+            onUnzip={() => { if(contextMenu.entry) handleUnzip(contextMenu.entry.path); setContextMenu(null); }}
             sortBy={sortBy} sortDesc={sortDesc} onSort={handleSort}
           />
         )}
@@ -982,6 +1017,9 @@ export default function FileOrgApp() {
           >
             <div className="bulk-count">{selected.size} seleccionados</div>
             <div className="bulk-actions">
+              <button className="btn btn-ghost" onClick={() => handleZip(Array.from(selected))}>
+                <FileArchive size={14} /> Comprimir ZIP
+              </button>
               <button className="btn btn-ghost" onClick={() => setShowMoveTo(Array.from(selected))}>
                 <MoveRight size={14} /> Mover a
               </button>

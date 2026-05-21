@@ -729,11 +729,11 @@ export function PreviewModal({ entry, allPreviewable, onClose }: {
 }
 
 // ─── Context Menu ──────────────────────────────────────────
-export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, onMoveTo, sortBy, sortDesc, onSort }: {
+export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, onMoveTo, onUnzip, sortBy, sortDesc, onSort }: {
   x: number; y: number; entry: FileEntry | null;
   onClose: () => void; onRename: () => void; onDelete: () => void;
   onMkdir: () => void; onOpen: () => void; onPreview: () => void;
-  onOpenLocation: () => void; onMoveTo: () => void;
+  onOpenLocation: () => void; onMoveTo: () => void; onUnzip: () => void;
   sortBy: string; sortDesc: boolean; onSort: (field: string) => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -781,6 +781,11 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
           <div className="context-menu-item" onClick={onOpenLocation}>
             <ExternalLink size={13} /> Abrir origen
           </div>
+          {entry.ext === '.zip' && (
+            <div className="context-menu-item" onClick={onUnzip}>
+              <FileArchive size={13} /> Extraer Aquí
+            </div>
+          )}
           <div className="context-menu-sep" />
           <div className="context-menu-item" onClick={onRename}>
             <Edit2 size={13} /> Renombrar

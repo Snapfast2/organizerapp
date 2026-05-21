@@ -115,6 +115,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, newPath: outZip });
       }
 
+      case 'unzip': {
+        if (!paths || paths.length === 0) return NextResponse.json({ error: 'paths required' }, { status: 400 });
+        const items = [];
+        for (const p of paths) {
+          // Extract to current dir if destPath not provided, else to destPath
+          // To keep it clean, we extract to a folder with the zip's basename
+          const targetDir = destPath || path.join(path.dirname(p), path.basename(p, '.zip'));
+          const command = `powershell Expand-Archive -Path "${p}" -DestinationPath "${targetDir}" -Force`;
+          await execAsync(command);
+          items.push({ originalPath: p, newPath: targetDir });
+        }
+        return NextResponse.json({ success: true, items });
+      }
+
       default:
         return NextResponse.json({ error: 'Unknown bulk action' }, { status: 400 });
     }

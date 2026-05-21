@@ -383,6 +383,14 @@ html, body {
 .file-card:hover { background: var(--bg-elevated); border-color: var(--border); transform: translateY(-2px); box-shadow: var(--shadow-card); }
 .file-card:hover::before { opacity: 1; }
 .file-card.selected { background: var(--accent-dim); border-color: rgba(14,201,0,0.4); }
+.file-card.focused {
+  border-color: rgba(74, 222, 128, 0.5);
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.2);
+}
+.file-card.selected.focused {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.4);
+}
 .file-card.video-card:hover { transform: translateY(-3px); box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(14,201,0,0.2); }
 
 /* Thumbnail wrapper — compact (icons/images) */
@@ -520,7 +528,17 @@ html, body {
 }
 
 .file-list-item:hover { background: var(--bg-elevated); }
+.file-list-item.focused {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(74, 222, 128, 0.5);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.2);
+}
 .file-list-item.selected { background: var(--accent-dim); border-color: rgba(14,201,0,0.3); }
+.file-list-item.selected.focused {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.4);
+}
 
 .file-list-icon {
   width: 30px; height: 30px;

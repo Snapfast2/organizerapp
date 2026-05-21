@@ -31,6 +31,7 @@ export default function FileOrgApp() {
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [focusedPath, setFocusedPath] = useState<string | null>(null);
   
   // Drives and Quick Access
   const [drives, setDrives] = useState<string[]>(['C:\\']);
@@ -294,18 +295,7 @@ export default function FileOrgApp() {
     }, 2000);
   }, [undoHistory, refresh, toast]);
 
-  // Handle Ctrl+Z Undo
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        handleUndo();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo]);
-
-  const doAction = async (action: string, payload: any) => {
+  const doAction = useCallback(async (action: string, payload: any) => {
     const res = await fetch('/api/fs/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -316,7 +306,144 @@ export default function FileOrgApp() {
     if (data.undoAction) setUndoHistory(prev => [...prev, data.undoAction]);
     refresh();
     return data;
-  };
+  }, [refresh]);
+
+  const clearSelection = useCallback(() => {
+    setSelected(new Set());
+    if (editingPath) {
+      setEditingPath(null);
+      setEditValue('');
+    }
+  }, [editingPath]);
+
+  const handleDelete = useCallback(async (paths: string[]) => {
+    try {
+      const res = await fetch('/api/fs/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', paths })
+      });
+      if (!res.ok) throw new Error('Bulk delete failed');
+      const data = await res.json();
+      
+      if (data.undoAction) setUndoHistory(prev => [...prev, data.undoAction]);
+      
+      toast(paths.length === 1 ? 'Archivo enviado a la papelera' : `${paths.length} archivos enviados a la papelera`, 'success');
+      clearSelection();
+      refresh();
+    } catch {
+      toast('Error al eliminar', 'error');
+    }
+  }, [toast, clearSelection, refresh]);
+
+  // Keyboard Navigation & Undo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      // Undo (Ctrl+Z)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+      
+      // Select All (Ctrl+A)
+      const entries = searchResults || listing?.entries || [];
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault();
+        setSelected(new Set(entries.map(x => x.path)));
+        return;
+      }
+
+      if (!entries.length) return;
+      const currentIndex = focusedPath ? entries.findIndex(x => x.path === focusedPath) : -1;
+
+      // Navigation
+      if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        let nextIndex = currentIndex;
+        
+        if (currentIndex === -1) {
+          nextIndex = 0; // Focus first item
+        } else {
+          if (viewMode === 'list') {
+            if (e.key === 'ArrowDown') nextIndex = Math.min(entries.length - 1, currentIndex + 1);
+            if (e.key === 'ArrowUp') nextIndex = Math.max(0, currentIndex - 1);
+          } else {
+            // Rough grid navigation. A better approach would query DOM positions, but this is a solid fallback
+            const columns = window.innerWidth > 1200 ? 6 : window.innerWidth > 800 ? 4 : 2;
+            if (e.key === 'ArrowRight') nextIndex = Math.min(entries.length - 1, currentIndex + 1);
+            if (e.key === 'ArrowLeft') nextIndex = Math.max(0, currentIndex - 1);
+            if (e.key === 'ArrowDown') nextIndex = Math.min(entries.length - 1, currentIndex + columns);
+            if (e.key === 'ArrowUp') nextIndex = Math.max(0, currentIndex - columns);
+          }
+        }
+        
+        const targetEntry = entries[nextIndex];
+        if (targetEntry) {
+          setFocusedPath(targetEntry.path);
+          // If moving with arrows and no modifier is held, automatically select the focused item (native OS behavior)
+          if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+            setSelected(new Set([targetEntry.path]));
+          }
+          // Scroll into view
+          setTimeout(() => {
+            const el = document.querySelector(`[data-path="${targetEntry.path.replace(/\\/g, '\\\\')}"]`);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }, 0);
+        }
+      }
+      
+      // Space for Quick Look or Ctrl+Space to toggle selection
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (focusedPath) {
+          if (e.ctrlKey || e.metaKey) {
+            const newSel = new Set(selected);
+            if (newSel.has(focusedPath)) newSel.delete(focusedPath);
+            else newSel.add(focusedPath);
+            setSelected(newSel);
+          } else {
+            const entry = entries.find(x => x.path === focusedPath);
+            if (entry && !entry.isDir && PREVIEWABLE.has(entry.ext)) setPreviewEntry(entry);
+          }
+        }
+      }
+      
+      // Enter to open
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focusedPath) {
+          const entry = entries.find(x => x.path === focusedPath);
+          if (entry) {
+            if (entry.isDir) setCurrentPath(entry.path);
+            else handleOpen(entry.path);
+          }
+        }
+      }
+      
+      // Delete
+      if (e.key === 'Delete') {
+        e.preventDefault();
+        const toDelete = selected.size > 0 ? Array.from(selected) : (focusedPath ? [focusedPath] : []);
+        if (toDelete.length > 0) handleDelete(toDelete);
+      }
+      
+      // F2 to Rename
+      if (e.key === 'F2') {
+        e.preventDefault();
+        if (focusedPath) {
+          const entry = entries.find(x => x.path === focusedPath);
+          if (entry) setInlineRenameEntry(entry);
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, focusedPath, selected, listing, searchResults, viewMode, handleDelete, currentPath]);
 
   const toggleSelect = (path: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -354,37 +481,10 @@ export default function FileOrgApp() {
     if (e.key === 'Escape') setEditingPath(null);
   };
 
-  const clearSelection = () => {
-    setSelected(new Set());
-    if (editingPath) commitRename();
-  };
-
   const handleOpen = async (path: string) => {
     try {
       await doAction('open', { path });
     } catch {}
-  };
-
-
-
-  const handleDelete = async (paths: string[]) => {
-    try {
-      const res = await fetch('/api/fs/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', paths })
-      });
-      if (!res.ok) throw new Error('Bulk delete failed');
-      const data = await res.json();
-      
-      if (data.undoAction) setUndoHistory(prev => [...prev, data.undoAction]);
-      
-      toast(paths.length === 1 ? 'Archivo enviado a la papelera' : `${paths.length} archivos enviados a la papelera`, 'success');
-      clearSelection();
-      refresh();
-    } catch {
-      toast('Error al eliminar', 'error');
-    }
   };
 
   // Modals state
@@ -616,8 +716,9 @@ export default function FileOrgApp() {
                   <motion.div
                     layout
                     key={entry.path}
-                    className={`file-card ${isSelected ? 'selected' : ''} ${useCoverLayout ? 'video-card' : ''}`}
-                    onClick={e => { e.stopPropagation(); handleClick(e, entry); }}
+                    data-path={entry.path}
+                    className={`file-card ${isSelected ? 'selected' : ''} ${focusedPath === entry.path ? 'focused' : ''} ${useCoverLayout ? 'video-card' : ''}`}
+                    onClick={e => { e.stopPropagation(); setFocusedPath(entry.path); handleClick(e, entry); }}
                     onContextMenu={e => onContextMenu(e, entry)}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1, boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' }}
@@ -681,8 +782,9 @@ export default function FileOrgApp() {
                     <motion.div
                       layout
                       key={entry.path}
-                      className={`file-list-item ${isSelected ? 'selected' : ''}`}
-                      onClick={e => { e.stopPropagation(); handleClick(e, entry); }}
+                      data-path={entry.path}
+                      className={`file-list-item ${isSelected ? 'selected' : ''} ${focusedPath === entry.path ? 'focused' : ''}`}
+                      onClick={e => { e.stopPropagation(); setFocusedPath(entry.path); handleClick(e, entry); }}
                       onContextMenu={e => onContextMenu(e, entry)}
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}

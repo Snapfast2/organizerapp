@@ -125,7 +125,11 @@ export default function FileOrgApp() {
   // Reset visible count when navigating to a new folder
   useEffect(() => { setVisibleCount(100); }, [currentPath]);
 
-  const handleClick = (entry: FileEntry) => {
+  const handleClick = (e: React.MouseEvent, entry: FileEntry) => {
+    if (e.ctrlKey || e.metaKey) {
+      toggleSelect(entry.path, e);
+      return;
+    }
     if (entry.isDir) {
       setCurrentPath(entry.path);
     } else {
@@ -613,7 +617,7 @@ export default function FileOrgApp() {
                     layout
                     key={entry.path}
                     className={`file-card ${isSelected ? 'selected' : ''} ${useCoverLayout ? 'video-card' : ''}`}
-                    onClick={e => { e.stopPropagation(); handleClick(entry); }}
+                    onClick={e => { e.stopPropagation(); handleClick(e, entry); }}
                     onContextMenu={e => onContextMenu(e, entry)}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1, boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' }}
@@ -678,7 +682,7 @@ export default function FileOrgApp() {
                       layout
                       key={entry.path}
                       className={`file-list-item ${isSelected ? 'selected' : ''}`}
-                      onClick={e => { e.stopPropagation(); handleClick(entry); }}
+                      onClick={e => { e.stopPropagation(); handleClick(e, entry); }}
                       onContextMenu={e => onContextMenu(e, entry)}
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}

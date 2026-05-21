@@ -7,7 +7,7 @@ import {
   Trash2, Trash, Edit2, RefreshCw, BarChart2, Wand2, X, CheckCircle, AlertCircle, 
   Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
   Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
-  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info
+  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, Check
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
@@ -156,7 +156,7 @@ export function FileCheckbox({ selected, onToggle }: { selected: boolean; onTogg
       onClick={e => { e.stopPropagation(); onToggle(); }}
       title={selected ? "Deseleccionar" : "Seleccionar"}
     >
-      {selected ? <CheckSquare size={16} color="var(--primary)" /> : <Square size={16} color="rgba(255,255,255,0.4)" />}
+      {selected && <Check size={16} color="#4ade80" strokeWidth={3} />}
     </div>
   );
 }

@@ -119,9 +119,9 @@ export async function POST(request: NextRequest) {
         if (!paths || paths.length === 0) return NextResponse.json({ error: 'paths required' }, { status: 400 });
         const items = [];
         for (const p of paths) {
-          // Extract to current dir if destPath not provided, else to destPath
-          // To keep it clean, we extract to a folder with the zip's basename
-          const targetDir = destPath || path.join(path.dirname(p), path.basename(p, '.zip'));
+          const baseDir = destPath || path.dirname(p);
+          const zipNameWithoutExt = path.basename(p, path.extname(p));
+          const targetDir = path.join(baseDir, zipNameWithoutExt);
           const command = `powershell Expand-Archive -Path "${p}" -DestinationPath "${targetDir}" -Force`;
           await execAsync(command);
           items.push({ originalPath: p, newPath: targetDir });

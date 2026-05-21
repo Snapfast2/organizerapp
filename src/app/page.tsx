@@ -546,8 +546,13 @@ export default function FileOrgApp() {
                 })}
               </div>
             )}
-            <div className={viewMode === 'grid' ? 'file-grid' : 'file-list'}>
-              {displayedEntries.slice(0, visibleCount).map((entry, idx) => {
+            {viewMode === 'grid' ? (() => {
+              const sliced = displayedEntries.slice(0, visibleCount);
+              const dirs        = sliced.filter(e => e.isDir);
+              const coverFiles  = sliced.filter(e => !e.isDir && (IMAGE_EXTS.has(e.ext) || VIDEO_EXTS.has(e.ext) || DOC_EXTS.has(e.ext)));
+              const otherFiles  = sliced.filter(e => !e.isDir && !IMAGE_EXTS.has(e.ext) && !VIDEO_EXTS.has(e.ext) && !DOC_EXTS.has(e.ext));
+
+              const renderGridCard = (entry: typeof sliced[0]) => {
                 const isSelected = selected.has(entry.path);
                 const isReturning = returningItems.includes(entry.path);
                 const isEditing = inlineRenameEntry?.path === entry.path;
@@ -555,78 +560,97 @@ export default function FileOrgApp() {
                 const isImage = IMAGE_EXTS.has(entry.ext);
                 const isVideo = VIDEO_EXTS.has(entry.ext);
                 const useCoverLayout = !entry.isDir && (isImage || isVideo || isDoc);
-
-                if (viewMode === 'grid') {
-                  return (
-                    <motion.div
-                      layout
-                      key={entry.path}
-                      className={`file-card ${isSelected ? 'selected' : ''} ${useCoverLayout ? 'video-card' : ''}`}
-                      onClick={e => { e.stopPropagation(); handleClick(entry); }}
-                      onContextMenu={e => onContextMenu(e, entry)}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1, boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' }}
-                      transition={{ duration: 0.15 }}
-                    >
-                      <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
-                      
-                      {useCoverLayout ? (
-                        <>
-                          <div className="file-thumb-cover">
-                            {isVideo && <VideoThumb src={`/api/preview?path=${encodeURIComponent(entry.path)}`} cover />}
-                            {isImage && <ImageCover src={`/api/preview?path=${encodeURIComponent(entry.path)}`} name={entry.name} ext={entry.ext} />}
-                            {isDoc && <DocCover src={entry.path} name={entry.name} ext={entry.ext} />}
-                          </div>
-                          <div className="video-card-info">
-                            {isEditing ? (
-                              <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
-                            ) : (
-                              <div className="video-card-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</div>
-                            )}
-                            <div className="video-card-meta">
-                              {formatSize(entry.size)}
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <FileThumbnail entry={entry} size={56} />
-                          {isEditing ? (
-                            <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
-                          ) : (
-                            <div className="file-card-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</div>
-                          )}
-                        </>
-                      )}
-                    </motion.div>
-                  );
-                }
-
-                // List mode
                 return (
                   <motion.div
                     layout
                     key={entry.path}
-                    className={`file-list-item ${isSelected ? 'selected' : ''}`}
+                    className={`file-card ${isSelected ? 'selected' : ''} ${useCoverLayout ? 'video-card' : ''}`}
                     onClick={e => { e.stopPropagation(); handleClick(entry); }}
                     onContextMenu={e => onContextMenu(e, entry)}
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1, boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' }}
+                    transition={{ duration: 0.15 }}
                   >
                     <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
-                    <FileListIcon entry={entry} />
-                    {isEditing ? (
-                      <div style={{ flex: 1 }}><InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} /></div>
+                    {useCoverLayout ? (
+                      <>
+                        <div className="file-thumb-cover">
+                          {isVideo && <VideoThumb src={`/api/preview?path=${encodeURIComponent(entry.path)}`} cover />}
+                          {isImage && <ImageCover src={`/api/preview?path=${encodeURIComponent(entry.path)}`} name={entry.name} ext={entry.ext} />}
+                          {isDoc && <DocCover src={entry.path} name={entry.name} ext={entry.ext} />}
+                        </div>
+                        <div className="video-card-info">
+                          {isEditing ? (
+                            <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
+                          ) : (
+                            <div className="video-card-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</div>
+                          )}
+                          <div className="video-card-meta">{formatSize(entry.size)}</div>
+                        </div>
+                      </>
                     ) : (
-                      <span className="file-list-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</span>
+                      <>
+                        <FileThumbnail entry={entry} size={56} />
+                        {isEditing ? (
+                          <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
+                        ) : (
+                          <div className="file-card-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</div>
+                        )}
+                      </>
                     )}
-                    <span className="file-list-ext">{entry.ext}</span>
-                    <span className="file-list-size">{formatSize(entry.size)}</span>
-                    <span className="file-list-date">{formatDate(entry.modified)}</span>
                   </motion.div>
                 );
-              })}
-            </div>
+              };
+
+              return (
+                <>
+                  {dirs.length > 0 && <div className="file-grid">{dirs.map(renderGridCard)}</div>}
+                  {coverFiles.length > 0 && (
+                    <>
+                      {dirs.length > 0 && <div className="grid-section-divider" />}
+                      <div className="file-grid">{coverFiles.map(renderGridCard)}</div>
+                    </>
+                  )}
+                  {otherFiles.length > 0 && (
+                    <>
+                      {(dirs.length > 0 || coverFiles.length > 0) && <div className="grid-section-divider" />}
+                      <div className="file-grid">{otherFiles.map(renderGridCard)}</div>
+                    </>
+                  )}
+                </>
+              );
+            })() : (
+              /* ── LIST MODE ── */
+              <div className="file-list">
+                {displayedEntries.slice(0, visibleCount).map((entry) => {
+                  const isSelected = selected.has(entry.path);
+                  const isEditing = inlineRenameEntry?.path === entry.path;
+                  return (
+                    <motion.div
+                      layout
+                      key={entry.path}
+                      className={`file-list-item ${isSelected ? 'selected' : ''}`}
+                      onClick={e => { e.stopPropagation(); handleClick(entry); }}
+                      onContextMenu={e => onContextMenu(e, entry)}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
+                      <FileListIcon entry={entry} />
+                      {isEditing ? (
+                        <div style={{ flex: 1 }}><InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} /></div>
+                      ) : (
+                        <span className="file-list-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</span>
+                      )}
+                      <span className="file-list-ext">{entry.ext}</span>
+                      <span className="file-list-size">{formatSize(entry.size)}</span>
+                      <span className="file-list-date">{formatDate(entry.modified)}</span>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+
           </AnimatePresence>
         </div>
 

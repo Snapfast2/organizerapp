@@ -333,6 +333,13 @@ html, body {
   align-items: start;
 }
 
+/* Subtle divider between folder / media / other sections */
+.grid-section-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 6px 0;
+}
+
 /* List */
 .file-list { display: flex; flex-direction: column; gap: 1px; }
 

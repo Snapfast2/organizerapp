@@ -24,7 +24,7 @@ export interface ActionRequest {
 }
 
 export interface BulkActionRequest {
-  action: 'delete' | 'move' | 'copy' | 'group' | 'zip' | 'rename';
+  action: 'delete' | 'move' | 'copy' | 'group' | 'zip' | 'unzip' | 'rename';
   paths: string[];
   destPath?: string;
   newName?: string;

@@ -80,6 +80,8 @@ export default function FileOrgApp() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showScrollTop, setShowScrollTop] = useState(false);
   const fileContentRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const totalEntries = searchResults?.length ?? (listing?.entries.length ?? 0);
 
   const goUp = () => {
     if (currentPath.length > 3) {
@@ -106,6 +108,21 @@ export default function FileOrgApp() {
     el.addEventListener('scroll', onScroll);
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
+
+  // Infinite scroll: load more when sentinel becomes visible
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisibleCount(prev => prev + 100); },
+      { root: fileContentRef.current, rootMargin: '200px' }
+    );
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [totalEntries]);
+
+  // Reset visible count when navigating to a new folder
+  useEffect(() => { setVisibleCount(100); }, [currentPath]);
 
   const handleClick = (entry: FileEntry) => {
     if (entry.isDir) {
@@ -650,6 +667,15 @@ export default function FileOrgApp() {
             )}
 
           </AnimatePresence>
+
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} style={{ height: 1 }} />
+          {/* Counter when not all entries are visible */}
+          {visibleCount < totalEntries && (
+            <div style={{ textAlign: 'center', padding: '12px 0 4px', fontSize: 11.5, color: 'var(--text-muted)' }}>
+              Mostrando {Math.min(visibleCount, totalEntries)} de {totalEntries} — seguí bajando para ver más
+            </div>
+          )}
         </div>
 
         {/* ─── Scroll to Top Floating Button ─── */}

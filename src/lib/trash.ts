@@ -28,11 +28,25 @@ export function moveToTrash(srcPath: string): string {
   const trashPath = path.join(TRASH_DIR, trashName);
 
   moveWithExdevFallback(srcPath, trashPath);
+  
+  // Save original path so we can restore it properly
+  try {
+    fs.writeFileSync(`${trashPath}.meta`, JSON.stringify({ originalPath: srcPath }));
+  } catch (err) {
+    console.error('Failed to write trash meta file', err);
+  }
+
   return trashPath;
 }
 
 export function restoreFromTrash(trashPath: string, originalPath: string) {
   moveWithExdevFallback(trashPath, originalPath);
+  
+  // Cleanup meta file
+  const metaPath = `${trashPath}.meta`;
+  if (fs.existsSync(metaPath)) {
+    fs.rmSync(metaPath, { force: true });
+  }
 }
 
 export function emptyTrash() {
@@ -50,23 +64,44 @@ export function getTrashItems() {
   if (!fs.existsSync(TRASH_DIR)) return [];
   try {
     const items = fs.readdirSync(TRASH_DIR);
-    return items.map(item => {
+    const trashItems = [];
+    
+    for (const item of items) {
+      if (item.endsWith('.meta')) continue; // skip metadata sidecar files
+      
       const fullPath = path.join(TRASH_DIR, item);
-      const stat = fs.statSync(fullPath);
-      // Remove hash prefix (16 hex chars + 1 underscore = 17 chars)
+      const metaPath = `${fullPath}.meta`;
+      
+      let stat;
+      try {
+        stat = fs.statSync(fullPath);
+      } catch {
+        continue;
+      }
+      
       const name = item.length > 17 ? item.substring(17) : item;
+      let originalPath = name; // fallback
+      
+      if (fs.existsSync(metaPath)) {
+        try {
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+          if (meta.originalPath) originalPath = meta.originalPath;
+        } catch (e) {}
+      }
+
       const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() || '' : '';
-      return {
+      
+      trashItems.push({
         name,
         trashPath: fullPath,
-        // We don't store original path, so surface the name for display
-        originalPath: name,
+        originalPath,
         size: stat.size,
         ext,
         isDir: stat.isDirectory(),
         deletedAt: stat.mtime.toISOString(),
-      };
-    }).sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
+      });
+    }
+    return trashItems.sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
   } catch {
     return [];
   }

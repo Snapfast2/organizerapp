@@ -1296,7 +1296,7 @@ export function TrashModal({ onClose, onRestore, toast }: {
       await fetch('/api/fs/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'undo', undoAction: { type: 'delete', items: [{ originalPath: item.name, trashPath: item.trashPath }] } })
+        body: JSON.stringify({ action: 'undo', undoAction: { type: 'delete', items: [{ originalPath: item.originalPath, trashPath: item.trashPath }] } })
       });
       toast('Archivo restaurado', 'success');
       onRestore();

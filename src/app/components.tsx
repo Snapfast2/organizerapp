@@ -804,7 +804,7 @@ export function MoveToModal({ sourcePaths, onConfirm, onCancel }: {
 
   // Load quick access on mount
   useEffect(() => {
-    fetch('/api/fs?path=__quick__')
+    fetch('/api/fs/drives')
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.quickAccess) setQuickAccess(data.quickAccess); });
   }, []);
@@ -1181,5 +1181,103 @@ export function StatsPanel({ path, onClose }: { path: string; onClose: () => voi
         )}
       </div>
     </div>
+  );
+}
+
+// ─── Trash Modal ────────────────────────────────────────────
+export function TrashModal({ onClose, onRestore, toast }: {
+  onClose: () => void;
+  onRestore: () => void;
+  toast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+}) {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [emptying, setEmptying] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/fs/trash');
+      if (res.ok) { const d = await res.json(); setItems(d.items || []); }
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleRestore = async (item: any) => {
+    try {
+      await fetch('/api/fs/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'undo', undoAction: { type: 'delete', items: [{ originalPath: item.originalPath, trashPath: item.trashPath }] } })
+      });
+      toast('Archivo restaurado', 'success');
+      onRestore();
+      load();
+    } catch { toast('Error al restaurar', 'error'); }
+  };
+
+  const handleEmptyTrash = async () => {
+    setEmptying(true);
+    try {
+      const res = await fetch('/api/fs/empty-trash', { method: 'POST' });
+      if (res.ok) { toast('Papelera vaciada', 'success'); setItems([]); onRestore(); }
+      else toast('Error al vaciar', 'error');
+    } finally { setEmptying(false); }
+  };
+
+  return (
+    <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <motion.div className="modal" style={{ maxWidth: 560 }}
+        initial={{ scale: 0.95, opacity: 0, y: 10 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 10 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+      >
+        <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Trash size={16} style={{ color: 'var(--danger)' }} /> Papelera
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
+            {items.length} {items.length === 1 ? 'elemento' : 'elementos'}
+          </span>
+        </div>
+
+        <div style={{ minHeight: 200, maxHeight: 360, overflowY: 'auto', margin: '14px 0' }}>
+          {loading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>Cargando…</div>}
+          {!loading && items.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <Trash size={32} style={{ opacity: 0.2 }} />
+              <div>La papelera está vacía</div>
+            </div>
+          )}
+          {items.map((item, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <File size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.originalPath?.split('\\').pop() || 'Archivo'}
+                </div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.originalPath}
+                </div>
+              </div>
+              <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px', flexShrink: 0 }}
+                onClick={() => handleRestore(item)}>
+                Restaurar
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
+          {items.length > 0 && (
+            <button className="btn btn-ghost" style={{ color: 'var(--danger)' }}
+              onClick={handleEmptyTrash} disabled={emptying}>
+              <Trash2 size={13} /> {emptying ? 'Vaciando…' : 'Vaciar papelera'}
+            </button>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }

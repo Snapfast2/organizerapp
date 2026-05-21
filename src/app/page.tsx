@@ -16,7 +16,7 @@ import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
 import { 
   InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail, FileListIcon,
   VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal, BulkActionModal,
-  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal
+  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal
 } from './components';
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'heic', 'tiff', 'tif']);
@@ -241,7 +241,7 @@ export default function FileOrgApp() {
         const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&path=${encodeURIComponent(currentPath)}`);
         if (res.ok) {
           const data = await res.json();
-          setSearchResults(data.results || []);
+          setSearchResults(data.entries || []);
         }
       } catch {}
       setIsSearching(false);
@@ -752,6 +752,17 @@ export default function FileOrgApp() {
 
       {showOrganize && <OrganizeModal currentPath={currentPath} onClose={() => setShowOrganize(false)} toast={toast} />}
       {showStats && <StatsPanel path={currentPath} onClose={() => setShowStats(false)} />}
+
+      {/* Trash Modal */}
+      <AnimatePresence>
+        {showTrashModal && (
+          <TrashModal
+            onClose={() => setShowTrashModal(false)}
+            onRestore={() => { refresh(); fetchTrashCount(); }}
+            toast={toast}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Bulk Action Bar */}
       <AnimatePresence>

@@ -125,19 +125,18 @@ export default function FileOrgApp() {
     setContextMenu({ x: e.clientX, y: e.clientY, entry });
   };
 
-  const handleInlineRename = async (newName: string) => {
-    if (!inlineRenameEntry || newName === inlineRenameEntry.name) {
-      setInlineRenameEntry(null);
-      return;
-    }
-    const oldPath = inlineRenameEntry.path;
-    const basePath = oldPath.substring(0, oldPath.lastIndexOf('\\'));
-    const newPath = `${basePath}\\${newName}${inlineRenameEntry.ext ? '.' + inlineRenameEntry.ext : ''}`;
-    
-    try {
-      await doAction('rename', { paths: [oldPath], newPath });
-    } catch {}
+  const handleInlineRename = async (path: string, newName: string) => {
+    const entry = inlineRenameEntry;
     setInlineRenameEntry(null);
+    if (!entry || newName === entry.name || !newName.trim()) return;
+    const basePath = path.substring(0, path.lastIndexOf('\\'));
+    // Keep extension if the user didn't type it
+    const hasExt = newName.includes('.');
+    const finalName = hasExt ? newName : `${newName}${entry.ext ? '.' + entry.ext : ''}`;
+    const newPath = `${basePath}\\${finalName}`;
+    try {
+      await doAction('rename', { paths: [path], newPath });
+    } catch {}
   };
 
   const handleMkdir = async (name: string) => {
@@ -583,7 +582,7 @@ export default function FileOrgApp() {
                           {isEditing ? (
                             <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
                           ) : (
-                            <div className="video-card-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</div>
+                            <div className="video-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
                           )}
                           <div className="video-card-meta">{formatSize(entry.size)}</div>
                         </div>
@@ -594,7 +593,7 @@ export default function FileOrgApp() {
                         {isEditing ? (
                           <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
                         ) : (
-                          <div className="file-card-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</div>
+                          <div className="file-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
                         )}
                       </>
                     )}
@@ -640,7 +639,7 @@ export default function FileOrgApp() {
                       {isEditing ? (
                         <div style={{ flex: 1 }}><InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} /></div>
                       ) : (
-                        <span className="file-list-name" title={entry.name} onClick={e => { if(isSelected){ e.stopPropagation(); setInlineRenameEntry(entry); } }}>{entry.name}</span>
+                        <span className="file-list-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</span>
                       )}
                       <span className="file-list-ext">{entry.ext}</span>
                       <span className="file-list-size">{formatSize(entry.size)}</span>

@@ -555,7 +555,7 @@ export default function FileOrgApp() {
         <div className="file-content" ref={fileContentRef} onClick={clearSelection}>
           <AnimatePresence mode="popLayout">
             {listing?.entries.length === 0 && !searching && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="empty-state">
+              <motion.div key="empty-state" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="empty-state">
                 <FolderOpen size={48} color="var(--border)" />
                 <div>Carpeta vacía</div>
               </motion.div>
@@ -563,7 +563,7 @@ export default function FileOrgApp() {
 
             {/* List view column headers */}
             {viewMode === 'list' && (
-              <div className="file-list-header">
+              <motion.div key="list-header" className="file-list-header" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <div style={{ width: 28 }} />{/* checkbox */}
                 <div style={{ width: 32 }} />{/* icon */}
                 {(['name','type','size','modified'] as const).map(field => {
@@ -582,7 +582,7 @@ export default function FileOrgApp() {
                     </div>
                   );
                 })}
-              </div>
+              </motion.div>
             )}
             {viewMode === 'grid' ? (() => {
               const sliced = displayedEntries.slice(0, visibleCount);
@@ -641,7 +641,7 @@ export default function FileOrgApp() {
               };
 
               return (
-                <>
+                <motion.div key="grid-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                   {dirs.length > 0 && <div className="file-grid">{dirs.map(renderGridCard)}</div>}
                   {coverFiles.length > 0 && (
                     <>
@@ -655,11 +655,11 @@ export default function FileOrgApp() {
                       <div className="file-grid">{otherFiles.map(renderGridCard)}</div>
                     </>
                   )}
-                </>
+                </motion.div>
               );
             })() : (
               /* ── LIST MODE ── */
-              <div className="file-list">
+              <motion.div key="list-view" className="file-list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 {displayedEntries.slice(0, visibleCount).map((entry) => {
                   const isSelected = selected.has(entry.path);
                   const isEditing = inlineRenameEntry?.path === entry.path;
@@ -686,7 +686,7 @@ export default function FileOrgApp() {
                     </motion.div>
                   );
                 })}
-              </div>
+              </motion.div>
             )}
 
           </AnimatePresence>

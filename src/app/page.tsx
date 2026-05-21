@@ -372,8 +372,18 @@ export default function FileOrgApp() {
             if (e.key === 'ArrowDown') nextIndex = Math.min(entries.length - 1, currentIndex + 1);
             if (e.key === 'ArrowUp') nextIndex = Math.max(0, currentIndex - 1);
           } else {
-            // Rough grid navigation. A better approach would query DOM positions, but this is a solid fallback
-            const columns = window.innerWidth > 1200 ? 6 : window.innerWidth > 800 ? 4 : 2;
+            // Find exact column count dynamically by measuring elements in the first row
+            let columns = 1;
+            const cards = document.querySelectorAll('.file-card');
+            if (cards.length > 1) {
+              const firstY = cards[0].getBoundingClientRect().y;
+              for (let i = 1; i < cards.length; i++) {
+                if (Math.abs(cards[i].getBoundingClientRect().y - firstY) < 10) columns++;
+                else break;
+              }
+            } else {
+              columns = window.innerWidth > 1200 ? 6 : window.innerWidth > 800 ? 4 : 2;
+            }
             if (e.key === 'ArrowRight') nextIndex = Math.min(entries.length - 1, currentIndex + 1);
             if (e.key === 'ArrowLeft') nextIndex = Math.max(0, currentIndex - 1);
             if (e.key === 'ArrowDown') nextIndex = Math.min(entries.length - 1, currentIndex + columns);
@@ -391,7 +401,10 @@ export default function FileOrgApp() {
           // Scroll into view
           setTimeout(() => {
             const el = document.querySelector(`[data-path="${targetEntry.path.replace(/\\/g, '\\\\')}"]`);
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            if (el) {
+              // use auto to prevent jank when navigating fast
+              el.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+            }
           }, 0);
         }
       }

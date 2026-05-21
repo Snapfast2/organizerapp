@@ -1185,6 +1185,50 @@ export function StatsPanel({ path, onClose }: { path: string; onClose: () => voi
 }
 
 // ─── Trash Modal ────────────────────────────────────────────
+const TRASH_IMG_EXTS = new Set(['jpg','jpeg','png','gif','webp','bmp','svg','ico','heic','tiff']);
+const TRASH_VID_EXTS = new Set(['mp4','webm','mov','avi','mkv','wmv','m4v']);
+
+function TrashThumb({ item }: { item: any }) {
+  const ext = (item.ext || '').toLowerCase();
+  const src = `/api/preview?path=${encodeURIComponent(item.trashPath)}`;
+
+  if (TRASH_IMG_EXTS.has(ext)) {
+    return (
+      <div style={{ width: 44, height: 44, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
+        <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+      </div>
+    );
+  }
+  if (TRASH_VID_EXTS.has(ext)) {
+    return (
+      <div style={{ width: 44, height: 44, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Film size={20} style={{ color: 'var(--accent)', opacity: 0.7 }} />
+      </div>
+    );
+  }
+  if (item.isDir) {
+    return (
+      <div style={{ width: 44, height: 44, borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
+        <Folder size={22} style={{ color: 'var(--accent)' }} />
+      </div>
+    );
+  }
+  // Generic file icon colored by type
+  const typeColors: Record<string, string> = {
+    pdf: '#e74c3c', psd: '#31a8ff', zip: '#f39c12', rar: '#f39c12',
+    doc: '#2b579a', docx: '#2b579a', xls: '#217346', xlsx: '#217346',
+    mp3: '#1db954', wav: '#1db954', txt: '#aaa', js: '#f7df1e',
+  };
+  const color = typeColors[ext] || 'var(--text-muted)';
+  return (
+    <div style={{ width: 44, height: 44, borderRadius: 6, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', gap: 1 }}>
+      <File size={18} style={{ color }} />
+      {ext && <span style={{ fontSize: 8, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{ext}</span>}
+    </div>
+  );
+}
+
 export function TrashModal({ onClose, onRestore, toast }: {
   onClose: () => void;
   onRestore: () => void;
@@ -1209,7 +1253,7 @@ export function TrashModal({ onClose, onRestore, toast }: {
       await fetch('/api/fs/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'undo', undoAction: { type: 'delete', items: [{ originalPath: item.originalPath, trashPath: item.trashPath }] } })
+        body: JSON.stringify({ action: 'undo', undoAction: { type: 'delete', items: [{ originalPath: item.name, trashPath: item.trashPath }] } })
       });
       toast('Archivo restaurado', 'success');
       onRestore();
@@ -1226,49 +1270,81 @@ export function TrashModal({ onClose, onRestore, toast }: {
     } finally { setEmptying(false); }
   };
 
+  const openTrashFolder = () => {
+    fetch('/api/fs/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'open-location', path: items[0]?.trashPath || '' })
+    });
+  };
+
+  const totalSize = items.reduce((s, i) => s + (i.size || 0), 0);
+
   return (
     <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <motion.div className="modal" style={{ maxWidth: 560 }}
+      <motion.div className="modal" style={{ maxWidth: 600 }}
         initial={{ scale: 0.95, opacity: 0, y: 10 }} animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0, y: 10 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}
       >
-        <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Trash size={16} style={{ color: 'var(--danger)' }} /> Papelera
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
-            {items.length} {items.length === 1 ? 'elemento' : 'elementos'}
-          </span>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, flex: 1 }}>
+            <Trash size={16} style={{ color: 'var(--danger)' }} /> Papelera
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {items.length > 0 && (
+              <button className="btn btn-ghost btn-icon" title="Abrir carpeta de papelera en el Explorador"
+                onClick={openTrashFolder} style={{ padding: '4px 7px', fontSize: 11, gap: 5 }}>
+                <FolderOpen size={13} /> Ver carpeta
+              </button>
+            )}
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {items.length} {items.length === 1 ? 'elemento' : 'elementos'}
+              {totalSize > 0 && <> · {formatSize(totalSize)}</>}
+            </span>
+          </div>
         </div>
 
-        <div style={{ minHeight: 200, maxHeight: 360, overflowY: 'auto', margin: '14px 0' }}>
-          {loading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>Cargando…</div>}
+        {/* List */}
+        <div style={{ minHeight: 200, maxHeight: 400, overflowY: 'auto', margin: '14px -4px 0', padding: '0 4px' }}>
+          {loading && (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Cargando…</div>
+          )}
           {!loading && items.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-              <Trash size={32} style={{ opacity: 0.2 }} />
-              <div>La papelera está vacía</div>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <Trash size={36} style={{ opacity: 0.15 }} />
+              <div style={{ fontSize: 13 }}>La papelera está vacía</div>
             </div>
           )}
           {items.map((item, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', borderBottom: '1px solid var(--border-subtle)' }}>
-              <File size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                <div style={{ fontSize: 12.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {item.originalPath?.split('\\').pop() || 'Archivo'}
+            <motion.div key={item.trashPath || i}
+              initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 6px', borderBottom: '1px solid var(--border-subtle)', borderRadius: 6 }}
+              className="trash-item-row"
+            >
+              <TrashThumb item={item} />
+              <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
+                  {item.name || 'Archivo desconocido'}
                 </div>
-                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {item.originalPath}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 10, marginTop: 2 }}>
+                  <span>{item.isDir ? 'Carpeta' : (item.ext ? item.ext.toUpperCase() : 'Archivo')}</span>
+                  {item.size > 0 && <span>{formatSize(item.size)}</span>}
+                  {item.deletedAt && <span>{new Date(item.deletedAt).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
                 </div>
               </div>
-              <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px', flexShrink: 0 }}
+              <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px', flexShrink: 0 }}
                 onClick={() => handleRestore(item)}>
                 Restaurar
               </button>
-            </div>
+            </motion.div>
           ))}
         </div>
 
-        <div className="modal-actions">
+        {/* Footer */}
+        <div className="modal-actions" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 12 }}>
           <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
           {items.length > 0 && (
             <button className="btn btn-ghost" style={{ color: 'var(--danger)' }}

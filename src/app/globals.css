@@ -882,6 +882,9 @@ html, body {
 }
 .moveto-folder-item:hover { background: var(--bg-hover); color: var(--text-primary); }
 
+/* ─── Trash Modal rows ─── */
+.trash-item-row:hover { background: var(--bg-hover); }
+
 
 /* ═══════════════════════════════════════════
    PREVIEW MODAL

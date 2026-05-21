@@ -44,6 +44,8 @@ export function emptyTrash() {
   }
 }
 
+export const TRASH_DIR_PATH = TRASH_DIR;
+
 export function getTrashItems() {
   if (!fs.existsSync(TRASH_DIR)) return [];
   try {
@@ -51,18 +53,21 @@ export function getTrashItems() {
     return items.map(item => {
       const fullPath = path.join(TRASH_DIR, item);
       const stat = fs.statSync(fullPath);
-      // Remove hash prefix (16 chars + 1 underscore = 17 chars)
-      const name = item.substring(17);
+      // Remove hash prefix (16 hex chars + 1 underscore = 17 chars)
+      const name = item.length > 17 ? item.substring(17) : item;
       const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() || '' : '';
       return {
-        Name: name,
-        Path: fullPath,
-        Size: stat.size,
+        name,
+        trashPath: fullPath,
+        // We don't store original path, so surface the name for display
+        originalPath: name,
+        size: stat.size,
         ext,
-        isDir: stat.isDirectory()
+        isDir: stat.isDirectory(),
+        deletedAt: stat.mtime.toISOString(),
       };
-    });
-  } catch (err) {
+    }).sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
+  } catch {
     return [];
   }
 }

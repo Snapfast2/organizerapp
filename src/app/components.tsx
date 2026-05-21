@@ -1501,3 +1501,122 @@ export function MetadataModal({
     </motion.div>
   );
 }
+
+// ─── Duplicate Finder Modal ─────────────────────────────────────────
+export function DuplicateModal({
+  cwd, onClose, onSuccess
+}: {
+  cwd: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [duplicates, setDuplicates] = useState<{ hash: string; files: { path: string; size: number }[] }[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const { show: toast } = useToast();
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/fs/duplicates?path=${encodeURIComponent(cwd)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (active) {
+          setDuplicates(d.duplicates || []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false);
+          toast('Error al buscar duplicados', 'error');
+        }
+      });
+    return () => { active = false; };
+  }, [cwd, toast]);
+
+  const handleDelete = async (pathsToKeep: string[], groupFiles: string[]) => {
+    const toDelete = groupFiles.filter(f => !pathsToKeep.includes(f));
+    if (toDelete.length === 0) return;
+    
+    setDeleting(true);
+    try {
+      const res = await fetch('/api/fs/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', paths: toDelete })
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      
+      // Remove group from UI
+      setDuplicates(prev => prev ? prev.filter(g => !g.files.some(f => toDelete.includes(f.path))) : null);
+      toast(`${toDelete.length} duplicado(s) eliminado(s)`, 'success');
+      onSuccess();
+    } catch {
+      toast('Error al eliminar duplicados', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.div className="modal" style={{ width: 600, maxWidth: '90vw' }} initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <Copy size={20} className="accent-text" />
+          <h2 style={{ fontSize: 16, fontWeight: 600 }}>Buscador de Duplicados</h2>
+        </div>
+
+        <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
+          Escaneando: <strong style={{ color: 'var(--text-primary)' }}>{cwd}</strong>
+        </div>
+
+        <div style={{ minHeight: 200, maxHeight: 400, overflowY: 'auto', margin: '0 -4px', padding: '0 4px' }}>
+          {loading && (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Analizando hashes SHA-256...</div>
+          )}
+          
+          {!loading && duplicates && duplicates.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--accent)' }}>
+              ¡Genial! No se encontraron archivos duplicados.
+            </div>
+          )}
+
+          {!loading && duplicates && duplicates.map((group, i) => (
+            <div key={group.hash} style={{ marginBottom: 16, background: 'var(--bg-surface)', padding: 12, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>SHA-256: {group.hash.substring(0, 16)}...</span>
+                <span className="badge">{formatSize(group.files[0].size)} c/u</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {group.files.map(f => {
+                  const parts = f.path.split(/[\\/]/);
+                  const name = parts[parts.length - 1];
+                  return (
+                    <div key={f.path} style={{ fontSize: 12, padding: '4px 8px', background: 'var(--bg-elevated)', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <File size={12} style={{ color: 'var(--text-secondary)' }} />
+                      <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.path}>{name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+                <button 
+                  className="btn btn-ghost" 
+                  style={{ color: 'var(--danger)', fontSize: 11, padding: '4px 8px' }}
+                  disabled={deleting}
+                  onClick={() => handleDelete([group.files[0].path], group.files.map(f => f.path))}
+                >
+                  <Trash2 size={12} /> Mantener 1 y borrar el resto
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="modal-actions" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 12 }}>
+          <button className="btn btn-primary" onClick={onClose}>Cerrar</button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}

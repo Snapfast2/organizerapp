@@ -16,7 +16,7 @@ import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
 import { 
   InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail, FileListIcon,
   VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal, BulkActionModal,
-  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, MetadataModal
+  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, MetadataModal, DuplicateModal
 } from './components';
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'heic', 'tiff', 'tif']);
@@ -52,6 +52,7 @@ export default function FileOrgApp() {
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, entry: FileEntry } | null>(null);
   const [showMoveTo, setShowMoveTo] = useState<string[] | null>(null); // paths to move
   const [showMetadataEntry, setShowMetadataEntry] = useState<FileEntry | null>(null);
+  const [showDuplicates, setShowDuplicates] = useState(false);
   const closeContextMenu = () => setContextMenu(null);
   
   // Toasts
@@ -770,6 +771,7 @@ export default function FileOrgApp() {
         <div className="toolbar">
           <div className="toolbar-group">
             <button className="btn btn-default" onClick={() => setShowMkdir(true)}><FolderPlus size={14} /> Nueva Carpeta</button>
+            <button className="btn btn-ghost" onClick={() => setShowDuplicates(true)} title="Buscar Duplicados"><Copy size={16} /> Duplicados</button>
           </div>
           <div className="toolbar-divider" />
           {/* Sort controls */}
@@ -1059,16 +1061,16 @@ export default function FileOrgApp() {
             <div className="bulk-count">{selected.size} seleccionados</div>
             <div className="bulk-actions">
               <button className="btn btn-ghost" onClick={() => handleZip(Array.from(selected))}>
-                <FileArchive size={14} /> Comprimir ZIP
+                <FileArchive size={14} /> <span className="hide-mobile">ZIP</span>
               </button>
               <button className="btn btn-ghost" onClick={() => setShowMoveTo(Array.from(selected))}>
-                <MoveRight size={14} /> Mover a
+                <MoveRight size={14} /> <span className="hide-mobile">Mover a</span>
               </button>
               <button className="btn btn-ghost" onClick={() => handleDelete(Array.from(selected))} style={{ color: 'var(--danger)' }}>
-                <Trash2 size={14} /> Eliminar
+                <Trash2 size={14} /> <span className="hide-mobile">Eliminar</span>
               </button>
               <button className="btn btn-ghost" onClick={clearSelection}>
-                <X size={14} /> Cancelar
+                <X size={14} /> <span className="hide-mobile">Cancelar</span>
               </button>
             </div>
           </motion.div>
@@ -1090,6 +1092,14 @@ export default function FileOrgApp() {
             entry={showMetadataEntry}
             onClose={() => setShowMetadataEntry(null)}
             onSave={(color, tags) => handleMetadataSave(showMetadataEntry, color, tags)}
+          />
+        )}
+
+        {showDuplicates && (
+          <DuplicateModal
+            cwd={currentPath}
+            onClose={() => setShowDuplicates(false)}
+            onSuccess={() => { refresh(); }}
           />
         )}
       </AnimatePresence>

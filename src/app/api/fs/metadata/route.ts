@@ -42,13 +42,14 @@ export async function POST(request: NextRequest) {
     if (Object.keys(metadata).length === 0) {
       try { await fs.unlink(metaPath); } catch {}
     } else {
-      // Write the file, optionally hiding it on Windows
-      await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2), 'utf8');
-      
-      // Attempt to hide the file on Windows
+      // Write the file, properly handling Windows hidden attributes
       if (process.platform === 'win32') {
-        const { exec } = require('child_process');
-        exec(`attrib +h "${metaPath}"`, () => {});
+        const { execSync } = require('child_process');
+        try { execSync(`attrib -h "${metaPath}"`); } catch {} // unhide first to avoid EPERM
+        await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2), 'utf8');
+        try { execSync(`attrib +h "${metaPath}"`); } catch {} // hide it again
+      } else {
+        await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2), 'utf8');
       }
     }
 

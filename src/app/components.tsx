@@ -1385,13 +1385,13 @@ export function StatsPanel({ path, onClose }: { path: string; onClose: () => voi
               </div>
             </motion.div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 32, alignItems: 'center' }}>
-              <motion.div variants={itemVariants}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 48, alignItems: 'center', width: '100%', paddingBottom: 20 }}>
+              <motion.div variants={itemVariants} style={{ width: '100%' }}>
                 <div className="stats-section-title" style={{ textAlign: 'center', marginBottom: 16 }}>Distribución por Tipo</div>
                 <DonutChart segments={segments} />
               </motion.div>
               
-              <motion.div variants={itemVariants}>
+              <motion.div variants={itemVariants} style={{ width: '100%', maxWidth: 700 }}>
                 <div className="stats-section-title" style={{ textAlign: 'center', marginBottom: 0 }}>Top 10 Más Pesados</div>
                 <BarChart data={topFilesData} />
               </motion.div>

@@ -670,6 +670,72 @@ export default function FileOrgApp() {
 
 
 
+  const renderGridCard = (entry: FileEntry) => {
+    const isSelected = selected.has(entry.path);
+    const isReturning = returningItems.includes(entry.path);
+    const isEditing = inlineRenameEntry?.path === entry.path;
+    const isDoc = DOC_EXTS.has(entry.ext);
+    const isImage = IMAGE_EXTS.has(entry.ext);
+    const isVideo = VIDEO_EXTS.has(entry.ext);
+    const useCoverLayout = !entry.isDir && (isImage || isVideo || isDoc);
+    return (
+      <motion.div
+        layout
+        key={entry.path}
+        data-path={entry.path}
+        className={`file-card ${isSelected ? 'selected' : ''} ${focusedPath === entry.path ? 'focused' : ''} ${useCoverLayout ? 'video-card' : ''}`}
+        draggable={true}
+        onDragStart={(e: any) => handleDragStart(e, entry)}
+        onDragOver={(e: any) => handleDragOver(e, entry)}
+        onDrop={(e: any) => handleDrop(e, entry)}
+        onClick={e => { e.stopPropagation(); setFocusedPath(entry.path); handleClick(e, entry); }}
+        onContextMenu={e => onContextMenu(e, entry)}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1, boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' }}
+        transition={{ duration: 0.15 }}
+      >
+        <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
+        {entry.color && (
+          <div className="file-color-dot" style={{ background: entry.color, position: 'absolute', top: 8, right: 8, width: 10, height: 10, borderRadius: '50%', zIndex: 10, boxShadow: '0 0 0 1.5px #050805' }} />
+        )}
+        {useCoverLayout ? (
+          <>
+            <div className="file-thumb-cover">
+              {isVideo && <VideoThumb src={`/api/preview?path=${encodeURIComponent(entry.path)}`} cover />}
+              {isImage && <ImageCover src={`/api/image-thumb?path=${encodeURIComponent(entry.path)}`} name={entry.name} ext={entry.ext} />}
+              {isDoc && <DocCover src={entry.path} name={entry.name} ext={entry.ext} />}
+            </div>
+            <div className="video-card-info">
+              {isEditing ? (
+                <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
+              ) : (
+                <div className="video-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+              )}
+              <div className="video-card-meta">
+                {formatSize(entry.size)}
+                {entry.tags && entry.tags.length > 0 && (
+                  <span style={{ color: 'var(--accent)', marginLeft: 6 }}>• {entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</span>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <FileThumbnail entry={entry} size={56} />
+            {isEditing ? (
+              <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
+            ) : (
+              <div className="file-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+            )}
+            {entry.tags && entry.tags.length > 0 && (
+              <div style={{ fontSize: 10, color: 'var(--accent)', textAlign: 'center', marginTop: 2 }}>{entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</div>
+            )}
+          </>
+        )}
+      </motion.div>
+    );
+  };
+
   return (
     <div className="app-shell" onClick={() => { clearSelection(); closeContextMenu(); }}>
       {/* ─── HEADER ─── */}
@@ -890,71 +956,6 @@ export default function FileOrgApp() {
               const coverFiles  = sliced.filter(e => !e.isDir && PREVIEWABLE.has(e.ext));
               const otherFiles  = sliced.filter(e => !e.isDir && !PREVIEWABLE.has(e.ext));
 
-              const renderGridCard = (entry: typeof sliced[0]) => {
-                const isSelected = selected.has(entry.path);
-                const isReturning = returningItems.includes(entry.path);
-                const isEditing = inlineRenameEntry?.path === entry.path;
-                const isDoc = DOC_EXTS.has(entry.ext);
-                const isImage = IMAGE_EXTS.has(entry.ext);
-                const isVideo = VIDEO_EXTS.has(entry.ext);
-                const useCoverLayout = !entry.isDir && (isImage || isVideo || isDoc);
-                return (
-                  <motion.div
-                    layout
-                    key={entry.path}
-                    data-path={entry.path}
-                    className={`file-card ${isSelected ? 'selected' : ''} ${focusedPath === entry.path ? 'focused' : ''} ${useCoverLayout ? 'video-card' : ''}`}
-                    draggable={true}
-                    onDragStart={(e: any) => handleDragStart(e, entry)}
-                    onDragOver={(e: any) => handleDragOver(e, entry)}
-                    onDrop={(e: any) => handleDrop(e, entry)}
-                    onClick={e => { e.stopPropagation(); setFocusedPath(entry.path); handleClick(e, entry); }}
-                    onContextMenu={e => onContextMenu(e, entry)}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1, boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' }}
-                    transition={{ duration: 0.15 }}
-                  >
-                    <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
-                    {entry.color && (
-                      <div className="file-color-dot" style={{ background: entry.color, position: 'absolute', top: 8, right: 8, width: 10, height: 10, borderRadius: '50%', zIndex: 10, boxShadow: '0 0 0 1.5px #050805' }} />
-                    )}
-                    {useCoverLayout ? (
-                      <>
-                        <div className="file-thumb-cover">
-                          {isVideo && <VideoThumb src={`/api/preview?path=${encodeURIComponent(entry.path)}`} cover />}
-                          {isImage && <ImageCover src={`/api/image-thumb?path=${encodeURIComponent(entry.path)}`} name={entry.name} ext={entry.ext} />}
-                          {isDoc && <DocCover src={entry.path} name={entry.name} ext={entry.ext} />}
-                        </div>
-                        <div className="video-card-info">
-                          {isEditing ? (
-                            <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
-                          ) : (
-                            <div className="video-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
-                          )}
-                          <div className="video-card-meta">
-                            {formatSize(entry.size)}
-                            {entry.tags && entry.tags.length > 0 && (
-                              <span style={{ color: 'var(--accent)', marginLeft: 6 }}>• {entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</span>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <FileThumbnail entry={entry} size={56} />
-                        {isEditing ? (
-                          <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
-                        ) : (
-                          <div className="file-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
-                        )}
-                        {entry.tags && entry.tags.length > 0 && (
-                          <div style={{ fontSize: 10, color: 'var(--accent)', textAlign: 'center', marginTop: 2 }}>{entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</div>
-                        )}
-                      </>
-                    )}
-                  </motion.div>
-                );
-              };
 
               return (
                 <motion.div key="grid-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

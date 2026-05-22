@@ -670,14 +670,14 @@ export default function FileOrgApp() {
 
 
 
-  const renderGridCard = (entry: FileEntry) => {
+  const renderGridCard = (entry: FileEntry, forceCover: boolean = false) => {
     const isSelected = selected.has(entry.path);
     const isReturning = returningItems.includes(entry.path);
     const isEditing = inlineRenameEntry?.path === entry.path;
     const isDoc = DOC_EXTS.has(entry.ext);
     const isImage = IMAGE_EXTS.has(entry.ext);
     const isVideo = VIDEO_EXTS.has(entry.ext);
-    const useCoverLayout = !entry.isDir && (isImage || isVideo || isDoc);
+    const useCoverLayout = forceCover || (!entry.isDir && (isImage || isVideo || isDoc));
     return (
       <motion.div
         layout
@@ -704,6 +704,11 @@ export default function FileOrgApp() {
               {isVideo && <VideoThumb src={`/api/preview?path=${encodeURIComponent(entry.path)}`} cover />}
               {isImage && <ImageCover src={`/api/image-thumb?path=${encodeURIComponent(entry.path)}`} name={entry.name} ext={entry.ext} />}
               {isDoc && <DocCover src={entry.path} name={entry.name} ext={entry.ext} />}
+              {!isVideo && !isImage && !isDoc && (
+                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', borderRadius: '12px 12px 0 0' }}>
+                   <FileThumbnail entry={entry} size={72} />
+                 </div>
+              )}
             </div>
             <div className="video-card-info">
               {isEditing ? (

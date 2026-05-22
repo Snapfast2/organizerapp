@@ -1260,7 +1260,7 @@ function DonutChart({ segments, size = 220, strokeWidth = 32 }: { segments: any[
 
 
 // ─── Stats Panel ───────────────────────────────────────────
-export function StatsPanel({ path, onClose, renderGridCard }: { path: string; onClose: () => void; renderGridCard?: (entry: any) => React.ReactNode }) {
+export function StatsPanel({ path, onClose, renderGridCard }: { path: string; onClose: () => void; renderGridCard?: (entry: any, forceCover?: boolean) => React.ReactNode }) {
   const [stats, setStats] = useState<DiskStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -1335,7 +1335,7 @@ export function StatsPanel({ path, onClose, renderGridCard }: { path: string; on
             <div style={{ display: 'flex', flexDirection: 'column', gap: 48, alignItems: 'center', width: '100%', paddingBottom: 20 }}>
               <motion.div variants={itemVariants} style={{ width: '100%' }}>
                 <div className="stats-section-title" style={{ textAlign: 'center', marginBottom: 16 }}>Distribución por Tipo</div>
-                <DonutChart segments={segments} />
+                <DonutChart segments={segments} size={320} strokeWidth={44} />
               </motion.div>
               
               {renderGridCard && stats.topFiles.length > 0 && (
@@ -1361,7 +1361,7 @@ export function StatsPanel({ path, onClose, renderGridCard }: { path: string; on
                         }}>
                           {i + 1}
                         </div>
-                        {renderGridCard(file)}
+                        {renderGridCard(file, true)}
                       </div>
                     ))}
                   </div>

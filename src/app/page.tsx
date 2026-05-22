@@ -202,7 +202,6 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot =
       >
         {/* Expand arrow */}
         <motion.div
-          onClick={toggle}
           animate={{ rotate: open ? 90 : 0 }}
           transition={{ type: 'spring', stiffness: 400, damping: 28 }}
           style={{

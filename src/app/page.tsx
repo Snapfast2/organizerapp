@@ -270,6 +270,12 @@ export default function FileOrgApp() {
     }
   }, [toast]);
 
+  // Called when AITagModal closes — refresh to show new tags on file cards
+  const handleAITagClose = useCallback(() => {
+    setAITagEntries(null);
+    refresh(); // reload directory so tags appear on file cards
+  }, [refresh]);
+
   // Sync path input with currentPath
   useEffect(() => {
     setPathInput(currentPath);
@@ -1136,7 +1142,7 @@ export default function FileOrgApp() {
         {aiTagEntries && (
           <AITagModal
             entries={aiTagEntries}
-            onClose={() => setAITagEntries(null)}
+            onClose={handleAITagClose}
             onTagsSaved={handleTagsSaved}
           />
         )}

@@ -13,25 +13,35 @@ const BINARY_DESIGN_EXTS = new Set(['psd','psb','ai','indd','xd','fig','sketch']
 // Max pixel dimension to send to Ollama — keeps base64 under ~2 MB
 const MAX_PX = 1024;
 
-const IMAGE_PROMPT = `You MUST respond with ONLY a JSON object. No explanation. No markdown. Just JSON.
-{"tags": ["tag1", "tag2", "tag3"], "description": "brief description in Spanish"}
+// Few-shot image prompt — concrete examples prevent the model from copying placeholder text
+const IMAGE_PROMPT = `Look carefully at this image and describe exactly what you see.
+Respond with ONLY a JSON object (no extra text, no markdown).
 
-Rules for the JSON:
-- 2 to 6 tags in Spanish (one word or hyphenated like "al-aire-libre")
-- description in Spanish, max 12 words
-- tags: describe content, main objects, colors, scene type
-- Start your response with { and end with }`;
+Example of a correct response for a photo of a dog in a park:
+{"tags": ["perro", "parque", "naturaleza", "verde", "mascota"], "description": "Perro marrón jugando en un parque con césped verde"}
+
+Example for a 3D game character:
+{"tags": ["criatura", "3d", "fantasia", "videojuego", "render"], "description": "Criatura 3D de fantasía con armadura y ojos grandes"}
+
+Example for a logo:
+{"tags": ["logo", "diseno", "tipografia", "marca"], "description": "Logotipo con texto en letras doradas sobre fondo oscuro"}
+
+Now analyze the image provided and respond in the same JSON format:
+- tags: 2 to 6 words in Spanish describing what IS VISIBLE in the image
+- description: one sentence in Spanish, max 12 words, describing what you actually see
+- DO NOT use the example tags above unless they truly match the image`;
 
 const FILENAME_PROMPT = (name: string, sizeKb: number, ext: string) =>
-  `You MUST respond with ONLY a JSON object. No explanation. No markdown. Just JSON.
-{"tags": ["tag1", "tag2", "tag3"], "description": "brief description in Spanish"}
+  `Respond with ONLY a JSON object (no extra text).
 
-File info:
-- Name: ${name}
-- Size: ${sizeKb} KB  
-- Extension: .${ext}
+Example: {"tags": ["diseno", "grafico", "arte"], "description": "Archivo de diseño gráfico profesional"}
 
-Infer tags in Spanish from the filename. Start with { and end with }.`;
+Analyze this file and suggest tags in Spanish based on the filename:
+- Filename: ${name}
+- Size: ${sizeKb} KB
+- Type: .${ext}
+
+Respond with JSON only:`;
 
 /** Resize image to MAX_PX on longest side, convert to JPEG for smaller base64 */
 async function resizeImageToBase64(filePath: string): Promise<string> {
@@ -71,9 +81,12 @@ function extractJSON(text: string): { tags: string[]; description: string } | nu
   return null;
 }
 
-async function callOllama(payload: object, timeoutMs = 90000): Promise<{ tags: string[]; description: string }> {
+async function callOllama(payload: Record<string, any>, timeoutMs = 90000): Promise<{ tags: string[]; description: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  // Vision calls (with images) skip format:'json' so the model can reason freely
+  const hasImages = Array.isArray((payload as any).images) && (payload as any).images.length > 0;
 
   try {
     const res = await fetch(`${OLLAMA_URL}/api/generate`, {
@@ -83,8 +96,8 @@ async function callOllama(payload: object, timeoutMs = 90000): Promise<{ tags: s
         model: OLLAMA_MODEL,
         prompt: '',
         stream: false,
-        format: 'json',
-        options: { temperature: 0.05, num_predict: 200 },
+        ...(hasImages ? {} : { format: 'json' }), // Only force JSON for text-only calls
+        options: { temperature: 0.1, num_predict: 300 },
         ...payload,
       }),
       signal: controller.signal,

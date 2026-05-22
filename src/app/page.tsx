@@ -88,7 +88,8 @@ export default function FileOrgApp() {
   const searching = isSearching;
   const [searchQuery, setSearchQuery] = useState('');
   const [searchScope, setSearchScope] = useState<'global' | 'local'>('local'); // Default to local
-  const [packState, setPackState] = useState<{ path: string; currentFile: string; copied: number; total: number; message?: string } | null>(null);
+  type PackFileStatus = { name: string; status: 'pending' | 'copying' | 'done' | 'error' };
+  const [packState, setPackState] = useState<{ path: string; copied: number; total: number; message?: string; files: PackFileStatus[] } | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const fileContentRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -112,7 +113,7 @@ export default function FileOrgApp() {
   }, [sortBy]);
 
   const handlePackProject = async (aepPath: string) => {
-    setPackState({ path: aepPath, currentFile: '', copied: 0, total: 0, message: 'Iniciando...' });
+    setPackState({ path: aepPath, copied: 0, total: 0, message: 'Iniciando...', files: [] });
     try {
       const res = await fetch('/api/ae-collect', {
         method: 'POST',
@@ -124,29 +125,49 @@ export default function FileOrgApp() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       
+      let buffer = '';
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\\n').filter(Boolean);
-        for (const line of lines) {
-          try {
-            const data = JSON.parse(line);
-            if (data.type === 'error') {
-              alert('Error empaquetando: ' + data.message);
-              setPackState(null);
-              return;
-            } else if (data.type === 'info') {
-              setPackState(prev => prev ? { ...prev, message: data.message } : null);
-            } else if (data.type === 'progress') {
-              setPackState(prev => prev ? { ...prev, copied: data.copied, total: data.total, currentFile: data.currentFile, message: data.message || prev.message } : null);
-            } else if (data.type === 'done') {
-              setPackState(null);
-              refresh();
-              alert(`¡Empaquetado exitoso!\\nArchivos copiados: ${data.totalFiles}\\nTamaño: ${formatSize(data.totalBytes)}\\n\\nSe guardó en: ${data.destPath}`);
-              return;
-            }
-          } catch(e) {}
+        buffer += decoder.decode(value, { stream: true });
+        
+        let boundary = buffer.indexOf('\\n\\n');
+        while (boundary !== -1) {
+          const part = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          
+          if (part.startsWith('data: ')) {
+            const jsonStr = part.substring(6);
+            try {
+              const data = JSON.parse(jsonStr);
+              if (data.type === 'error') {
+                alert('Error empaquetando: ' + data.message);
+                setPackState(null);
+                return;
+              } else if (data.type === 'info') {
+                setPackState(prev => prev ? { ...prev, message: data.message } : null);
+              } else if (data.type === 'start') {
+                setPackState(prev => prev ? { ...prev, total: data.total, files: data.files.map((f: string) => ({ name: f, status: 'pending' })) } : null);
+              } else if (data.type === 'progress') {
+                setPackState(prev => {
+                  if (!prev) return null;
+                  const newFiles = [...prev.files];
+                  for (let i = 0; i < newFiles.length; i++) {
+                     if (i < data.copied) newFiles[i].status = 'done';
+                     else if (newFiles[i].name === data.currentFile) newFiles[i].status = 'copying';
+                     else newFiles[i].status = 'pending';
+                  }
+                  return { ...prev, copied: data.copied, total: data.total, files: newFiles, message: data.message || prev.message };
+                });
+              } else if (data.type === 'done') {
+                setPackState(null);
+                refresh();
+                alert(`¡Empaquetado exitoso!\\nArchivos copiados: ${data.totalFiles}\\nTamaño: ${formatSize(data.totalBytes)}\\n\\nSe guardó en: ${data.destPath}`);
+                return;
+              }
+            } catch(e) {}
+          }
+          boundary = buffer.indexOf('\\n\\n');
         }
       }
     } catch (err: any) {
@@ -1176,9 +1197,18 @@ export default function FileOrgApp() {
                 <div style={{ width: '100%', height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
                   <div style={{ height: '100%', background: 'var(--accent)', width: `${(packState.copied / packState.total) * 100}%`, transition: 'width 0.2s' }} />
                 </div>
-                <div style={{ fontSize: 11, opacity: 0.6, display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: 11, opacity: 0.6, display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                   <span>{packState.copied} de {packState.total} archivos</span>
-                  <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{packState.currentFile}</span>
+                </div>
+                <div style={{ maxHeight: 200, overflowY: 'auto', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
+                  {packState.files.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 13, borderBottom: i < packState.files.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                      {f.status === 'done' ? <CheckCircle size={14} color="var(--success)" /> : 
+                       f.status === 'copying' ? <RefreshCw size={14} className="spin-icon" color="var(--accent)" /> : 
+                       <Loader size={14} color="var(--text-muted)" />}
+                      <span style={{ opacity: f.status === 'pending' ? 0.6 : 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{f.name}</span>
+                    </div>
+                  ))}
                 </div>
               </>
             )}

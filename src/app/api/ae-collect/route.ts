@@ -38,6 +38,8 @@ function extractPathsFromAEP(aepPath: string): string[] {
   }
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const { aepPath } = await request.json();
@@ -49,7 +51,7 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         const send = (data: any) => {
-          controller.enqueue(encoder.encode(JSON.stringify(data) + '\n'));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         };
 
         try {
@@ -64,6 +66,9 @@ export async function POST(request: NextRequest) {
           if (!fs.existsSync(destDirPath)) fs.mkdirSync(destDirPath, { recursive: true });
           if (!fs.existsSync(footageDirPath)) fs.mkdirSync(footageDirPath, { recursive: true });
 
+          const fileNames = deps.map(d => path.basename(d));
+          send({ type: 'start', total: deps.length, files: fileNames });
+          
           send({ type: 'info', message: 'Copiando archivo de proyecto...' });
           fs.copyFileSync(aepPath, path.join(destDirPath, parsedPath.base));
 
@@ -113,8 +118,8 @@ export async function POST(request: NextRequest) {
 
     return new Response(stream, {
       headers: {
-        'Content-Type': 'application/x-ndjson',
-        'Cache-Control': 'no-cache',
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
       },
     });

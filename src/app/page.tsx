@@ -165,7 +165,7 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot =
         const res = await fetch(`/api/fs?path=${encodeURIComponent(path)}`);
         const data = await res.json();
         const dirs = (data.entries ?? [])
-          .filter((e: { type: string }) => e.type === 'directory')
+          .filter((e: { isDir: boolean }) => e.isDir)
           .map((e: { name: string; path: string }) => ({ name: e.name, path: e.path }));
         setChildFolders(dirs);
         setFetched(true);

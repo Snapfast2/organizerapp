@@ -1261,7 +1261,7 @@ export default function FileOrgApp() {
               {(() => {
                 const flyIcons = [Film, ImageIcon, Music, FileText, Code, Archive];
                 return (
-                  <div style={{ position: 'relative', height: 160, marginBottom: 20 }}>
+                  <div style={{ position: 'relative', height: 160, marginBottom: 20, overflow: 'hidden' }}>
                     {/* Package box — centered at bottom */}
                     <motion.div
                       style={{ position: 'absolute', bottom: 0, left: '50%', marginLeft: -28, color: 'var(--accent)' }}

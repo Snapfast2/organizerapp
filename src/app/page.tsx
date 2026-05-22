@@ -29,96 +29,101 @@ const PREVIEWABLE = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...DOC_EXTS]);
 // ─── Pack Success Animation ───────────────────────────────────────────────────
 const FLY_ICONS = [Film, Archive, Music, FileText, Code, ImageIcon] as const;
 
+// Timing constants — single source of truth for ALL animations
+const ICON_DUR       = 1.2;   // how long an icon travels
+const ICON_STEP      = 0.22;  // stagger between icons
+const REPEAT_DELAY   = 2.2;   // pause before repeating
+const CYCLE          = ICON_DUR + REPEAT_DELAY; // 3.4 s — the shared loop period
+const N              = FLY_ICONS.length;        // 6
+
+// Build keyframe arrays for the circle & box that pulse exactly when each icon arrives.
+// Each arrival is at (i * ICON_STEP + ICON_DUR) within the CYCLE.
+// We add 3 sub-keyframes per impact (before → peak → settle) using a ±PW window.
+function buildPulseKFs() {
+  const PW = 0.022; // half-width in normalised time (~75ms at 3.4s)
+  const times: number[]   = [0];
+  const scaleKF: number[] = [1];
+  const bgKF: string[]    = ['rgba(14,201,0,0.15)'];
+  const bdKF: string[]    = ['rgba(14,201,0,0.40)'];
+
+  for (let i = 0; i < N; i++) {
+    const t = (i * ICON_STEP + ICON_DUR) / CYCLE; // normalised arrival time
+    times.push(  Math.max(0, t - PW),  t,           t + PW,              Math.min(1, t + PW * 3));
+    scaleKF.push(1,                    1.24,         0.90,                1);
+    bgKF.push(   'rgba(14,201,0,0.15)','rgba(14,201,0,0.45)','rgba(14,201,0,0.20)','rgba(14,201,0,0.15)');
+    bdKF.push(   'rgba(14,201,0,0.40)','rgba(14,201,0,0.95)','rgba(14,201,0,0.55)','rgba(14,201,0,0.40)');
+  }
+
+  // End of cycle — back to rest
+  if (times[times.length - 1] < 1) {
+    times.push(1); scaleKF.push(1);
+    bgKF.push('rgba(14,201,0,0.15)'); bdKF.push('rgba(14,201,0,0.40)');
+  }
+
+  return { times, scaleKF, bgKF, bdKF };
+}
+
+const { times: pulseTimes, scaleKF, bgKF, bdKF } = buildPulseKFs();
+
+// Shared transition for the loop — same duration as CYCLE, linear so
+// the `times` array controls the easing precisely at each keyframe.
+const loopTransition = {
+  duration: CYCLE,
+  repeat: Infinity,
+  ease: 'linear' as const,
+  times: pulseTimes,
+};
+
 function PackAnimation() {
-  const pkgCtrl = useAnimationControls();
-  const circleCtrl = useAnimationControls();
-
-  // icon duration + repeatDelay — must match transition below
-  const ICON_DUR = 1.2;
-  const ICON_DELAY_STEP = 0.22;
-  const REPEAT_DELAY = 2.2;
-  const CYCLE = ICON_DUR + REPEAT_DELAY; // 3.4s
-
-  useEffect(() => {
-    let running = true;
-    const timeouts: ReturnType<typeof setTimeout>[] = [];
-
-    const pulse = async () => {
-      if (!running) return;
-      // Quick scale pop on the box
-      pkgCtrl.start({
-        scale: [1, 1.22, 0.92, 1],
-        transition: { duration: 0.38, times: [0, 0.25, 0.65, 1], ease: 'easeOut' },
-      });
-      // Circle flash
-      circleCtrl.start({
-        background: ['rgba(14,201,0,0.15)', 'rgba(14,201,0,0.45)', 'rgba(14,201,0,0.15)'],
-        borderColor: ['rgba(14,201,0,0.4)', 'rgba(14,201,0,0.9)', 'rgba(14,201,0,0.4)'],
-        transition: { duration: 0.5, ease: 'easeOut' },
-      });
-    };
-
-    const scheduleCycle = (startOffset: number) => {
-      FLY_ICONS.forEach((_, i) => {
-        const arrivalMs = (startOffset + ICON_DELAY_STEP * i + ICON_DUR) * 1000;
-        const t = setTimeout(pulse, arrivalMs);
-        timeouts.push(t);
-      });
-    };
-
-    scheduleCycle(0);
-    const interval = setInterval(() => scheduleCycle(0), CYCLE * 1000);
-
-    return () => {
-      running = false;
-      timeouts.forEach(clearTimeout);
-      clearInterval(interval);
-    };
-  }, [pkgCtrl, circleCtrl]);
-
   return (
     <div style={{ position: 'relative', height: 180, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {/* Circle with Package inside */}
+
+      {/* ── Circle — flashes on each icon arrival ── */}
       <motion.div
-        animate={circleCtrl}
-        initial={{ scale: 1, background: 'rgba(14,201,0,0.15)', borderColor: 'rgba(14,201,0,0.4)' }}
+        animate={{ background: bgKF, borderColor: bdKF }}
+        transition={loopTransition}
         style={{
           width: 90, height: 90, borderRadius: '50%',
-          border: '2px solid rgba(14,201,0,0.4)',
+          border: '2px solid rgba(14,201,0,0.40)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: 'var(--accent)', position: 'relative', zIndex: 2,
         }}
       >
-        <motion.div animate={pkgCtrl}>
+        {/* ── Package box — pops on each icon arrival ── */}
+        <motion.div
+          animate={{ scale: scaleKF }}
+          transition={loopTransition}
+        >
           <Package size={44} strokeWidth={1.5} />
         </motion.div>
       </motion.div>
 
-      {/* Flying icons with bezier curve */}
+      {/* ── Flying icons — bezier curves from all directions ── */}
       {FLY_ICONS.map((Icon, i) => {
-        const rad = (i / FLY_ICONS.length) * Math.PI * 2;
+        const rad    = (i / N) * Math.PI * 2;
         const startX = Math.cos(rad) * 140;
         const startY = Math.sin(rad) * 110;
+        // Perpendicular offset → quadratic-bezier feel
         const perpRad = rad + Math.PI / 2;
-        const midX = startX * 0.5 + Math.cos(perpRad) * 48;
-        const midY = startY * 0.5 + Math.sin(perpRad) * 48;
+        const midX  = startX * 0.5 + Math.cos(perpRad) * 52;
+        const midY  = startY * 0.5 + Math.sin(perpRad) * 52;
         return (
           <motion.div
             key={i}
             style={{ position: 'absolute', color: 'var(--accent)', display: 'flex', zIndex: 1 }}
             animate={{
-              x: [startX, midX, 0],
-              y: [startY, midY, 0],
-              opacity: [0, 1, 0],
-              scale: [1.4, 1.1, 0.15],
+              x:       [startX, midX, 0],
+              y:       [startY, midY, 0],
+              opacity: [0,      1,    0],
+              scale:   [1.4,    1.05, 0.1],
             }}
             transition={{
-              delay: i * ICON_DELAY_STEP,
-              duration: ICON_DUR,
-              repeat: Infinity,
+              delay:       i * ICON_STEP,   // first-play stagger only
+              duration:    ICON_DUR,
+              repeat:      Infinity,
               repeatDelay: REPEAT_DELAY,
-              ease: [0.25, 0.46, 0.45, 0.94],
-              times: [0, 0.45, 1],
+              ease:        [0.22, 0.44, 0.45, 0.95],
+              times:       [0, 0.48, 1],
             }}
           >
             <Icon size={26} strokeWidth={1.5} />
@@ -128,6 +133,7 @@ function PackAnimation() {
     </div>
   );
 }
+
 
 export default function FileOrgApp() {
   const [currentPath, setCurrentPath] = useState<string>('C:\\');

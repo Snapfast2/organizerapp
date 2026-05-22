@@ -7,7 +7,8 @@ import {
   Trash2, Trash, Edit2, RefreshCw, BarChart2, Wand2, X, CheckCircle, AlertCircle, 
   Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
   Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
-  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, Check, Tag, Palette
+  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, Check, Tag, Palette,
+  Sparkles, Loader, Cpu, Wifi, WifiOff, ChevronDown
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
@@ -1735,6 +1736,229 @@ export function DuplicateView({
       <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
         <button className="btn btn-primary" onClick={onClose}>Cerrar Buscador</button>
       </div>
+    </motion.div>
+  );
+}
+
+// ─── AI Status Bar ────────────────────────────────────────────────────────────
+export function AIStatusBar({ onClick }: { onClick: () => void }) {
+  const [status, setStatus] = useState<{ available: boolean; modelAvailable?: boolean; error?: string } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/ai/status').then(r => r.json()).then(setStatus).catch(() => setStatus({ available: false }));
+  }, []);
+
+  if (!status) return null;
+
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px',
+        borderRadius: 20, border: `1px solid ${status.available && status.modelAvailable ? 'var(--accent)' : 'var(--border-subtle)'}`,
+        background: 'transparent', cursor: 'pointer', fontSize: 11,
+        color: status.available && status.modelAvailable ? 'var(--accent)' : 'var(--text-muted)',
+      }}
+      title={status.available ? (status.modelAvailable ? 'IA lista' : 'Modelo no descargado') : (status.error || 'Ollama no disponible')}
+    >
+      {status.available && status.modelAvailable
+        ? <><Cpu size={11} /> IA Lista</>
+        : <><WifiOff size={11} /> IA Offline</>}
+    </button>
+  );
+}
+
+// ─── AI Tag Modal ─────────────────────────────────────────────────────────────
+export function AITagModal({
+  entries,
+  onClose,
+  onTagsSaved,
+}: {
+  entries: FileEntry[];
+  onClose: () => void;
+  onTagsSaved: (path: string, tags: string[]) => void;
+}) {
+  type TagResult = { path: string; name: string; tags: string[]; description: string; status: 'pending' | 'processing' | 'done' | 'error'; error?: string };
+
+  const [results, setResults] = useState<TagResult[]>(
+    entries.map(e => ({ path: e.path, name: e.name, tags: [], description: '', status: 'pending' }))
+  );
+  const [running, setRunning] = useState(false);
+  const [current, setCurrent] = useState(-1);
+  const [ollamaStatus, setOllamaStatus] = useState<{ available: boolean; modelAvailable?: boolean } | null>(null);
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [newTag, setNewTag] = useState('');
+  const { show: toast } = useToast();
+
+  useEffect(() => {
+    fetch('/api/ai/status').then(r => r.json()).then(setOllamaStatus);
+  }, []);
+
+  const runTagging = async () => {
+    setRunning(true);
+    for (let i = 0; i < results.length; i++) {
+      setCurrent(i);
+      setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'processing' } : r));
+      try {
+        const res = await fetch('/api/ai/tag', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: results[i].path }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        setResults(prev => prev.map((r, idx) =>
+          idx === i ? { ...r, tags: data.tags || [], description: data.description || '', status: 'done' } : r
+        ));
+      } catch (err: any) {
+        setResults(prev => prev.map((r, idx) =>
+          idx === i ? { ...r, status: 'error', error: err.message } : r
+        ));
+      }
+    }
+    setCurrent(-1);
+    setRunning(false);
+  };
+
+  const saveAll = () => {
+    const done = results.filter(r => r.status === 'done');
+    done.forEach(r => onTagsSaved(r.path, r.tags));
+    toast(`${done.length} archivos etiquetados con IA`, 'success');
+    onClose();
+  };
+
+  const removeTag = (rIdx: number, tag: string) => {
+    setResults(prev => prev.map((r, i) => i === rIdx ? { ...r, tags: r.tags.filter(t => t !== tag) } : r));
+  };
+
+  const addTag = (rIdx: number) => {
+    if (!newTag.trim()) return;
+    setResults(prev => prev.map((r, i) => i === rIdx ? { ...r, tags: [...r.tags, newTag.trim()] } : r));
+    setNewTag('');
+    setEditingIdx(null);
+  };
+
+  const done = results.filter(r => r.status === 'done').length;
+  const total = results.length;
+
+  return (
+    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.div
+        className="modal"
+        style={{ width: 640, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+        initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <Sparkles size={20} className="accent-text" />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>Auto-Etiquetado con IA</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Llama 3.2-Vision 11B • Local • Sin internet</div>
+          </div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
+        </div>
+
+        {/* Ollama Status */}
+        {ollamaStatus && !ollamaStatus.available && (
+          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#f87171', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <WifiOff size={14} />
+            Ollama no está corriendo. Abrí la app Ollama en tu PC o ejecutá <code style={{ background: 'rgba(0,0,0,0.2)', padding: '1px 4px', borderRadius: 3 }}>ollama serve</code> en terminal.
+          </div>
+        )}
+        {ollamaStatus?.available && !ollamaStatus.modelAvailable && (
+          <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#fbbf24', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <AlertTriangle size={14} />
+            Modelo no descargado. Ejecutá: <code style={{ background: 'rgba(0,0,0,0.2)', padding: '1px 4px', borderRadius: 3 }}>ollama pull llama3.2-vision:11b</code>
+          </div>
+        )}
+
+        {/* Progress bar */}
+        {(running || done > 0) && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+              <span>{running ? `Procesando ${current + 1} de ${total}...` : `${done} de ${total} completados`}</span>
+              <span>{Math.round((done / total) * 100)}%</span>
+            </div>
+            <div style={{ height: 4, background: 'var(--border-subtle)', borderRadius: 2, overflow: 'hidden' }}>
+              <motion.div
+                animate={{ width: `${(done / total) * 100}%` }}
+                style={{ height: '100%', background: 'var(--accent)', borderRadius: 2 }}
+                transition={{ duration: 0.3 }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* File list */}
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
+          {results.map((r, rIdx) => (
+            <div key={r.path} style={{ background: 'var(--bg-surface)', borderRadius: 8, border: `1px solid ${r.status === 'error' ? 'rgba(239,68,68,0.3)' : r.status === 'done' ? 'rgba(34,197,94,0.2)' : 'var(--border-subtle)'}`, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: r.status === 'done' ? 8 : 0 }}>
+                {r.status === 'processing' && <Loader size={14} className="accent-text" style={{ animation: 'spin 1s linear infinite' }} />}
+                {r.status === 'done' && <CheckCircle size={14} style={{ color: '#22c55e' }} />}
+                {r.status === 'error' && <AlertCircle size={14} style={{ color: '#ef4444' }} />}
+                {r.status === 'pending' && <div style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--border-subtle)' }} />}
+                <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.path}>{r.name}</span>
+                {r.status === 'error' && <span style={{ fontSize: 10, color: '#f87171' }}>{r.error}</span>}
+              </div>
+
+              {r.status === 'done' && (
+                <>
+                  {r.description && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6, fontStyle: 'italic' }}>
+                      {r.description}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                    {r.tags.map(tag => (
+                      <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'var(--accent-dim)', color: 'var(--accent)', borderRadius: 12, padding: '2px 8px', fontSize: 11 }}>
+                        #{tag}
+                        <button onClick={() => removeTag(rIdx, tag)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'inherit', opacity: 0.6, lineHeight: 1 }}>×</button>
+                      </span>
+                    ))}
+                    {editingIdx === rIdx ? (
+                      <input
+                        autoFocus
+                        value={newTag}
+                        onChange={e => setNewTag(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') addTag(rIdx); if (e.key === 'Escape') setEditingIdx(null); }}
+                        onBlur={() => { addTag(rIdx); }}
+                        placeholder="nueva etiqueta..."
+                        style={{ fontSize: 11, padding: '2px 6px', borderRadius: 12, border: '1px solid var(--accent)', background: 'transparent', color: 'var(--text-primary)', outline: 'none', width: 110 }}
+                      />
+                    ) : (
+                      <button onClick={() => { setEditingIdx(rIdx); setNewTag(''); }} style={{ background: 'var(--bg-elevated)', border: '1px dashed var(--border-subtle)', borderRadius: 12, padding: '2px 8px', fontSize: 11, cursor: 'pointer', color: 'var(--text-muted)' }}>
+                        + agregar
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          {!running && done === 0 && (
+            <button
+              className="btn btn-primary"
+              onClick={runTagging}
+              disabled={ollamaStatus?.available === false || !ollamaStatus?.modelAvailable}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Sparkles size={14} /> Analizar {total} {total === 1 ? 'archivo' : 'archivos'}
+            </button>
+          )}
+          {!running && done > 0 && (
+            <button className="btn btn-primary" onClick={saveAll} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Check size={14} /> Guardar {done} etiquetas
+            </button>
+          )}
+        </div>
+      </motion.div>
     </motion.div>
   );
 }

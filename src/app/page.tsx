@@ -9,14 +9,15 @@ import {
   Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
   Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
   FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, MoreVertical,
-  ChevronsUp, ArrowUpDown, SortAsc, SortDesc, Undo
+  ChevronsUp, ArrowUpDown, SortAsc, SortDesc, Undo, Sparkles
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
 import { 
   InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail, FileListIcon,
   VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal, BulkActionModal,
-  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, MetadataModal, DuplicateView
+  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, MetadataModal, DuplicateView,
+  AITagModal, AIStatusBar
 } from './components';
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'heic', 'tiff', 'tif']);
@@ -53,6 +54,7 @@ export default function FileOrgApp() {
   const [showMoveTo, setShowMoveTo] = useState<string[] | null>(null); // paths to move
   const [showMetadataEntry, setShowMetadataEntry] = useState<FileEntry | null>(null);
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showAITag, setShowAITag] = useState(false);
   const closeContextMenu = () => setContextMenu(null);
   
   // Toasts
@@ -251,6 +253,22 @@ export default function FileOrgApp() {
       toast('Error al guardar etiquetas', 'error');
     }
   }, [toast, refresh]);
+
+  const handleTagsSaved = useCallback(async (filePath: string, tags: string[]) => {
+    try {
+      // Load existing metadata then merge tags
+      const res = await fetch(`/api/fs/metadata?path=${encodeURIComponent(filePath)}`);
+      const existing = res.ok ? await res.json() : { color: null, tags: [] };
+      const merged = Array.from(new Set([...(existing.tags || []), ...tags]));
+      await fetch('/api/fs/metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath, color: existing.color || null, tags: merged })
+      });
+    } catch {
+      toast('Error al guardar etiquetas IA', 'error');
+    }
+  }, [toast]);
 
   // Sync path input with currentPath
   useEffect(() => {
@@ -773,6 +791,9 @@ export default function FileOrgApp() {
           <div className="toolbar-group">
             <button className="btn btn-default" onClick={() => setShowMkdir(true)}><FolderPlus size={14} /> Nueva Carpeta</button>
             <button className="btn btn-ghost" onClick={() => setShowDuplicates(true)} title="Buscar Duplicados"><Copy size={16} /> Duplicados</button>
+            <button className="btn btn-ghost" onClick={() => setShowAITag(true)} title="Etiquetar con IA" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Sparkles size={14} /> IA {selected.size > 0 ? `(${selected.size})` : ''}
+            </button>
           </div>
           <div className="toolbar-divider" />
           {/* Sort controls */}
@@ -1107,7 +1128,18 @@ export default function FileOrgApp() {
             onSave={(color, tags) => handleMetadataSave(showMetadataEntry, color, tags)}
           />
         )}
-
+        {showAITag && (() => {
+          const targetEntries = selected.size > 0
+            ? visualEntries.filter(e => selected.has(e.path) && !e.isDir)
+            : visualEntries.filter(e => !e.isDir).slice(0, 20);
+          return (
+            <AITagModal
+              entries={targetEntries}
+              onClose={() => setShowAITag(false)}
+              onTagsSaved={handleTagsSaved}
+            />
+          );
+        })()}
 
       </AnimatePresence>
 

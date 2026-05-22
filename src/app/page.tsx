@@ -742,7 +742,7 @@ export default function FileOrgApp() {
         )}
         {linkedProjects.length > 0 && (
           <div style={{ position: 'absolute', top: 8, right: entry.color ? 24 : 8, zIndex: 10, background: '#3b0764', color: '#c4b5fd', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 5px rgba(0,0,0,0.4)' }} title="Usado en proyectos de After Effects">
-             🎬 {linkedProjects.length}
+             <Clapperboard size={10} color="#c4b5fd" /> {linkedProjects.length}
           </div>
         )}
         {useCoverLayout ? (

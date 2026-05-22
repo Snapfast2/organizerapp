@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef, useDeferredValue, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useDeferredValue, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Folder, File, Image, Film, Music, FileText, Archive, Code, HardDrive,
@@ -753,16 +753,20 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
     return () => window.removeEventListener('click', h);
   }, [onClose]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = menuRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    setPos({
-      left: rect.right > vw ? x - rect.width : x,
-      top: rect.bottom > vh ? y - rect.height : y,
-    });
+    
+    let newLeft = x;
+    let newTop = y;
+    
+    if (newLeft + rect.width > vw - 10) newLeft = vw - rect.width - 10;
+    if (newTop + rect.height > vh - 10) newTop = vh - rect.height - 10;
+    
+    setPos({ left: Math.max(10, newLeft), top: Math.max(10, newTop) });
   }, [x, y]);
 
   return (

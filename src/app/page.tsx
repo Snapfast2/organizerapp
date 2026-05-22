@@ -54,7 +54,7 @@ export default function FileOrgApp() {
   const [showMoveTo, setShowMoveTo] = useState<string[] | null>(null); // paths to move
   const [showMetadataEntry, setShowMetadataEntry] = useState<FileEntry | null>(null);
   const [showDuplicates, setShowDuplicates] = useState(false);
-  const [showAITag, setShowAITag] = useState(false);
+  const [aiTagEntries, setAITagEntries] = useState<FileEntry[] | null>(null);
   const closeContextMenu = () => setContextMenu(null);
   
   // Toasts
@@ -791,7 +791,12 @@ export default function FileOrgApp() {
           <div className="toolbar-group">
             <button className="btn btn-default" onClick={() => setShowMkdir(true)}><FolderPlus size={14} /> Nueva Carpeta</button>
             <button className="btn btn-ghost" onClick={() => setShowDuplicates(true)} title="Buscar Duplicados"><Copy size={16} /> Duplicados</button>
-            <button className="btn btn-ghost" onClick={() => setShowAITag(true)} title="Etiquetar con IA" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <button className="btn btn-ghost" onClick={() => {
+              const targets = selected.size > 0
+                ? visualEntries.filter(e => selected.has(e.path) && !e.isDir)
+                : visualEntries.filter(e => !e.isDir);
+              setAITagEntries(targets);
+            }} title="Etiquetar con IA" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <Sparkles size={14} /> IA {selected.size > 0 ? `(${selected.size})` : ''}
             </button>
           </div>
@@ -1128,18 +1133,13 @@ export default function FileOrgApp() {
             onSave={(color, tags) => handleMetadataSave(showMetadataEntry, color, tags)}
           />
         )}
-        {showAITag && (() => {
-          const targetEntries = selected.size > 0
-            ? visualEntries.filter(e => selected.has(e.path) && !e.isDir)
-            : visualEntries.filter(e => !e.isDir);
-          return (
-            <AITagModal
-              entries={targetEntries}
-              onClose={() => setShowAITag(false)}
-              onTagsSaved={handleTagsSaved}
-            />
-          );
-        })()}
+        {aiTagEntries && (
+          <AITagModal
+            entries={aiTagEntries}
+            onClose={() => setAITagEntries(null)}
+            onTagsSaved={handleTagsSaved}
+          />
+        )}
 
       </AnimatePresence>
 

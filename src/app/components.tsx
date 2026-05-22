@@ -1292,9 +1292,9 @@ function BarChart({ data, height = 140 }: { data: any[], height?: number }) {
                   style={{
                     position: 'absolute', 
                     bottom: 'calc(100% + 8px)', 
-                    left: i === 0 ? '0' : i === data.length - 1 ? 'auto' : '50%',
-                    right: i === data.length - 1 ? '0' : 'auto',
-                    transform: i === 0 || i === data.length - 1 ? 'none' : 'translateX(-50%)',
+                    left: i <= 2 ? '0' : i >= data.length - 3 ? 'auto' : '50%',
+                    right: i >= data.length - 3 ? '0' : 'auto',
+                    transform: i <= 2 || i >= data.length - 3 ? 'none' : 'translateX(-50%)',
                     background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
                     padding: '8px 12px', borderRadius: 8, zIndex: 10, pointerEvents: 'none',
                     minWidth: 160, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.6)'

@@ -143,16 +143,17 @@ function PackAnimation() {
 interface TreeNodeProps {
   path: string;
   label: string;
-  Icon: React.ElementType;
+  Icon?: React.ElementType;
   isActive: boolean;
   onNavigate: (path: string) => void;
   depth?: number;
+  isRoot?: boolean;
 }
 
-// A single node in the sidebar tree — arrow expands, label navigates
-function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0 }: TreeNodeProps) {
+// A single node in the sidebar tree — arrow expands, label navigates (Magic UI style)
+function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot = false }: TreeNodeProps) {
   const [open, setOpen] = useState(false);
-  const [children, setChildren] = useState<{ name: string; path: string }[]>([]);
+  const [childFolders, setChildFolders] = useState<{ name: string; path: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
 
@@ -166,7 +167,7 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0 }: TreeNo
         const dirs = (data.entries ?? [])
           .filter((e: { type: string }) => e.type === 'directory')
           .map((e: { name: string; path: string }) => ({ name: e.name, path: e.path }));
-        setChildren(dirs);
+        setChildFolders(dirs);
         setFetched(true);
       } catch { /* ignore */ }
       setLoading(false);
@@ -174,65 +175,75 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0 }: TreeNo
     setOpen(o => !o);
   };
 
-  const INDENT = 10; // px per depth level
+  // Magic UI style: FolderOpen when expanded
+  const FolderIcon = open ? FolderOpen : (Icon ?? Folder);
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
       {/* Row */}
-      <div className="tree-item-wrap" style={{ paddingLeft: depth * INDENT }}>
-        {isActive && (
-          <motion.div
-            layoutId="sidebar-pill"
-            className="tree-item-pill"
-            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-          />
-        )}
+      <motion.div
+        onClick={() => onNavigate(path)}
+        whileHover={{ backgroundColor: isActive ? undefined : 'rgba(255,255,255,0.04)' }}
+        whileTap={{ scale: 0.985 }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+          paddingLeft: 8 + depth * 16,
+          paddingRight: 8,
+          paddingTop: 3,
+          paddingBottom: 3,
+          borderRadius: 5,
+          cursor: 'pointer',
+          backgroundColor: isActive ? 'rgba(74,222,128,0.1)' : 'transparent',
+          position: 'relative',
+          userSelect: 'none',
+        }}
+      >
+        {/* Expand arrow */}
         <motion.div
-          className={`tree-item ${isActive ? 'active no-bg' : ''}`}
-          whileTap={{ scale: 0.97 }}
-          style={{ gap: 4 }}
+          onClick={toggle}
+          animate={{ rotate: open ? 90 : 0 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 14, height: 14, flexShrink: 0,
+            color: 'var(--text-muted)', opacity: 0.55, borderRadius: 3,
+          }}
+          onClick={(e) => { e.stopPropagation(); toggle(e); }}
         >
-          {/* Arrow to expand/collapse */}
-          <motion.button
-            onClick={toggle}
-            animate={{ rotate: open ? 90 : 0 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 16, height: 16, flexShrink: 0, background: 'none',
-              border: 'none', cursor: 'pointer', padding: 0,
-              color: 'var(--text-muted)', borderRadius: 3,
-            }}
-          >
-            {loading
-              ? <Loader size={10} className="spinning" />
-              : <ChevronRight size={11} strokeWidth={2.5} />
-            }
-          </motion.button>
-
-          {/* Icon + Label — clicking navigates */}
-          <motion.div
-            onClick={() => onNavigate(path)}
-            whileHover={isActive ? {} : { x: 1.5 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, cursor: 'pointer' }}
-          >
-            <motion.span
-              animate={{
-                scale: isActive ? 1.15 : 1,
-                color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-              }}
-              transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-              style={{ display: 'flex', lineHeight: 1 }}
-            >
-              <Icon size={13} strokeWidth={isActive ? 2 : 1.5} />
-            </motion.span>
-            <div className="tree-item-name" style={{ fontWeight: isActive ? 600 : 400 }}>
-              {label}
-            </div>
-          </motion.div>
+          {loading
+            ? <Loader size={9} className="spinning" />
+            : <ChevronRight size={10} strokeWidth={2.5} />
+          }
         </motion.div>
-      </div>
+
+        {/* Folder icon */}
+        <motion.span
+          animate={{
+            color: isActive ? 'var(--accent)' : open ? 'var(--accent)' : 'var(--text-secondary)',
+            scale: isActive ? 1.08 : 1,
+          }}
+          transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+          style={{ display: 'flex', flexShrink: 0 }}
+        >
+          <FolderIcon size={13} strokeWidth={1.6} />
+        </motion.span>
+
+        {/* Label */}
+        <span style={{
+          fontSize: 12.5,
+          color: isActive ? 'var(--accent)' : 'var(--text-primary)',
+          fontWeight: isActive ? 600 : 400,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          flex: 1,
+          letterSpacing: '-0.01em',
+        }}>
+          {label}
+        </span>
+      </motion.div>
 
       {/* Children */}
       <AnimatePresence initial={false}>
@@ -242,49 +253,54 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0 }: TreeNo
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            style={{ overflow: 'hidden' }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: 'hidden', position: 'relative' }}
           >
-            {/* Indent line */}
-            <div style={{ position: 'relative' }}>
+            {/* Magic UI indent guide line */}
+            <div style={{
+              position: 'absolute',
+              left: 8 + depth * 16 + 15,
+              top: 0,
+              bottom: 6,
+              width: 1,
+              background: 'var(--border-subtle)',
+              opacity: 0.6,
+            }} />
+
+            {childFolders.length === 0 && fetched ? (
               <div style={{
-                position: 'absolute', left: depth * INDENT + 19,
-                top: 0, bottom: 4, width: 1,
-                background: 'var(--border-subtle)', borderRadius: 1,
-              }} />
-              {children.length === 0 && fetched ? (
-                <div style={{
-                  paddingLeft: depth * INDENT + 32, paddingTop: 4, paddingBottom: 4,
-                  fontSize: 11, color: 'var(--text-muted)', opacity: 0.5,
-                }}>
-                  Vacío
-                </div>
-              ) : (
-                children.map((child, i) => (
-                  <motion.div
-                    key={child.path}
-                    initial={{ opacity: 0, x: -4 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.03, duration: 0.15, ease: 'easeOut' }}
-                  >
-                    <TreeNode
-                      path={child.path}
-                      label={child.name}
-                      Icon={Folder}
-                      isActive={isActive && false /* child active handled by parent */}
-                      onNavigate={onNavigate}
-                      depth={depth + 1}
-                    />
-                  </motion.div>
-                ))
-              )}
-            </div>
+                paddingLeft: 8 + (depth + 1) * 16 + 14,
+                paddingTop: 3, paddingBottom: 3,
+                fontSize: 11.5, color: 'var(--text-muted)', opacity: 0.45,
+                letterSpacing: '-0.01em',
+              }}>
+                Vacío
+              </div>
+            ) : (
+              childFolders.map((child, i) => (
+                <motion.div
+                  key={child.path}
+                  initial={{ opacity: 0, x: -3 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.025, duration: 0.13 }}
+                >
+                  <TreeNode
+                    path={child.path}
+                    label={child.name}
+                    isActive={false}
+                    onNavigate={onNavigate}
+                    depth={depth + 1}
+                  />
+                </motion.div>
+              ))
+            )}
           </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
 }
+
 
 interface SidebarSectionProps {
   title: string;

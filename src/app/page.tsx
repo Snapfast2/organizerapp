@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useDeferredValue, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import {
   Folder, File, Image as ImageIcon, Film, Music, FileText, Archive, Code, HardDrive,
   Search, Grid, List, ChevronRight, HomeIcon, ArrowLeft, ArrowUp, ArrowDown, Plus,
@@ -25,6 +25,109 @@ const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', '
 const VIDEO_EXTS = new Set(['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'wmv', 'flv', 'm4v']);
 const DOC_EXTS = new Set(['pdf', 'psd']);
 const PREVIEWABLE = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...DOC_EXTS]);
+
+// ─── Pack Success Animation ───────────────────────────────────────────────────
+const FLY_ICONS = [Film, Archive, Music, FileText, Code, ImageIcon] as const;
+
+function PackAnimation() {
+  const pkgCtrl = useAnimationControls();
+  const circleCtrl = useAnimationControls();
+
+  // icon duration + repeatDelay — must match transition below
+  const ICON_DUR = 1.2;
+  const ICON_DELAY_STEP = 0.22;
+  const REPEAT_DELAY = 2.2;
+  const CYCLE = ICON_DUR + REPEAT_DELAY; // 3.4s
+
+  useEffect(() => {
+    let running = true;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+
+    const pulse = async () => {
+      if (!running) return;
+      // Quick scale pop on the box
+      pkgCtrl.start({
+        scale: [1, 1.22, 0.92, 1],
+        transition: { duration: 0.38, times: [0, 0.25, 0.65, 1], ease: 'easeOut' },
+      });
+      // Circle flash
+      circleCtrl.start({
+        background: ['rgba(14,201,0,0.15)', 'rgba(14,201,0,0.45)', 'rgba(14,201,0,0.15)'],
+        borderColor: ['rgba(14,201,0,0.4)', 'rgba(14,201,0,0.9)', 'rgba(14,201,0,0.4)'],
+        transition: { duration: 0.5, ease: 'easeOut' },
+      });
+    };
+
+    const scheduleCycle = (startOffset: number) => {
+      FLY_ICONS.forEach((_, i) => {
+        const arrivalMs = (startOffset + ICON_DELAY_STEP * i + ICON_DUR) * 1000;
+        const t = setTimeout(pulse, arrivalMs);
+        timeouts.push(t);
+      });
+    };
+
+    scheduleCycle(0);
+    const interval = setInterval(() => scheduleCycle(0), CYCLE * 1000);
+
+    return () => {
+      running = false;
+      timeouts.forEach(clearTimeout);
+      clearInterval(interval);
+    };
+  }, [pkgCtrl, circleCtrl]);
+
+  return (
+    <div style={{ position: 'relative', height: 180, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Circle with Package inside */}
+      <motion.div
+        animate={circleCtrl}
+        initial={{ scale: 1, background: 'rgba(14,201,0,0.15)', borderColor: 'rgba(14,201,0,0.4)' }}
+        style={{
+          width: 90, height: 90, borderRadius: '50%',
+          border: '2px solid rgba(14,201,0,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--accent)', position: 'relative', zIndex: 2,
+        }}
+      >
+        <motion.div animate={pkgCtrl}>
+          <Package size={44} strokeWidth={1.5} />
+        </motion.div>
+      </motion.div>
+
+      {/* Flying icons with bezier curve */}
+      {FLY_ICONS.map((Icon, i) => {
+        const rad = (i / FLY_ICONS.length) * Math.PI * 2;
+        const startX = Math.cos(rad) * 140;
+        const startY = Math.sin(rad) * 110;
+        const perpRad = rad + Math.PI / 2;
+        const midX = startX * 0.5 + Math.cos(perpRad) * 48;
+        const midY = startY * 0.5 + Math.sin(perpRad) * 48;
+        return (
+          <motion.div
+            key={i}
+            style={{ position: 'absolute', color: 'var(--accent)', display: 'flex', zIndex: 1 }}
+            animate={{
+              x: [startX, midX, 0],
+              y: [startY, midY, 0],
+              opacity: [0, 1, 0],
+              scale: [1.4, 1.1, 0.15],
+            }}
+            transition={{
+              delay: i * ICON_DELAY_STEP,
+              duration: ICON_DUR,
+              repeat: Infinity,
+              repeatDelay: REPEAT_DELAY,
+              ease: [0.25, 0.46, 0.45, 0.94],
+              times: [0, 0.45, 1],
+            }}
+          >
+            <Icon size={26} strokeWidth={1.5} />
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function FileOrgApp() {
   const [currentPath, setCurrentPath] = useState<string>('C:\\');
@@ -1258,66 +1361,7 @@ export default function FileOrgApp() {
               style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 20, padding: 32, width: 460, maxWidth: '92vw', boxShadow: '0 30px 80px rgba(0,0,0,0.7)', textAlign: 'center', position: 'relative', overflow: 'hidden' }}
             >
               {/* Package box inside green circle, icons flying in */}
-              {(() => {
-                const flyIcons = [Film, ImageIcon, Music, FileText, Code, Archive];
-                return (
-                  <div style={{ position: 'relative', height: 180, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {/* The green circle with Package inside */}
-                    <motion.div
-                      animate={{ scale: [1, 1.06, 1] }}
-                      transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
-                      style={{
-                        width: 90, height: 90, borderRadius: '50%',
-                        background: 'rgba(14,201,0,0.15)',
-                        border: '2px solid rgba(14,201,0,0.4)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'var(--accent)',
-                        position: 'relative', zIndex: 2,
-                      }}
-                    >
-                      <Package size={44} strokeWidth={1.5} />
-                    </motion.div>
-
-                    {/* Icons flying FROM outside INTO the circle — bezier curve via perpendicular midpoint */}
-                    {flyIcons.map((Icon, i) => {
-                      const angles = [0, 60, 120, 180, 240, 300];
-                      const rad = (angles[i] * Math.PI) / 180;
-                      const startX = Math.cos(rad) * 140;
-                      const startY = Math.sin(rad) * 110;
-
-                      // Bezier control point: halfway + perpendicular offset for the curve
-                      const perpRad = rad + Math.PI / 2;
-                      const curveStrength = 45;
-                      const midX = startX * 0.5 + Math.cos(perpRad) * curveStrength;
-                      const midY = startY * 0.5 + Math.sin(perpRad) * curveStrength;
-
-                      const delay = i * 0.22;
-                      return (
-                        <motion.div
-                          key={i}
-                          style={{ position: 'absolute', color: 'var(--accent)', display: 'flex', zIndex: 1 }}
-                          animate={{
-                            x: [startX, midX, 0],
-                            y: [startY, midY, 0],
-                            opacity: [0, 0.9, 0],
-                            scale: [1.4, 1.1, 0.2],
-                          }}
-                          transition={{
-                            delay,
-                            duration: 1.2,
-                            repeat: Infinity,
-                            repeatDelay: 2.2,
-                            ease: [0.25, 0.46, 0.45, 0.94],
-                            times: [0, 0.45, 1],
-                          }}
-                        >
-                          <Icon size={26} strokeWidth={1.5} />
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+              <PackAnimation />
 
               <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700 }}>¡Proyecto Empaquetado!</h2>
               <p style={{ margin: '0 0 20px', fontSize: 14, opacity: 0.6 }}>Todos los archivos fueron copiados exitosamente</p>

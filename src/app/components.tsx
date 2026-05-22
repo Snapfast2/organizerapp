@@ -1516,7 +1516,17 @@ export function DuplicateView({
   const [progressMsg, setProgressMsg] = useState('Iniciando...');
   const [progressPct, setProgressPct] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const { show: toast } = useToast();
+
+  const toggleGroup = (ext: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(ext)) next.delete(ext);
+      else next.add(ext);
+      return next;
+    });
+  };
 
   const groupedDuplicates = useMemo(() => {
     if (!duplicates) return null;
@@ -1630,13 +1640,35 @@ export function DuplicateView({
             </div>
           )}
 
-          {!loading && groupedDuplicates && Object.entries(groupedDuplicates).map(([ext, extGroups]) => (
-            <div key={ext} style={{ marginBottom: 24 }}>
-              <h3 style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center' }}>
-                {ext === 'sin extensión' ? 'Archivos sin extensión' : `Formato .${ext}`}
-                <span className="badge" style={{ marginLeft: 8 }}>{extGroups.length} {extGroups.length === 1 ? 'grupo' : 'grupos'}</span>
-              </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, alignItems: 'start' }}>
+          {!loading && groupedDuplicates && Object.entries(groupedDuplicates).map(([ext, extGroups]) => {
+            const isCollapsed = collapsedGroups.has(ext);
+            const totalFiles = extGroups.reduce((s, g) => s + g.files.length, 0);
+            return (
+            <div key={ext} style={{ marginBottom: 16, border: '1px solid var(--border-subtle)', borderRadius: 10, overflow: 'hidden' }}>
+              <button
+                onClick={() => toggleGroup(ext)}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg-surface)', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <motion.div animate={{ rotate: isCollapsed ? -90 : 0 }} transition={{ duration: 0.2 }}>
+                  <ChevronRight size={15} style={{ color: 'var(--text-muted)' }} />
+                </motion.div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, flex: 1 }}>
+                  {ext === 'sin extensión' ? 'Sin extensión' : `.${ext}`}
+                </span>
+                <span className="badge" style={{ marginRight: 4 }}>{extGroups.length} {extGroups.length === 1 ? 'grupo' : 'grupos'}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{totalFiles} archivos</span>
+              </button>
+              <AnimatePresence initial={false}>
+                {!isCollapsed && (
+                  <motion.div
+                    key="content"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <div style={{ padding: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10, alignItems: 'start' }}>
                 {extGroups.map((group, i) => (
                   <div key={group.hash} style={{ background: 'var(--bg-surface)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -1683,10 +1715,14 @@ export function DuplicateView({
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
+                 ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          ))}
+            );
+          })}
       </div>
 
       <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef, useDeferredValue } from 'react';
+import { useState, useEffect, useCallback, useRef, useDeferredValue, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Folder, File, Image, Film, Music, FileText, Archive, Code, HardDrive,
@@ -1518,6 +1518,18 @@ export function DuplicateView({
   const [deleting, setDeleting] = useState(false);
   const { show: toast } = useToast();
 
+  const groupedDuplicates = useMemo(() => {
+    if (!duplicates) return null;
+    const groups: Record<string, typeof duplicates> = {};
+    for (const group of duplicates) {
+      const name = group.files[0].path.split(/[\\/]/).pop() || '';
+      const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() || 'sin extensión' : 'sin extensión';
+      if (!groups[ext]) groups[ext] = [];
+      groups[ext].push(group);
+    }
+    return Object.fromEntries(Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)));
+  }, [duplicates]);
+
   useEffect(() => {
     let active = true;
     const es = new EventSource(`/api/fs/duplicates?path=${encodeURIComponent(cwd)}`);
@@ -1618,57 +1630,63 @@ export function DuplicateView({
             </div>
           )}
 
-          {!loading && duplicates && duplicates.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16, alignItems: 'start' }}>
-              {duplicates.map((group, i) => (
-                <div key={group.hash} style={{ background: 'var(--bg-surface)', padding: 12, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>SHA-256: {group.hash.substring(0, 16)}...</span>
-                <span className="badge">{formatSize(group.files[0].size)} c/u</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {group.files.map(f => {
-                  const parts = f.path.split(/[\\/]/);
-                  const name = parts[parts.length - 1];
-                  const ext = name.split('.').pop()?.toLowerCase() || '';
-                  const mockEntry: FileEntry = { path: f.path, name, ext, isDir: false, size: f.size, modified: '', created: '' };
-                  return (
-                    <div key={f.path} style={{ fontSize: 13, padding: '6px 10px', background: 'var(--bg-elevated)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 24, height: 24 }}>
-                        <FileListIcon entry={mockEntry} />
-                      </div>
-                      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={name}>{name}</span>
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.path}>
-                          {f.path.startsWith(cwd) ? f.path.substring(cwd.length).replace(/^[\\/]+/, '') : f.path}
-                        </span>
-                      </div>
+          {!loading && groupedDuplicates && Object.entries(groupedDuplicates).map(([ext, extGroups]) => (
+            <div key={ext} style={{ marginBottom: 24 }}>
+              <h3 style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center' }}>
+                {ext === 'sin extensión' ? 'Archivos sin extensión' : `Formato .${ext}`}
+                <span className="badge" style={{ marginLeft: 8 }}>{extGroups.length} {extGroups.length === 1 ? 'grupo' : 'grupos'}</span>
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, alignItems: 'start' }}>
+                {extGroups.map((group, i) => (
+                  <div key={group.hash} style={{ background: 'var(--bg-surface)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>SHA-256: {group.hash.substring(0, 16)}...</span>
+                      <span className="badge">{formatSize(group.files[0].size)} c/u</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {group.files.map(f => {
+                        const parts = f.path.split(/[\\/]/);
+                        const name = parts[parts.length - 1];
+                        const fExt = name.split('.').pop()?.toLowerCase() || '';
+                        const mockEntry: FileEntry = { path: f.path, name, ext: fExt, isDir: false, size: f.size, modified: '', created: '' };
+                        return (
+                          <div key={f.path} style={{ fontSize: 12, padding: '4px 8px', background: 'var(--bg-elevated)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 20, height: 20 }}>
+                              <FileListIcon entry={mockEntry} />
+                            </div>
+                            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={name}>{name}</span>
+                              <span style={{ fontSize: 9.5, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.path}>
+                                {f.path.startsWith(cwd) ? f.path.substring(cwd.length).replace(/^[\\/]+/, '') : f.path}
+                              </span>
+                            </div>
+                            <button 
+                              className="btn btn-ghost btn-icon" 
+                              title="Ver en carpeta"
+                              style={{ width: 20, height: 20, padding: 0 }}
+                              onClick={() => onOpenLocation && onOpenLocation(f.path)}
+                            >
+                              <ExternalLink size={12} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
                       <button 
-                        className="btn btn-ghost btn-icon" 
-                        title="Ver en carpeta"
-                        style={{ width: 24, height: 24, padding: 0 }}
-                        onClick={() => onOpenLocation && onOpenLocation(f.path)}
+                        className="btn btn-ghost" 
+                        style={{ color: 'var(--danger)', fontSize: 11, padding: '4px 8px' }}
+                        disabled={deleting}
+                        onClick={() => handleDelete([group.files[0].path], group.files.map(f => f.path))}
                       >
-                        <ExternalLink size={14} />
+                        <Trash2 size={12} /> Mantener 1 y borrar el resto
                       </button>
                     </div>
-                  );
-                })}
-              </div>
-              <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
-                <button 
-                  className="btn btn-ghost" 
-                  style={{ color: 'var(--danger)', fontSize: 11, padding: '4px 8px' }}
-                  disabled={deleting}
-                  onClick={() => handleDelete([group.files[0].path], group.files.map(f => f.path))}
-                >
-                  <Trash2 size={12} /> Mantener 1 y borrar el resto
-                </button>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
-          </div>
-        )}
       </div>
 
       <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>

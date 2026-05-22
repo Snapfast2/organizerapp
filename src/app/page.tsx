@@ -1278,26 +1278,40 @@ export default function FileOrgApp() {
                       <Package size={44} strokeWidth={1.5} />
                     </motion.div>
 
-                    {/* Icons flying FROM outside INTO the circle */}
+                    {/* Icons flying FROM outside INTO the circle — bezier curve via perpendicular midpoint */}
                     {flyIcons.map((Icon, i) => {
                       const angles = [0, 60, 120, 180, 240, 300];
                       const rad = (angles[i] * Math.PI) / 180;
-                      const startX = Math.cos(rad) * 130;
-                      const startY = Math.sin(rad) * 100;
-                      const delay = i * 0.2;
+                      const startX = Math.cos(rad) * 140;
+                      const startY = Math.sin(rad) * 110;
+
+                      // Bezier control point: halfway + perpendicular offset for the curve
+                      const perpRad = rad + Math.PI / 2;
+                      const curveStrength = 45;
+                      const midX = startX * 0.5 + Math.cos(perpRad) * curveStrength;
+                      const midY = startY * 0.5 + Math.sin(perpRad) * curveStrength;
+
+                      const delay = i * 0.22;
                       return (
                         <motion.div
                           key={i}
                           style={{ position: 'absolute', color: 'var(--accent)', display: 'flex', zIndex: 1 }}
                           animate={{
-                            x: [startX, startX * 0.5, 0],
-                            y: [startY, startY * 0.5, 0],
-                            opacity: [0, 1, 0],
-                            scale: [1, 0.8, 0.3],
+                            x: [startX, midX, 0],
+                            y: [startY, midY, 0],
+                            opacity: [0, 0.9, 0],
+                            scale: [1.4, 1.1, 0.2],
                           }}
-                          transition={{ delay, duration: 1.0, repeat: Infinity, repeatDelay: 2, ease: 'easeIn' }}
+                          transition={{
+                            delay,
+                            duration: 1.2,
+                            repeat: Infinity,
+                            repeatDelay: 2.2,
+                            ease: [0.25, 0.46, 0.45, 0.94],
+                            times: [0, 0.45, 1],
+                          }}
                         >
-                          <Icon size={18} strokeWidth={1.5} />
+                          <Icon size={26} strokeWidth={1.5} />
                         </motion.div>
                       );
                     })}

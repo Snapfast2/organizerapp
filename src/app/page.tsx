@@ -964,17 +964,17 @@ export default function FileOrgApp() {
 
               return (
                 <motion.div key="grid-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  {dirs.length > 0 && <div className="file-grid">{dirs.map(renderGridCard)}</div>}
+                  {dirs.length > 0 && <div className="file-grid">{dirs.map(e => renderGridCard(e))}</div>}
                   {coverFiles.length > 0 && (
                     <>
                       {dirs.length > 0 && <div className="grid-section-divider" />}
-                      <div className="file-grid">{coverFiles.map(renderGridCard)}</div>
+                      <div className="file-grid">{coverFiles.map(e => renderGridCard(e))}</div>
                     </>
                   )}
                   {otherFiles.length > 0 && (
                     <>
                       {(dirs.length > 0 || coverFiles.length > 0) && <div className="grid-section-divider" />}
-                      <div className="file-grid">{otherFiles.map(renderGridCard)}</div>
+                      <div className="file-grid">{otherFiles.map(e => renderGridCard(e))}</div>
                     </>
                   )}
                 </motion.div>

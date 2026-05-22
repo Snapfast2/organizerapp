@@ -1257,38 +1257,45 @@ export default function FileOrgApp() {
               onClick={e => e.stopPropagation()}
               style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 20, padding: 32, width: 460, maxWidth: '92vw', boxShadow: '0 30px 80px rgba(0,0,0,0.7)', textAlign: 'center', position: 'relative', overflow: 'hidden' }}
             >
-              {/* Flying Lucide icons INTO the package box */}
+              {/* Package box inside green circle, icons flying in */}
               {(() => {
                 const flyIcons = [Film, ImageIcon, Music, FileText, Code, Archive];
                 return (
-                  <div style={{ position: 'relative', height: 160, marginBottom: 20, overflow: 'hidden' }}>
-                    {/* Package box — centered at bottom */}
+                  <div style={{ position: 'relative', height: 180, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {/* The green circle with Package inside */}
                     <motion.div
-                      style={{ position: 'absolute', bottom: 0, left: '50%', marginLeft: -28, color: 'var(--accent)' }}
-                      animate={{ scale: [1, 1.08, 1] }} transition={{ repeat: Infinity, duration: 1.8, ease: 'easeInOut' }}
+                      animate={{ scale: [1, 1.06, 1] }}
+                      transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+                      style={{
+                        width: 90, height: 90, borderRadius: '50%',
+                        background: 'rgba(14,201,0,0.15)',
+                        border: '2px solid rgba(14,201,0,0.4)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--accent)',
+                        position: 'relative', zIndex: 2,
+                      }}
                     >
-                      <Package size={56} strokeWidth={1.5} />
+                      <Package size={44} strokeWidth={1.5} />
                     </motion.div>
 
-                    {/* Icons: start spread around top, fly DOWN toward the box */}
+                    {/* Icons flying FROM outside INTO the circle */}
                     {flyIcons.map((Icon, i) => {
-                      // Spread across top in an arc: from -140px to +140px horizontally, start at top
-                      const spread = [-130, -80, -30, 30, 80, 130];
-                      const startX = spread[i];
-                      const startY = -70; // above the container center
+                      const angles = [0, 60, 120, 180, 240, 300];
+                      const rad = (angles[i] * Math.PI) / 180;
+                      const startX = Math.cos(rad) * 130;
+                      const startY = Math.sin(rad) * 100;
                       const delay = i * 0.2;
                       return (
                         <motion.div
                           key={i}
-                          style={{ position: 'absolute', bottom: 12, left: '50%', marginLeft: -10, color: 'var(--accent)', display: 'flex' }}
-                          initial={{ x: startX, y: startY, opacity: 0, scale: 1 }}
+                          style={{ position: 'absolute', color: 'var(--accent)', display: 'flex', zIndex: 1 }}
                           animate={{
-                            x: [startX, startX * 0.4, 0],
-                            y: [startY, startY * 0.4, 0],
+                            x: [startX, startX * 0.5, 0],
+                            y: [startY, startY * 0.5, 0],
                             opacity: [0, 1, 0],
-                            scale: [1, 0.9, 0.2],
+                            scale: [1, 0.8, 0.3],
                           }}
-                          transition={{ delay, duration: 0.9, repeat: Infinity, repeatDelay: 2, ease: 'easeIn' }}
+                          transition={{ delay, duration: 1.0, repeat: Infinity, repeatDelay: 2, ease: 'easeIn' }}
                         >
                           <Icon size={18} strokeWidth={1.5} />
                         </motion.div>
@@ -1297,15 +1304,6 @@ export default function FileOrgApp() {
                   </div>
                 );
               })()}
-
-              {/* Check badge — completely separate, below animation */}
-              <motion.div
-                initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.3, damping: 12 }}
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 54, height: 54,
-                  borderRadius: '50%', background: 'rgba(14,201,0,0.15)', border: '1.5px solid rgba(14,201,0,0.35)', marginBottom: 14 }}
-              >
-                <Check size={26} strokeWidth={2.5} color="var(--success)" />
-              </motion.div>
 
               <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700 }}>¡Proyecto Empaquetado!</h2>
               <p style={{ margin: '0 0 20px', fontSize: 14, opacity: 0.6 }}>Todos los archivos fueron copiados exitosamente</p>

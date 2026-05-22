@@ -27,16 +27,34 @@ const TAG_TAXONOMY = [
   // Visual content types
   'ilustración', 'fotografía', 'render-3d', 'logo', 'tipografía', 'icono',
   'diseño-grafico', 'captura-pantalla', 'infografia', 'animacion',
+  'sticker', 'mockup', 'textura', 'patron', 'fondo', 'efecto',
+  'overlay', 'sprite', 'ui-ux', 'wireframe', 'banner', 'portada',
+
   // Subject matter
   'personaje', 'criatura', 'paisaje', 'arquitectura', 'retrato', 'producto',
   'comida', 'naturaleza', 'tecnologia', 'arte-digital',
+  'espiritual', 'mistico', 'fantasia', 'abstracto', 'minimalista', 'retro',
+  'animal', 'planta', 'vehiculo', 'ciudad', 'espacio', 'kawaii',
+
+  // Study / learning
+  'estudio', 'apuntes', 'resumen', 'ejercicio', 'tarea',
+  'investigacion', 'curso', 'clase', 'examen',
+
   // Document types
   'contrato', 'factura', 'certificado', 'reporte', 'formulario', 'carta',
   'presentacion', 'manual', 'academico', 'legal',
+  'acta', 'declaracion', 'constancia', 'presupuesto', 'cotizacion',
+  'recibo', 'contabilidad', 'identidad', 'gobierno',
+
+  // PSD / design project types
+  'composicion', 'retoque', 'collage', 'fotomontaje', 'degradado', 'mascara',
+
   // Media types
   'videojuego', 'tutorial', 'vlog', 'clip', 'musica', 'efecto-visual',
+
   // Design tools / origin
   'photoshop', 'after-effects', 'blender', 'vector',
+
   // Workflow
   'borrador', 'final', 'referencia', 'recurso', 'plantilla',
 ];

@@ -326,6 +326,7 @@ html, body {
   padding: 8px 20px;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .toolbar-group { display: flex; align-items: center; gap: 3px; }
@@ -1151,6 +1152,10 @@ html, body {
   border-radius: 50%;
   animation: spin 0.65s linear infinite;
   box-shadow: 0 0 10px rgba(14,201,0,0.2);
+}
+
+.spin-animation {
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }

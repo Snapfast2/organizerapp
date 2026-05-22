@@ -9,7 +9,7 @@ import {
   Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
   Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
   FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, MoreVertical,
-  ChevronsUp, ArrowUpDown, SortAsc, SortDesc, Undo, Sparkles
+  ChevronsUp, ArrowUpDown, SortAsc, SortDesc, Undo, Sparkles, Clapperboard, Globe, FolderSearch
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
@@ -56,6 +56,7 @@ export default function FileOrgApp() {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [aiTagEntries, setAITagEntries] = useState<FileEntry[] | null>(null);
   const [aeLinks, setAeLinks] = useState<Record<string, string[]>>({});
+  const [isScanningAE, setIsScanningAE] = useState(false);
   const closeContextMenu = () => setContextMenu(null);
   
   // Toasts
@@ -356,6 +357,7 @@ export default function FileOrgApp() {
     }
     if (action === 'scan-ae') {
       try {
+        setIsScanningAE(true);
         toast('Escaneando proyectos After Effects...', 'info');
         const res = await fetch('/api/ae-scanner', {
           method: 'POST',
@@ -371,6 +373,8 @@ export default function FileOrgApp() {
         }
       } catch (e: any) {
         toast(e.message, 'error');
+      } finally {
+        setIsScanningAE(false);
       }
       return;
     }
@@ -790,24 +794,30 @@ export default function FileOrgApp() {
       <header className="header">
         <div className="header-logo"><FolderOpen size={20} color="var(--accent)" strokeWidth={2.5} /> FileOrganizer</div>
         <div className="header-search">
-          <Search size={14} className="header-search-icon" />
-          <input 
-            type="text" 
-            placeholder={searchScope === 'global' ? "Buscar en todo el sistema..." : "Buscar en esta carpeta..."}
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
           <button 
-            className="search-scope-toggle" 
+            className="btn btn-ghost btn-icon" 
+            style={{ padding: 0, width: 28, height: 28, marginRight: -4 }}
             onClick={() => setSearchScope(prev => prev === 'global' ? 'local' : 'global')}
             title={searchScope === 'global' ? "Buscando en todo (Click para buscar solo aquí)" : "Buscando solo aquí (Click para buscar en todo)"}
           >
-            {searchScope === 'global' ? '🌐' : '📁'}
+            {searchScope === 'global' ? <Globe size={14} color="var(--text-muted)" /> : <FolderSearch size={14} color="var(--text-muted)" />}
           </button>
+          <Search size={14} className="header-search-icon" style={{ left: 36 }} />
+          <input 
+            type="text" 
+            placeholder={searchScope === 'global' ? "Buscar en todo..." : "Buscar en esta carpeta..."}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{ paddingLeft: 36 }}
+          />
         </div>
         <div className="header-actions">
-          <button className="btn btn-ghost btn-icon" onClick={() => doAction('scan-ae', {})} title="Escanear proyectos de After Effects en esta carpeta">
-            <span style={{ fontSize: 16 }}>🎬</span>
+          <button 
+            className={`btn btn-ghost btn-icon`} 
+            onClick={() => !isScanningAE && doAction('scan-ae', {})} 
+            title={isScanningAE ? 'Escaneando...' : 'Escanear proyectos de After Effects en esta carpeta'}
+          >
+            {isScanningAE ? <RefreshCw size={16} className="spin-animation" color="var(--accent)" /> : <Clapperboard size={16} color="var(--accent)" />}
           </button>
           <button className="btn btn-ghost btn-icon" onClick={() => setShowStats(true)} title="Estadísticas de disco"><BarChart2 size={16} /></button>
           <button className="btn btn-primary" style={{ padding: '0 12px', height: 30, fontSize: 11.5 }} onClick={() => setShowOrganize(true)}>

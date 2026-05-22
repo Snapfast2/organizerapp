@@ -115,61 +115,52 @@ export default function FileOrgApp() {
   const handlePackProject = async (aepPath: string) => {
     setPackState({ path: aepPath, copied: 0, total: 0, message: 'Iniciando...', files: [] });
     try {
-      const res = await fetch('/api/ae-collect', {
+      // 1. Start the job
+      const startRes = await fetch('/api/ae-collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ aepPath })
       });
-      
-      if (!res.body) throw new Error('Error al conectar con la API');
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      
-      let buffer = '';
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        
-        let boundary = buffer.indexOf('\\n\\n');
-        while (boundary !== -1) {
-          const part = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          
-          if (part.startsWith('data: ')) {
-            const jsonStr = part.substring(6);
-            try {
-              const data = JSON.parse(jsonStr);
-              if (data.type === 'error') {
-                alert('Error empaquetando: ' + data.message);
-                setPackState(null);
-                return;
-              } else if (data.type === 'info') {
-                setPackState(prev => prev ? { ...prev, message: data.message } : null);
-              } else if (data.type === 'start') {
-                setPackState(prev => prev ? { ...prev, total: data.total, files: data.files.map((f: string) => ({ name: f, status: 'pending' })) } : null);
-              } else if (data.type === 'progress') {
-                setPackState(prev => {
-                  if (!prev) return null;
-                  const newFiles = [...prev.files];
-                  for (let i = 0; i < newFiles.length; i++) {
-                     if (i < data.copied) newFiles[i].status = 'done';
-                     else if (newFiles[i].name === data.currentFile) newFiles[i].status = 'copying';
-                     else newFiles[i].status = 'pending';
-                  }
-                  return { ...prev, copied: data.copied, total: data.total, files: newFiles, message: data.message || prev.message };
-                });
-              } else if (data.type === 'done') {
-                setPackState(null);
-                refresh();
-                alert(`¡Empaquetado exitoso!\\nArchivos copiados: ${data.totalFiles}\\nTamaño: ${formatSize(data.totalBytes)}\\n\\nSe guardó en: ${data.destPath}`);
-                return;
-              }
-            } catch(e) {}
+      const { jobId, error: startError } = await startRes.json();
+      if (startError) throw new Error(startError);
+
+      // 2. Poll every 300ms
+      await new Promise<void>((resolve, reject) => {
+        const interval = setInterval(async () => {
+          try {
+            const pollRes = await fetch(`/api/ae-collect?jobId=${jobId}`);
+            const data = await pollRes.json();
+
+            if (data.error) {
+              clearInterval(interval);
+              reject(new Error(data.error));
+              return;
+            }
+
+            setPackState({
+              path: aepPath,
+              message: data.message,
+              copied: data.copied,
+              total: data.total,
+              files: data.files || [],
+            });
+
+            if (data.state === 'done') {
+              clearInterval(interval);
+              setPackState(null);
+              refresh();
+              alert(`¡Empaquetado exitoso!\nArchivos copiados: ${data.copied}\nTamaño: ${formatSize(data.totalBytes ?? 0)}\n\nSe guardó en:\n${data.destPath}`);
+              resolve();
+            } else if (data.state === 'error') {
+              clearInterval(interval);
+              reject(new Error(data.error));
+            }
+          } catch (e: any) {
+            clearInterval(interval);
+            reject(e);
           }
-          boundary = buffer.indexOf('\\n\\n');
-        }
-      }
+        }, 300);
+      });
     } catch (err: any) {
       alert('Fallo al empaquetar: ' + err.message);
       setPackState(null);

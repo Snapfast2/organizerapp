@@ -157,12 +157,12 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot =
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
 
-  const toggle = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggle = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (!open && !fetched) {
       setLoading(true);
       try {
-        const res = await fetch(`/api/list?path=${encodeURIComponent(path)}`);
+        const res = await fetch(`/api/fs?path=${encodeURIComponent(path)}`);
         const data = await res.json();
         const dirs = (data.entries ?? [])
           .filter((e: { type: string }) => e.type === 'directory')
@@ -182,7 +182,10 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot =
     <div style={{ position: 'relative' }}>
       {/* Row */}
       <motion.div
-        onClick={() => onNavigate(path)}
+        onClick={(e) => {
+          onNavigate(path);
+          if (!open) toggle(e);
+        }}
         whileHover={{ backgroundColor: isActive ? undefined : 'rgba(255,255,255,0.04)' }}
         whileTap={{ scale: 0.985 }}
         style={{

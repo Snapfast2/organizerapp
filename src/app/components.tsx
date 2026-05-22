@@ -734,13 +734,15 @@ export function PreviewModal({ entry, allPreviewable, onClose }: {
 }
 
 // ─── Context Menu ──────────────────────────────────────────
-export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, onMoveTo, onUnzip, onMetadata, sortBy, sortDesc, onSort }: {
+export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, onMoveTo, onUnzip, onMetadata, sortBy, sortDesc, onSort, aeLinkedProjects, onOpenAEProject }: {
   x: number; y: number; entry: FileEntry | null;
   onClose: () => void; onRename: () => void; onDelete: () => void;
   onMkdir: () => void; onOpen: () => void; onPreview: () => void;
   onOpenLocation: () => void; onMoveTo: () => void; onUnzip: () => void;
   onMetadata: () => void;
   sortBy: string; sortDesc: boolean; onSort: (field: string) => void;
+  aeLinkedProjects?: string[];
+  onOpenAEProject?: (path: string) => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
@@ -807,6 +809,22 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
             <Trash2 size={13} /> Eliminar
           </div>
           <div className="context-menu-sep" />
+          
+          {aeLinkedProjects && aeLinkedProjects.length > 0 && (
+            <>
+              <div className="context-menu-section-label" style={{ color: '#c4b5fd' }}>🎬 Usado en After Effects</div>
+              {aeLinkedProjects.map((projPath, i) => {
+                const parts = projPath.split(/[\\/]/);
+                const projName = parts[parts.length - 1];
+                return (
+                  <div key={i} className="context-menu-item" style={{ fontSize: 11 }} onClick={() => onOpenAEProject && onOpenAEProject(projPath)} title={projPath}>
+                    <ExternalLink size={11} /> {projName}
+                  </div>
+                );
+              })}
+              <div className="context-menu-sep" />
+            </>
+          )}
         </>
       )}
       {!entry && (

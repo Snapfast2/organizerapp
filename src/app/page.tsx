@@ -55,6 +55,7 @@ export default function FileOrgApp() {
   const [showMetadataEntry, setShowMetadataEntry] = useState<FileEntry | null>(null);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [aiTagEntries, setAITagEntries] = useState<FileEntry[] | null>(null);
+  const [aeLinks, setAeLinks] = useState<Record<string, string[]>>({});
   const closeContextMenu = () => setContextMenu(null);
   
   // Toasts
@@ -212,9 +213,21 @@ export default function FileOrgApp() {
     try {
       const res = await fetch('/api/fs/trash/count');
       const data = await res.json();
-      setTrashCount(data.count || 0);
+      if (!data.error) setTrashCount(data.count);
     } catch {}
   }, []);
+
+  const fetchAeLinks = useCallback(async () => {
+    try {
+      const res = await fetch('/api/ae-links');
+      const data = await res.json();
+      if (!data.error) setAeLinks(data);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchAeLinks();
+  }, [fetchAeLinks]);
 
   useEffect(() => {
     fetch('/api/fs/drives')
@@ -337,6 +350,30 @@ export default function FileOrgApp() {
   }, [undoHistory, refresh, toast]);
 
   const doAction = useCallback(async (action: string, payload: any) => {
+    if (action === 'open') {
+      await fetch('/api/fs/action', { method: 'POST', body: JSON.stringify({ action: 'open', path: payload.path }) });
+      return;
+    }
+    if (action === 'scan-ae') {
+      try {
+        toast('Escaneando proyectos After Effects...', 'info');
+        const res = await fetch('/api/ae-scanner', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dirPath: currentPath })
+        });
+        const data = await res.json();
+        if (data.success) {
+          toast(`Escaneo AE completado: ${data.aepFilesFound} proyectos encontrados, ${data.linksFound} dependencias.`, 'success');
+          fetchAeLinks();
+        } else {
+          toast(data.error || 'Error escaneando', 'error');
+        }
+      } catch (e: any) {
+        toast(e.message, 'error');
+      }
+      return;
+    }
     const res = await fetch('/api/fs/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -678,6 +715,7 @@ export default function FileOrgApp() {
     const isImage = IMAGE_EXTS.has(entry.ext);
     const isVideo = VIDEO_EXTS.has(entry.ext);
     const useCoverLayout = forceCover || (!entry.isDir && (isImage || isVideo || isDoc));
+    const linkedProjects = aeLinks[entry.path] || [];
     return (
       <motion.div
         layout
@@ -697,6 +735,11 @@ export default function FileOrgApp() {
         <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
         {entry.color && (
           <div className="file-color-dot" style={{ background: entry.color, position: 'absolute', top: 8, right: 8, width: 10, height: 10, borderRadius: '50%', zIndex: 10, boxShadow: '0 0 0 1.5px #050805' }} />
+        )}
+        {linkedProjects.length > 0 && (
+          <div style={{ position: 'absolute', top: 8, right: entry.color ? 24 : 8, zIndex: 10, background: '#3b0764', color: '#c4b5fd', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 5px rgba(0,0,0,0.4)' }} title="Usado en proyectos de After Effects">
+             🎬 {linkedProjects.length}
+          </div>
         )}
         {useCoverLayout ? (
           <>
@@ -763,6 +806,9 @@ export default function FileOrgApp() {
           </button>
         </div>
         <div className="header-actions">
+          <button className="btn btn-ghost btn-icon" onClick={() => doAction('scan-ae', {})} title="Escanear proyectos de After Effects en esta carpeta">
+            <span style={{ fontSize: 16 }}>🎬</span>
+          </button>
           <button className="btn btn-ghost btn-icon" onClick={() => setShowStats(true)} title="Estadísticas de disco"><BarChart2 size={16} /></button>
           <button className="btn btn-primary" style={{ padding: '0 12px', height: 30, fontSize: 11.5 }} onClick={() => setShowOrganize(true)}>
             <Wand2 size={13} /> Auto-Organizar
@@ -1073,6 +1119,17 @@ export default function FileOrgApp() {
             onMetadata={() => { if(contextMenu.entry) setShowMetadataEntry(contextMenu.entry); setContextMenu(null); }}
             onMoveTo={() => { if(contextMenu.entry) setShowMoveTo([contextMenu.entry.path]); setContextMenu(null); }}
             onUnzip={() => { if(contextMenu.entry) handleUnzip(contextMenu.entry.path); setContextMenu(null); }}
+            aeLinkedProjects={contextMenu.entry ? aeLinks[contextMenu.entry.path] : undefined}
+            onOpenAEProject={async (projPath) => {
+              try {
+                await fetch('/api/open-folder', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ filePath: projPath })
+                });
+                setContextMenu(null);
+              } catch (e: any) {}
+            }}
             sortBy={sortBy} sortDesc={sortDesc} onSort={handleSort}
           />
         )}

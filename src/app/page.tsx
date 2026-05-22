@@ -1257,63 +1257,92 @@ export default function FileOrgApp() {
               onClick={e => e.stopPropagation()}
               style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 20, padding: 32, width: 460, maxWidth: '92vw', boxShadow: '0 30px 80px rgba(0,0,0,0.7)', textAlign: 'center', position: 'relative', overflow: 'hidden' }}
             >
-              {/* Flying file icons animation */}
-              <div style={{ position: 'relative', height: 120, marginBottom: 16 }}>
-                {/* Box / destination */}
-                <motion.div
-                  style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)' }}
-                  animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 2 }}
-                >
-                  <Package size={52} color="var(--accent)" />
-                </motion.div>
-                {/* Floating file icons */}
-                {['🎬','🖼️','🎵','📄','🖼️','🎬'].map((icon, i) => (
-                  <motion.div
-                    key={i}
-                    style={{ position: 'absolute', fontSize: 22, top: 0, left: `${10 + i * 15}%` }}
-                    initial={{ y: 0, opacity: 1, scale: 1 }}
-                    animate={{ y: [0, 60, 80], opacity: [1, 1, 0], scale: [1, 0.8, 0.4] }}
-                    transition={{ delay: i * 0.18, duration: 0.9, repeat: Infinity, repeatDelay: 1.5 }}
-                  >
-                    {icon}
-                  </motion.div>
-                ))}
-              </div>
+              {/* Flying Lucide icons INTO the package box */}
+              {(() => {
+                const flyIcons = [Film, ImageIcon, Music, FileText, Code, Archive];
+                return (
+                  <div style={{ position: 'relative', height: 140, marginBottom: 8 }}>
+                    {/* Package box — destination */}
+                    <motion.div
+                      style={{ position: 'absolute', bottom: 4, left: '50%', transform: 'translateX(-50%)', color: 'var(--accent)' }}
+                      animate={{ scale: [1, 1.07, 1] }} transition={{ repeat: Infinity, duration: 1.8, ease: 'easeInOut' }}
+                    >
+                      <Package size={56} strokeWidth={1.5} />
+                    </motion.div>
 
-              {/* Check badge */}
+                    {/* Icons flying in from different positions toward center */}
+                    {flyIcons.map((Icon, i) => {
+                      const angle = (i / flyIcons.length) * Math.PI;
+                      const startX = Math.cos(angle - Math.PI / 2) * 160;
+                      const startY = -50 - Math.abs(Math.sin(angle) * 40);
+                      const delay = i * 0.22;
+                      return (
+                        <motion.div
+                          key={i}
+                          style={{ position: 'absolute', top: '50%', left: '50%', color: 'var(--text-secondary)', display: 'flex' }}
+                          initial={{ x: startX, y: startY - 30, opacity: 0, scale: 1.2 }}
+                          animate={{
+                            x: [startX, startX * 0.3, 0],
+                            y: [startY - 30, startY * 0.5, 20],
+                            opacity: [0, 1, 0],
+                            scale: [1.2, 1, 0.3],
+                          }}
+                          transition={{ delay, duration: 1.1, repeat: Infinity, repeatDelay: 1.8, ease: 'easeIn' }}
+                        >
+                          <Icon size={20} strokeWidth={1.5} />
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* Check badge — icon perfectly centered inside circle */}
               <motion.div
-                initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.2, damping: 12 }}
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 52, height: 52,
-                  borderRadius: '50%', background: 'rgba(14,201,0,0.15)', marginBottom: 14 }}
+                initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.25, damping: 12 }}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56,
+                  borderRadius: '50%', background: 'rgba(14,201,0,0.15)', border: '1.5px solid rgba(14,201,0,0.3)', marginBottom: 14 }}
               >
-                <CheckCircle size={30} color="var(--success)" />
+                <Check size={28} strokeWidth={2.5} color="var(--success)" />
               </motion.div>
 
-              <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700 }}>¡Proyecto Empaquetado! 📦</h2>
-              <p style={{ margin: '0 0 20px', fontSize: 14, opacity: 0.7 }}>Todos los archivos fueron copiados exitosamente</p>
+              <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700 }}>¡Proyecto Empaquetado!</h2>
+              <p style={{ margin: '0 0 20px', fontSize: 14, opacity: 0.6 }}>Todos los archivos fueron copiados exitosamente</p>
 
               {/* Stats row */}
               <div style={{ display: 'flex', gap: 12, marginBottom: 20, justifyContent: 'center' }}>
-                <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 18px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{packDone.totalFiles}</div>
-                  <div style={{ fontSize: 11, opacity: 0.6 }}>archivos</div>
+                <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 22px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)' }}>{packDone.totalFiles}</div>
+                  <div style={{ fontSize: 11, opacity: 0.5 }}>archivos</div>
                 </div>
-                <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 18px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{formatSize(packDone.totalBytes)}</div>
-                  <div style={{ fontSize: 11, opacity: 0.6 }}>copiados</div>
+                <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 22px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)' }}>{formatSize(packDone.totalBytes)}</div>
+                  <div style={{ fontSize: 11, opacity: 0.5 }}>copiados</div>
                 </div>
               </div>
 
-              {/* Destination path */}
-              <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 14px', marginBottom: 22, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <FolderOpen size={16} color="var(--accent)" style={{ flexShrink: 0 }} />
-                <span style={{ fontSize: 12, opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{packDone.destPath}</span>
+              {/* Destination path — with open folder button */}
+              <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 12px', marginBottom: 22, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FolderOpen size={15} color="var(--accent)" style={{ flexShrink: 0 }} />
+                <span style={{ flex: 1, fontSize: 12, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{packDone.destPath}</span>
+                <motion.button
+                  whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                  title="Abrir carpeta destino"
+                  onClick={async () => {
+                    try {
+                      await fetch('/api/open-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filePath: packDone.destPath }) });
+                    } catch {}
+                  }}
+                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--accent)', display: 'flex', alignItems: 'center', flexShrink: 0, padding: '5px 7px', borderRadius: 7 }}
+                >
+                  <ExternalLink size={13} />
+                </motion.button>
               </div>
 
               <motion.button
-                whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                whileHover={{ scale: 1.02, boxShadow: '0 0 20px rgba(14,201,0,0.4)' }} whileTap={{ scale: 0.97 }}
                 onClick={() => setPackDone(null)}
-                style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+                style={{ width: '100%', padding: '12px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
               >
                 ¡Genial!
               </motion.button>

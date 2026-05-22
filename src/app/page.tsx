@@ -796,7 +796,7 @@ export default function FileOrgApp() {
         <div className="header-search">
           <button 
             className="btn btn-ghost btn-icon" 
-            style={{ padding: 0, width: 28, height: 28, marginRight: -4 }}
+            style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', padding: 0, width: 26, height: 26, zIndex: 10 }}
             onClick={() => setSearchScope(prev => prev === 'global' ? 'local' : 'global')}
             title={searchScope === 'global' ? "Buscando en todo (Click para buscar solo aquí)" : "Buscando solo aquí (Click para buscar en todo)"}
           >
@@ -808,7 +808,7 @@ export default function FileOrgApp() {
             placeholder={searchScope === 'global' ? "Buscar en todo..." : "Buscar en esta carpeta..."}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            style={{ paddingLeft: 36 }}
+            style={{ paddingLeft: 56 }}
           />
         </div>
         <div className="header-actions">

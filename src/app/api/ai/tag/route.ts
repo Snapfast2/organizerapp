@@ -1,92 +1,134 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import sharp from 'sharp';
+import pdfParse from 'pdf-parse';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2-vision:11b';
 
 const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','bmp','tiff','tif','heic','ico']);
 const VIDEO_EXTS = new Set(['mp4','mov','avi','mkv','webm','wmv','flv','m4v']);
-const BINARY_DESIGN_EXTS = new Set(['psd','psb','ai','indd','xd','fig','sketch']);
+const BINARY_DESIGN_EXTS = new Set(['psd','psb','ai','indd','xd','fig','sketch','blend','obj','fbx']);
 
-// Max pixel dimension to send to Ollama — keeps base64 under ~2 MB
-const MAX_PX = 1024;
+const MAX_PX = 1024; // Max image dimension sent to Ollama
 
-// Few-shot image prompt — concrete examples prevent the model from copying placeholder text
-const IMAGE_PROMPT = `Look carefully at this image and describe exactly what you see.
-Respond with ONLY a JSON object (no extra text, no markdown).
+// ─── Prompts ─────────────────────────────────────────────────────────────────
 
-Example of a correct response for a photo of a dog in a park:
-{"tags": ["perro", "parque", "naturaleza", "verde", "mascota"], "description": "Perro marrón jugando en un parque con césped verde"}
+const IMAGE_PROMPT = `Look carefully at this image. What is the most important thing you see?
+Respond ONLY with a JSON object — no extra text.
 
-Example for a 3D game character:
-{"tags": ["criatura", "3d", "fantasia", "videojuego", "render"], "description": "Criatura 3D de fantasía con armadura y ojos grandes"}
+Correct examples:
+- Photo of mountains at sunset → {"tags": ["montaña", "atardecer", "naturaleza"], "description": "Montañas con cielo rojizo al atardecer"}
+- 3D game creature → {"tags": ["criatura", "videojuego", "3d"], "description": "Criatura 3D con armadura y ojo rojo grande"}
+- Logo with text → {"tags": ["logo", "tipografia"], "description": "Logotipo con texto dorado sobre fondo oscuro"}
+- Portrait photo → {"tags": ["retrato", "persona"], "description": "Foto de una mujer con cabello claro"}
 
-Example for a logo:
-{"tags": ["logo", "diseno", "tipografia", "marca"], "description": "Logotipo con texto en letras doradas sobre fondo oscuro"}
+Now describe THIS image:
+{"tags": [MAXIMUM 3 tags, most important only, in Spanish], "description": "one sentence in Spanish about what you see"}`;
 
-Now analyze the image provided and respond in the same JSON format:
-- tags: 2 to 6 words in Spanish describing what IS VISIBLE in the image
-- description: one sentence in Spanish, max 12 words, describing what you actually see
-- DO NOT use the example tags above unless they truly match the image`;
+const VIDEO_FRAME_PROMPT = `This is a frame extracted from a video file. What is shown?
+Respond ONLY with a JSON object — no extra text.
 
-const FILENAME_PROMPT = (name: string, sizeKb: number, ext: string) =>
-  `Respond with ONLY a JSON object (no extra text).
+Examples:
+- Gaming footage → {"tags": ["videojuego", "gameplay"], "description": "Escena de videojuego con personaje en acción"}
+- Tutorial video → {"tags": ["tutorial", "pantalla"], "description": "Captura de pantalla de tutorial en computadora"}
+- Nature video → {"tags": ["naturaleza", "paisaje"], "description": "Video de paisaje natural con vegetación verde"}
 
-Example: {"tags": ["diseno", "grafico", "arte"], "description": "Archivo de diseño gráfico profesional"}
+Describe THIS video frame:
+{"tags": [MAXIMUM 3 tags in Spanish], "description": "one sentence in Spanish"}`;
 
-Analyze this file and suggest tags in Spanish based on the filename:
-- Filename: ${name}
-- Size: ${sizeKb} KB
-- Type: .${ext}
+const buildDocPrompt = (filename: string, text: string) =>
+  `Read this document content carefully.
+Respond ONLY with a JSON object — no extra text.
 
-Respond with JSON only:`;
+Examples:
+- Invoice/receipt → {"tags": ["factura", "finanzas"], "description": "Factura de compra con datos de pago"}
+- Legal contract → {"tags": ["contrato", "legal"], "description": "Contrato legal con términos y condiciones"}
+- Academic paper → {"tags": ["investigacion", "academico"], "description": "Artículo académico sobre biología molecular"}
+- Certificate → {"tags": ["certificado", "diploma"], "description": "Certificado de finalización de curso"}
 
-/** Resize image to MAX_PX on longest side, convert to JPEG for smaller base64 */
-async function resizeImageToBase64(filePath: string): Promise<string> {
+Document: ${filename}
+Content (first 1500 chars):
+${text.substring(0, 1500)}
+
+Respond with MAXIMUM 3 tags in Spanish about the document's actual topic:
+{"tags": [...], "description": "..."}`;
+
+const buildFilenamePrompt = (name: string, ext: string) =>
+  `Based ONLY on this filename, suggest tags in Spanish.
+Respond ONLY with JSON — no extra text.
+
+Examples:
+- "wedding_photos_2024.zip" → {"tags": ["fotos", "evento"], "description": "Archivo comprimido de fotos de boda"}
+- "project_report_final.docx" → {"tags": ["reporte", "documento"], "description": "Reporte de proyecto en documento Word"}
+- "song_remix.mp3" → {"tags": ["musica", "audio"], "description": "Archivo de música o remix de audio"}
+
+Filename: ${name}
+Extension: .${ext}
+
+{"tags": [1-3 tags in Spanish], "description": "one sentence in Spanish"}`;
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
+async function resizeToBase64(filePath: string): Promise<string> {
+  const resized = await sharp(filePath)
+    .resize({ width: MAX_PX, height: MAX_PX, fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 80 })
+    .toBuffer();
+  return resized.toString('base64');
+}
+
+/** Try to extract a video frame using ffmpeg (if installed) */
+async function extractVideoFrame(videoPath: string): Promise<string | null> {
   try {
-    const resized = await sharp(filePath)
-      .resize({ width: MAX_PX, height: MAX_PX, fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 82 })
-      .toBuffer();
-    return resized.toString('base64');
+    const tmpFrame = videoPath + '_frame_tmp.jpg';
+    // Seek to 3s or 10% of video, extract 1 frame
+    execSync(
+      `ffmpeg -ss 3 -i "${videoPath}" -frames:v 1 -q:v 2 "${tmpFrame}" -y`,
+      { timeout: 15000, stdio: 'pipe' }
+    );
+    if (!fs.existsSync(tmpFrame)) return null;
+    const base64 = await resizeToBase64(tmpFrame);
+    fs.unlinkSync(tmpFrame);
+    return base64;
   } catch {
-    // If sharp fails (e.g. corrupt file), fall back to raw buffer
-    const raw = fs.readFileSync(filePath);
-    if (raw.length > 4 * 1024 * 1024) throw new Error('Imagen demasiado grande para procesar sin sharp');
-    return raw.toString('base64');
+    return null; // ffmpeg not available or failed
   }
 }
 
-/** Parse JSON from model response — handles markdown code blocks + raw JSON */
+/** Parse JSON from free-form model response */
 function extractJSON(text: string): { tags: string[]; description: string } | null {
-  // Strip markdown fences
-  const stripped = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-
-  // Try direct parse first
+  const cleaned = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+  // Try direct parse
   try {
-    const p = JSON.parse(stripped);
-    if (Array.isArray(p.tags)) return { tags: p.tags.slice(0, 6), description: p.description || '' };
+    const p = JSON.parse(cleaned);
+    if (Array.isArray(p.tags)) return { tags: p.tags.slice(0, 3), description: p.description || '' };
   } catch { /* fall through */ }
-
-  // Regex fallback: find first {...} block
-  const match = stripped.match(/\{[\s\S]*?\}/);
-  if (match) {
+  // Regex: first {...} block
+  const m = cleaned.match(/\{[\s\S]*?\}/);
+  if (m) {
     try {
-      const p = JSON.parse(match[0]);
-      if (Array.isArray(p.tags)) return { tags: p.tags.slice(0, 6), description: p.description || '' };
+      const p = JSON.parse(m[0]);
+      if (Array.isArray(p.tags)) return { tags: p.tags.slice(0, 3), description: p.description || '' };
     } catch { /* fall through */ }
   }
   return null;
 }
 
-async function callOllama(payload: Record<string, any>, timeoutMs = 90000): Promise<{ tags: string[]; description: string }> {
+function cleanTags(tags: string[]): string[] {
+  return tags
+    .map(t => String(t).toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-záéíóúüñ0-9-]/gi, ''))
+    .filter(t => t.length > 1 && t !== 'tag' && t !== 'tags' && !t.startsWith('tag'));
+}
+
+// ─── Core Ollama caller ───────────────────────────────────────────────────────
+
+async function callOllama(payload: Record<string, any>, timeoutMs = 75000): Promise<{ tags: string[]; description: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  // Vision calls (with images) skip format:'json' so the model can reason freely
-  const hasImages = Array.isArray((payload as any).images) && (payload as any).images.length > 0;
+  const hasImages = Array.isArray(payload.images) && payload.images.length > 0;
 
   try {
     const res = await fetch(`${OLLAMA_URL}/api/generate`, {
@@ -96,8 +138,8 @@ async function callOllama(payload: Record<string, any>, timeoutMs = 90000): Prom
         model: OLLAMA_MODEL,
         prompt: '',
         stream: false,
-        ...(hasImages ? {} : { format: 'json' }), // Only force JSON for text-only calls
-        options: { temperature: 0.1, num_predict: 300 },
+        ...(hasImages ? {} : { format: 'json' }),
+        options: { temperature: 0.1, num_predict: 256 },
         ...payload,
       }),
       signal: controller.signal,
@@ -105,19 +147,19 @@ async function callOllama(payload: Record<string, any>, timeoutMs = 90000): Prom
 
     if (!res.ok) throw new Error(`Ollama error: ${res.status}`);
     const data = await res.json();
-    const text: string = data.response || '';
-
-    const parsed = extractJSON(text);
-    if (!parsed) throw new Error('No JSON in response');
+    const parsed = extractJSON(data.response || '');
+    if (!parsed || parsed.tags.length === 0) throw new Error('No JSON in response');
 
     return {
-      tags: parsed.tags.map((t: string) => String(t).toLowerCase().replace(/[^a-záéíóúüñ0-9-]/gi, '').trim()).filter(Boolean),
-      description: String(parsed.description || '').substring(0, 120),
+      tags: cleanTags(parsed.tags),
+      description: String(parsed.description || '').substring(0, 100),
     };
   } finally {
     clearTimeout(timer);
   }
 }
+
+// ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
@@ -134,79 +176,80 @@ export async function POST(request: NextRequest) {
     const stat = fs.statSync(normalized);
     const sizeKb = Math.round(stat.size / 1024);
 
-    // ── Images ─────────────────────────────────────────────────────────────────
+    // ── Images ──────────────────────────────────────────────────────────────
     if (IMAGE_EXTS.has(ext)) {
-      let base64: string;
       try {
-        base64 = await resizeImageToBase64(normalized);
-      } catch (resizeErr: any) {
-        // Can't resize — fall back to filename analysis
-        console.warn('Resize failed, using filename fallback:', resizeErr.message);
-        const result = await callOllama({ prompt: FILENAME_PROMPT(name, sizeKb, ext) });
-        return NextResponse.json({ success: true, ...result, type: 'image-fallback' });
-      }
-
-      // First attempt: image vision analysis
-      try {
-        const result = await callOllama({
-          prompt: IMAGE_PROMPT,
-          images: [base64],
-          system: 'Respond only with valid JSON. No extra text.',
-        }, 60000);
-        return NextResponse.json({ success: true, ...result, type: 'image' });
-      } catch (visionErr: any) {
-        // Second attempt: retry with even simpler prompt
+        const base64 = await resizeToBase64(normalized);
         try {
-          const simplePrompt = `Describe this image in Spanish with JSON only:
-{"tags": ["objeto1", "objeto2"], "description": "que muestra la imagen"}
-Only JSON, starting with {`;
+          const result = await callOllama({ prompt: IMAGE_PROMPT, images: [base64] }, 60000);
+          return NextResponse.json({ success: true, ...result, type: 'image' });
+        } catch {
+          // Retry with simpler prompt
           const result = await callOllama({
-            prompt: simplePrompt,
+            prompt: `What is in this image? JSON only: {"tags": ["main_subject"], "description": "what you see in Spanish"}`,
             images: [base64],
           }, 45000);
           return NextResponse.json({ success: true, ...result, type: 'image-retry' });
-        } catch {
-          // Final fallback: filename-based
-          const result = await callOllama({ prompt: FILENAME_PROMPT(name, sizeKb, ext) }, 30000);
-          return NextResponse.json({ success: true, ...result, type: 'image-filename-fallback' });
         }
+      } catch {
+        // Fallback to filename
+        const result = await callOllama({ prompt: buildFilenamePrompt(name, ext) }, 20000);
+        return NextResponse.json({ success: true, ...result, type: 'image-fallback' });
       }
     }
 
-    // ── Videos ─────────────────────────────────────────────────────────────────
+    // ── Videos — extract frame if ffmpeg available ───────────────────────────
     if (VIDEO_EXTS.has(ext)) {
-      const result = await callOllama({ prompt: FILENAME_PROMPT(name, sizeKb, ext) }, 30000);
-      return NextResponse.json({ success: true, ...result, type: 'video' });
+      const frameBase64 = await extractVideoFrame(normalized);
+      if (frameBase64) {
+        // Analyze actual video frame
+        try {
+          const result = await callOllama({ prompt: VIDEO_FRAME_PROMPT, images: [frameBase64] }, 60000);
+          return NextResponse.json({ success: true, ...result, type: 'video-frame' });
+        } catch { /* fall through to filename */ }
+      }
+      // No ffmpeg or frame failed — analyze by filename
+      const result = await callOllama({ prompt: buildFilenamePrompt(name, ext) }, 20000);
+      return NextResponse.json({ success: true, ...result, type: 'video-filename' });
     }
 
-    // ── Design/binary files (PSD, AI, etc.) ────────────────────────────────────
+    // ── PDFs — extract real text ─────────────────────────────────────────────
+    if (ext === 'pdf') {
+      try {
+        const buffer = fs.readFileSync(normalized);
+        const pdfData = await pdfParse(buffer);
+        const text = pdfData.text?.trim();
+        if (text && text.length > 50) {
+          const result = await callOllama({ prompt: buildDocPrompt(name, text) }, 45000);
+          return NextResponse.json({ success: true, ...result, type: 'pdf' });
+        }
+      } catch { /* PDF parse failed */ }
+      // Fallback: filename
+      const result = await callOllama({ prompt: buildFilenamePrompt(name, ext) }, 20000);
+      return NextResponse.json({ success: true, ...result, type: 'pdf-fallback' });
+    }
+
+    // ── Design/binary files ──────────────────────────────────────────────────
     if (BINARY_DESIGN_EXTS.has(ext)) {
-      const result = await callOllama({ prompt: FILENAME_PROMPT(name, sizeKb, ext) }, 30000);
+      const result = await callOllama({ prompt: buildFilenamePrompt(name, ext) }, 20000);
       return NextResponse.json({ success: true, ...result, type: 'design' });
     }
 
-    // ── Text / PDF / documents ──────────────────────────────────────────────────
+    // ── Other text files ─────────────────────────────────────────────────────
     let textContent = '';
-    try {
-      textContent = fs.readFileSync(normalized, { encoding: 'utf-8' }).substring(0, 2000);
-    } catch { /* binary — use filename */ }
+    try { textContent = fs.readFileSync(normalized, { encoding: 'utf-8' }).substring(0, 2000); } catch { /* binary */ }
 
-    const docPrompt = textContent
-      ? `Respond ONLY with JSON. No extra text.
-{"tags": ["tag1", "tag2"], "description": "brief in Spanish"}
-Document: ${name}
-Content: ${textContent.substring(0, 1500)}
-Start with {`
-      : FILENAME_PROMPT(name, sizeKb, ext);
+    const prompt = textContent.length > 50
+      ? buildDocPrompt(name, textContent)
+      : buildFilenamePrompt(name, ext);
 
-    const result = await callOllama({ prompt: docPrompt }, 45000);
+    const result = await callOllama({ prompt }, 30000);
     return NextResponse.json({ success: true, ...result, type: 'text' });
 
   } catch (err: any) {
-    console.error('AI tag error:', err.message);
-    const isTimeout = err.name === 'AbortError' || err.message?.includes('aborted');
+    const isTimeout = err.name === 'AbortError' || String(err.message).includes('abort');
     return NextResponse.json(
-      { error: isTimeout ? 'Timeout: imagen muy pesada, intenta con una selección más pequeña' : (err.message || 'Error al procesar con IA') },
+      { error: isTimeout ? 'Tiempo de espera agotado (imagen muy grande)' : (err.message || 'Error de IA') },
       { status: 500 }
     );
   }

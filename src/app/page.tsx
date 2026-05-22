@@ -84,6 +84,7 @@ export default function FileOrgApp() {
   const [isSearching, setIsSearching] = useState(false);
   const searching = isSearching;
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchScope, setSearchScope] = useState<'global' | 'local'>('local'); // Default to local
   const [showScrollTop, setShowScrollTop] = useState(false);
   const fileContentRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -291,7 +292,8 @@ export default function FileOrgApp() {
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&path=${encodeURIComponent(currentPath)}`);
+        const rootPath = searchScope === 'global' ? 'C:\\' : currentPath;
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&path=${encodeURIComponent(rootPath)}`);
         if (res.ok) {
           const data = await res.json();
           setSearchResults(data.entries || []);
@@ -300,7 +302,7 @@ export default function FileOrgApp() {
       setIsSearching(false);
     }, 350);
     return () => clearTimeout(timer);
-  }, [searchQuery, currentPath]);
+  }, [searchQuery, currentPath, searchScope]);
 
 
   // Handle Ctrl+Z Undo
@@ -677,10 +679,17 @@ export default function FileOrgApp() {
           <Search size={14} className="header-search-icon" />
           <input 
             type="text" 
-            placeholder="Buscar en todos lados..." 
+            placeholder={searchScope === 'global' ? "Buscar en todo el sistema..." : "Buscar en esta carpeta..."}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
+          <button 
+            className="search-scope-toggle" 
+            onClick={() => setSearchScope(prev => prev === 'global' ? 'local' : 'global')}
+            title={searchScope === 'global' ? "Buscando en todo (Click para buscar solo aquí)" : "Buscando solo aquí (Click para buscar en todo)"}
+          >
+            {searchScope === 'global' ? '🌐' : '📁'}
+          </button>
         </div>
         <div className="header-actions">
           <button className="btn btn-ghost btn-icon" onClick={() => setShowStats(true)} title="Estadísticas de disco"><BarChart2 size={16} /></button>

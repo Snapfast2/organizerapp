@@ -1,135 +1,208 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import os from 'os';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import sharp from 'sharp';
 
-/** Extract text from a PDF without crashing if pdf-parse has DOM issues */
-async function extractPdfText(pdfPath: string): Promise<string> {
-  try {
-    // Use require inside function so module-load crash is contained here
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require('pdf-parse');
-    const buffer = fs.readFileSync(pdfPath);
-    const data = await pdfParse(buffer);
-    return (data.text || '').trim();
-  } catch {
-    // Fallback: read raw bytes and extract printable text sequences
-    try {
-      const raw = fs.readFileSync(pdfPath);
-      const text = raw.toString('latin1').replace(/[^\x20-\x7E\xC0-\xFF\n\r]/g, ' ').replace(/\s{3,}/g, ' ');
-      const words = text.match(/[A-Za-záéíóúüñÁÉÍÓÚÜÑ]{4,}/g) || [];
-      return words.slice(0, 200).join(' ');
-    } catch {
-      return '';
-    }
-  }
-}
-
-
+const execFileAsync = promisify(execFile);
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2-vision:11b';
 
 const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','bmp','tiff','tif','heic','ico']);
 const VIDEO_EXTS = new Set(['mp4','mov','avi','mkv','webm','wmv','flv','m4v']);
-const BINARY_DESIGN_EXTS = new Set(['psd','psb','ai','indd','xd','fig','sketch','blend','obj','fbx']);
+const DESIGN_EXTS = new Set(['psd','psb','ai','indd','xd','fig','sketch','blend','obj','fbx']);
 
-const MAX_PX = 1024; // Max image dimension sent to Ollama
+// Thumb cache dirs (same as /api/thumb and /api/thumb-img routes)
+const VIDEO_THUMB_DIR = path.join(os.tmpdir(), 'fileorg-thumbs');
+const IMG_THUMB_DIR   = path.join(os.tmpdir(), 'fileorg-thumbs-img');
+const MAX_PX = 1024;
 
-// ─── Prompts ─────────────────────────────────────────────────────────────────
+// ─── Predefined tag taxonomy ──────────────────────────────────────────────────
+// The AI MUST choose from these categories when they match, and may add 1 extra
+// specific tag if none of the categories fit well.
+const TAG_TAXONOMY = [
+  // Visual content types
+  'ilustración', 'fotografía', 'render-3d', 'logo', 'tipografía', 'icono',
+  'diseño-grafico', 'captura-pantalla', 'infografia', 'animacion',
+  // Subject matter
+  'personaje', 'criatura', 'paisaje', 'arquitectura', 'retrato', 'producto',
+  'comida', 'naturaleza', 'tecnologia', 'arte-digital',
+  // Document types
+  'contrato', 'factura', 'certificado', 'reporte', 'formulario', 'carta',
+  'presentacion', 'manual', 'academico', 'legal',
+  // Media types
+  'videojuego', 'tutorial', 'vlog', 'clip', 'musica', 'efecto-visual',
+  // Design tools / origin
+  'photoshop', 'after-effects', 'blender', 'vector',
+  // Workflow
+  'borrador', 'final', 'referencia', 'recurso', 'plantilla',
+];
 
-const IMAGE_PROMPT = `Look carefully at this image. What is the most important thing you see?
+const TAXONOMY_LIST = TAG_TAXONOMY.join(', ');
+
+// ─── Prompts ──────────────────────────────────────────────────────────────────
+
+const buildImagePrompt = (isDesign: boolean) =>
+  `Look carefully at this ${isDesign ? 'design file preview' : 'image'} and describe exactly what you see.
+Respond ONLY with a JSON object — no extra text, no markdown.
+
+You have a predefined tag list. PREFER tags from this list when they match:
+[${TAXONOMY_LIST}]
+
+You may add 1 additional specific tag (in Spanish) if none of the above fit well.
+
+Examples of correct responses:
+- 3D game creature render → {"tags": ["render-3d", "criatura", "videojuego"], "description": "Criatura 3D con armadura y ojo rojo brillante"}
+- Photoshop illustration → {"tags": ["ilustración", "diseño-grafico", "personaje"], "description": "Ilustración digital de mujer con cabello rojo"}
+- Logo design → {"tags": ["logo", "tipografía"], "description": "Logotipo con texto dorado sobre fondo oscuro"}
+- Nature photo → {"tags": ["fotografía", "naturaleza", "paisaje"], "description": "Fotografía de montañas nevadas con cielo azul"}
+
+Now analyze THIS image. Use 1 to 3 tags maximum (most important first):
+{"tags": [...], "description": "one sentence in Spanish describing what you see"}`;
+
+const buildVideoPrompt = () =>
+  `This is a frame extracted from a video file. Describe what you see.
 Respond ONLY with a JSON object — no extra text.
 
-Correct examples:
-- Photo of mountains at sunset → {"tags": ["montaña", "atardecer", "naturaleza"], "description": "Montañas con cielo rojizo al atardecer"}
-- 3D game creature → {"tags": ["criatura", "videojuego", "3d"], "description": "Criatura 3D con armadura y ojo rojo grande"}
-- Logo with text → {"tags": ["logo", "tipografia"], "description": "Logotipo con texto dorado sobre fondo oscuro"}
-- Portrait photo → {"tags": ["retrato", "persona"], "description": "Foto de una mujer con cabello claro"}
-
-Now describe THIS image:
-{"tags": [MAXIMUM 3 tags, most important only, in Spanish], "description": "one sentence in Spanish about what you see"}`;
-
-const VIDEO_FRAME_PROMPT = `This is a frame extracted from a video file. What is shown?
-Respond ONLY with a JSON object — no extra text.
+Prefer tags from this list:
+[${TAXONOMY_LIST}]
 
 Examples:
-- Gaming footage → {"tags": ["videojuego", "gameplay"], "description": "Escena de videojuego con personaje en acción"}
-- Tutorial video → {"tags": ["tutorial", "pantalla"], "description": "Captura de pantalla de tutorial en computadora"}
-- Nature video → {"tags": ["naturaleza", "paisaje"], "description": "Video de paisaje natural con vegetación verde"}
+- Gaming footage → {"tags": ["videojuego", "clip"], "description": "Escena de videojuego con personaje en batalla"}
+- Tutorial screen recording → {"tags": ["tutorial", "captura-pantalla"], "description": "Grabación de pantalla mostrando software de edición"}
+- Nature/travel video → {"tags": ["fotografía", "naturaleza"], "description": "Video de paisaje natural con vegetación"}
+- Motion graphics → {"tags": ["animacion", "efecto-visual"], "description": "Animación con efectos visuales y partículas"}
 
-Describe THIS video frame:
-{"tags": [MAXIMUM 3 tags in Spanish], "description": "one sentence in Spanish"}`;
+Use 1 to 3 tags maximum:
+{"tags": [...], "description": "one sentence in Spanish"}`;
 
 const buildDocPrompt = (filename: string, text: string) =>
-  `Read this document content carefully.
+  `Read this document content and classify it.
 Respond ONLY with a JSON object — no extra text.
 
+Prefer tags from this list:
+[${TAXONOMY_LIST}]
+
 Examples:
-- Invoice/receipt → {"tags": ["factura", "finanzas"], "description": "Factura de compra con datos de pago"}
-- Legal contract → {"tags": ["contrato", "legal"], "description": "Contrato legal con términos y condiciones"}
-- Academic paper → {"tags": ["investigacion", "academico"], "description": "Artículo académico sobre biología molecular"}
-- Certificate → {"tags": ["certificado", "diploma"], "description": "Certificado de finalización de curso"}
+- Government certificate → {"tags": ["certificado", "legal"], "description": "Certificado oficial de la Contraloría General"}  
+- Invoice → {"tags": ["factura", "finanzas"], "description": "Factura de compra con datos de pago"}
+- Academic paper → {"tags": ["academico", "reporte"], "description": "Artículo de investigación sobre biología molecular"}
 
 Document: ${filename}
-Content (first 1500 chars):
-${text.substring(0, 1500)}
+Content preview: ${text.substring(0, 1500)}
 
-Respond with MAXIMUM 3 tags in Spanish about the document's actual topic:
-{"tags": [...], "description": "..."}`;
+Use 1 to 3 tags maximum:
+{"tags": [...], "description": "one sentence in Spanish"}`;
 
 const buildFilenamePrompt = (name: string, ext: string) =>
   `Based ONLY on this filename, suggest tags in Spanish.
 Respond ONLY with JSON — no extra text.
 
+Prefer tags from: [${TAXONOMY_LIST}]
+
 Examples:
-- "wedding_photos_2024.zip" → {"tags": ["fotos", "evento"], "description": "Archivo comprimido de fotos de boda"}
-- "project_report_final.docx" → {"tags": ["reporte", "documento"], "description": "Reporte de proyecto en documento Word"}
-- "song_remix.mp3" → {"tags": ["musica", "audio"], "description": "Archivo de música o remix de audio"}
+- "wedding_photos.zip" → {"tags": ["fotografía", "recurso"], "description": "Archivo comprimido con fotos de boda"}
+- "logo_final_v3.psd" → {"tags": ["logo", "photoshop", "final"], "description": "Archivo Photoshop de logotipo versión final"}
+- "tutorial_react.mp4" → {"tags": ["tutorial", "clip"], "description": "Video tutorial de programación en React"}
 
-Filename: ${name}
-Extension: .${ext}
+Filename: ${name}  Extension: .${ext}
+{"tags": [...1-3 tags...], "description": "one sentence in Spanish"}`;
 
-{"tags": [1-3 tags in Spanish], "description": "one sentence in Spanish"}`;
+// ─── Thumbnail cache lookup ───────────────────────────────────────────────────
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
-
-async function resizeToBase64(filePath: string): Promise<string> {
-  const resized = await sharp(filePath)
-    .resize({ width: MAX_PX, height: MAX_PX, fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 80 })
-    .toBuffer();
-  return resized.toString('base64');
+function cacheKeyVideo(filePath: string, mtime: number, size: number): string {
+  const safe = filePath.replace(/[^a-zA-Z0-9]/g, '_').slice(-60);
+  return path.join(VIDEO_THUMB_DIR, `${safe}_${mtime}_${size}.jpg`);
 }
 
-/** Try to extract a video frame using ffmpeg (if installed) */
-async function extractVideoFrame(videoPath: string): Promise<string | null> {
+function cacheKeyImg(filePath: string, mtime: number, size: number): string {
+  const safe = filePath.replace(/[^a-zA-Z0-9]/g, '_').slice(-60);
+  return path.join(IMG_THUMB_DIR, `${safe}_${mtime}_${size}.webp`);
+}
+
+/** Get existing cached thumbnail for a file (generated by /api/thumb or /api/thumb-img) */
+function getCachedThumb(filePath: string, isVideo: boolean): string | null {
   try {
-    const tmpFrame = videoPath + '_frame_tmp.jpg';
-    // Seek to 3s or 10% of video, extract 1 frame
-    execSync(
-      `ffmpeg -ss 3 -i "${videoPath}" -frames:v 1 -q:v 2 "${tmpFrame}" -y`,
-      { timeout: 15000, stdio: 'pipe' }
-    );
-    if (!fs.existsSync(tmpFrame)) return null;
-    const base64 = await resizeToBase64(tmpFrame);
-    fs.unlinkSync(tmpFrame);
-    return base64;
+    const stat = fs.statSync(filePath);
+    const cached = isVideo
+      ? cacheKeyVideo(filePath, stat.mtimeMs, stat.size)
+      : cacheKeyImg(filePath, stat.mtimeMs, stat.size);
+    return fs.existsSync(cached) ? cached : null;
+  } catch { return null; }
+}
+
+// ─── FFmpeg lookup (same logic as /api/thumb) ────────────────────────────────
+const FFMPEG_CANDIDATES = [
+  'ffmpeg',
+  path.join(os.homedir(), 'AppData/Local/Microsoft/WinGet/Packages',
+    'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe',
+    'ffmpeg-8.1.1-full_build/bin/ffmpeg.exe'),
+];
+
+let _ffmpegBin: string | null = null;
+async function getFFmpegBin(): Promise<string | null> {
+  if (_ffmpegBin !== null) return _ffmpegBin;
+  for (const c of FFMPEG_CANDIDATES) {
+    try { await execFileAsync(c, ['-version']); _ffmpegBin = c; return c; } catch { /* next */ }
+  }
+  _ffmpegBin = '';
+  return null;
+}
+
+/** Extract a video frame fresh (if no cache exists) */
+async function extractVideoFrame(videoPath: string, outPath: string): Promise<boolean> {
+  const ffmpeg = await getFFmpegBin();
+  if (!ffmpeg) return false;
+  try {
+    await execFileAsync(ffmpeg, [
+      '-ss', '5', '-i', videoPath, '-vframes', '1',
+      '-vf', 'scale=640:-2', '-f', 'image2', '-q:v', '2', '-y', outPath,
+    ], { timeout: 15000 });
+    return fs.existsSync(outPath);
+  } catch { return false; }
+}
+
+// ─── Image resize → base64 ───────────────────────────────────────────────────
+
+async function toBase64(filePath: string): Promise<string> {
+  const buf = await sharp(filePath)
+    .resize({ width: MAX_PX, height: MAX_PX, fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 82 })
+    .toBuffer();
+  return buf.toString('base64');
+}
+
+// ─── PDF text extraction ─────────────────────────────────────────────────────
+
+async function extractPdfText(pdfPath: string): Promise<string> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require('pdf-parse');
+    const buffer = fs.readFileSync(pdfPath);
+    const data = await pdfParse(buffer);
+    return (data.text || '').trim();
   } catch {
-    return null; // ffmpeg not available or failed
+    try {
+      const raw = fs.readFileSync(pdfPath);
+      const words = raw.toString('latin1')
+        .replace(/[^\x20-\x7E\xC0-\xFF\n\r]/g, ' ')
+        .match(/[A-Za-záéíóúüñÁÉÍÓÚÜÑ]{4,}/g) || [];
+      return words.slice(0, 200).join(' ');
+    } catch { return ''; }
   }
 }
 
-/** Parse JSON from free-form model response */
+// ─── JSON extraction from model response ─────────────────────────────────────
+
 function extractJSON(text: string): { tags: string[]; description: string } | null {
   const cleaned = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
-  // Try direct parse
   try {
     const p = JSON.parse(cleaned);
     if (Array.isArray(p.tags)) return { tags: p.tags.slice(0, 3), description: p.description || '' };
   } catch { /* fall through */ }
-  // Regex: first {...} block
   const m = cleaned.match(/\{[\s\S]*?\}/);
   if (m) {
     try {
@@ -143,10 +216,10 @@ function extractJSON(text: string): { tags: string[]; description: string } | nu
 function cleanTags(tags: string[]): string[] {
   return tags
     .map(t => String(t).toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-záéíóúüñ0-9-]/gi, ''))
-    .filter(t => t.length > 1 && t !== 'tag' && t !== 'tags' && !t.startsWith('tag'));
+    .filter(t => t.length > 1 && !['tag', 'tags', 'etiqueta', 'etiquetas'].includes(t));
 }
 
-// ─── Core Ollama caller ───────────────────────────────────────────────────────
+// ─── Ollama caller ────────────────────────────────────────────────────────────
 
 async function callOllama(payload: Record<string, any>, timeoutMs = 75000): Promise<{ tags: string[]; description: string }> {
   const controller = new AbortController();
@@ -172,11 +245,7 @@ async function callOllama(payload: Record<string, any>, timeoutMs = 75000): Prom
     const data = await res.json();
     const parsed = extractJSON(data.response || '');
     if (!parsed || parsed.tags.length === 0) throw new Error('No JSON in response');
-
-    return {
-      tags: cleanTags(parsed.tags),
-      description: String(parsed.description || '').substring(0, 100),
-    };
+    return { tags: cleanTags(parsed.tags), description: String(parsed.description || '').substring(0, 120) };
   } finally {
     clearTimeout(timer);
   }
@@ -197,78 +266,109 @@ export async function POST(request: NextRequest) {
     const ext = path.extname(normalized).replace('.', '').toLowerCase();
     const name = path.basename(normalized);
     const stat = fs.statSync(normalized);
-    const sizeKb = Math.round(stat.size / 1024);
 
     // ── Images ──────────────────────────────────────────────────────────────
     if (IMAGE_EXTS.has(ext)) {
       try {
-        const base64 = await resizeToBase64(normalized);
+        // Use existing thumb cache if available (already resized), else resize now
+        const cached = getCachedThumb(normalized, false);
+        const base64 = cached ? fs.readFileSync(cached).toString('base64') : await toBase64(normalized);
         try {
-          const result = await callOllama({ prompt: IMAGE_PROMPT, images: [base64] }, 60000);
+          const result = await callOllama({
+            prompt: buildImagePrompt(false),
+            images: [base64],
+            system: 'You are a file tagging assistant. Respond only with valid JSON.',
+          }, 60000);
           return NextResponse.json({ success: true, ...result, type: 'image' });
         } catch {
-          // Retry with simpler prompt
+          // Simple retry
           const result = await callOllama({
-            prompt: `What is in this image? JSON only: {"tags": ["main_subject"], "description": "what you see in Spanish"}`,
+            prompt: `Describe this image in Spanish. JSON only: {"tags": ["main_tag"], "description": "what you see"}`,
             images: [base64],
-          }, 45000);
+          }, 40000);
           return NextResponse.json({ success: true, ...result, type: 'image-retry' });
         }
       } catch {
-        // Fallback to filename
         const result = await callOllama({ prompt: buildFilenamePrompt(name, ext) }, 20000);
         return NextResponse.json({ success: true, ...result, type: 'image-fallback' });
       }
     }
 
-    // ── Videos — extract frame if ffmpeg available ───────────────────────────
-    if (VIDEO_EXTS.has(ext)) {
-      const frameBase64 = await extractVideoFrame(normalized);
-      if (frameBase64) {
-        // Analyze actual video frame
+    // ── Design files (PSD etc.) — use existing preview thumbnail ────────────
+    if (DESIGN_EXTS.has(ext)) {
+      // Check if thumb-img already generated a preview for this PSD
+      const cached = getCachedThumb(normalized, false);
+      if (cached) {
         try {
-          const result = await callOllama({ prompt: VIDEO_FRAME_PROMPT, images: [frameBase64] }, 60000);
-          return NextResponse.json({ success: true, ...result, type: 'video-frame' });
+          const base64 = fs.readFileSync(cached).toString('base64');
+          const result = await callOllama({
+            prompt: buildImagePrompt(true),
+            images: [base64],
+            system: 'You are a file tagging assistant. Respond only with valid JSON.',
+          }, 60000);
+          return NextResponse.json({ success: true, ...result, type: 'psd-visual' });
         } catch { /* fall through to filename */ }
       }
-      // No ffmpeg or frame failed — analyze by filename
+      const result = await callOllama({ prompt: buildFilenamePrompt(name, ext) }, 20000);
+      return NextResponse.json({ success: true, ...result, type: 'design-filename' });
+    }
+
+    // ── Videos — use existing ffmpeg thumbnail or extract fresh ─────────────
+    if (VIDEO_EXTS.has(ext)) {
+      // First: check if the UI already generated a thumbnail for this video
+      let frameBase64: string | null = null;
+      const cached = getCachedThumb(normalized, true);
+      if (cached) {
+        try { frameBase64 = await toBase64(cached); } catch { /* ignore */ }
+      }
+      // Second: extract fresh frame if no cache
+      if (!frameBase64) {
+        const tmpFrame = path.join(os.tmpdir(), `ai_frame_${Date.now()}.jpg`);
+        const ok = await extractVideoFrame(normalized, tmpFrame);
+        if (ok) {
+          try {
+            frameBase64 = await toBase64(tmpFrame);
+            fs.unlinkSync(tmpFrame);
+          } catch { /* ignore */ }
+        }
+      }
+
+      if (frameBase64) {
+        try {
+          const result = await callOllama({
+            prompt: buildVideoPrompt(),
+            images: [frameBase64],
+          }, 60000);
+          return NextResponse.json({ success: true, ...result, type: 'video-frame' });
+        } catch { /* fall through */ }
+      }
+      // Fallback: filename-based
       const result = await callOllama({ prompt: buildFilenamePrompt(name, ext) }, 20000);
       return NextResponse.json({ success: true, ...result, type: 'video-filename' });
     }
 
-    // ── PDFs — extract real text ─────────────────────────────────────────────
+    // ── PDFs ─────────────────────────────────────────────────────────────────
     if (ext === 'pdf') {
       const text = await extractPdfText(normalized);
       if (text && text.length > 50) {
         const result = await callOllama({ prompt: buildDocPrompt(name, text) }, 45000);
         return NextResponse.json({ success: true, ...result, type: 'pdf' });
       }
-      // Fallback: filename only
       const result = await callOllama({ prompt: buildFilenamePrompt(name, ext) }, 20000);
       return NextResponse.json({ success: true, ...result, type: 'pdf-fallback' });
-    }
-
-    // ── Design/binary files ──────────────────────────────────────────────────
-    if (BINARY_DESIGN_EXTS.has(ext)) {
-      const result = await callOllama({ prompt: buildFilenamePrompt(name, ext) }, 20000);
-      return NextResponse.json({ success: true, ...result, type: 'design' });
     }
 
     // ── Other text files ─────────────────────────────────────────────────────
     let textContent = '';
     try { textContent = fs.readFileSync(normalized, { encoding: 'utf-8' }).substring(0, 2000); } catch { /* binary */ }
-
-    const prompt = textContent.length > 50
-      ? buildDocPrompt(name, textContent)
-      : buildFilenamePrompt(name, ext);
-
+    const prompt = textContent.length > 50 ? buildDocPrompt(name, textContent) : buildFilenamePrompt(name, ext);
     const result = await callOllama({ prompt }, 30000);
     return NextResponse.json({ success: true, ...result, type: 'text' });
 
   } catch (err: any) {
     const isTimeout = err.name === 'AbortError' || String(err.message).includes('abort');
     return NextResponse.json(
-      { error: isTimeout ? 'Tiempo de espera agotado (imagen muy grande)' : (err.message || 'Error de IA') },
+      { error: isTimeout ? 'Tiempo agotado (archivo muy grande)' : (err.message || 'Error de IA') },
       { status: 500 }
     );
   }

@@ -7,17 +7,17 @@ import sharp from 'sharp';
 /** Extract text from a PDF without crashing if pdf-parse has DOM issues */
 async function extractPdfText(pdfPath: string): Promise<string> {
   try {
-    // Dynamic import so a crash doesn't kill the whole route module
-    const pdfParse = (await import('pdf-parse')).default ?? (await import('pdf-parse'));
+    // Use require inside function so module-load crash is contained here
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require('pdf-parse');
     const buffer = fs.readFileSync(pdfPath);
-    const data = await (pdfParse as any)(buffer);
+    const data = await pdfParse(buffer);
     return (data.text || '').trim();
   } catch {
-    // Fallback: read raw bytes and extract printable ASCII text sequences
+    // Fallback: read raw bytes and extract printable text sequences
     try {
       const raw = fs.readFileSync(pdfPath);
       const text = raw.toString('latin1').replace(/[^\x20-\x7E\xC0-\xFF\n\r]/g, ' ').replace(/\s{3,}/g, ' ');
-      // Extract any meaningful words (length > 3)
       const words = text.match(/[A-Za-záéíóúüñÁÉÍÓÚÜÑ]{4,}/g) || [];
       return words.slice(0, 200).join(' ');
     } catch {
@@ -25,6 +25,7 @@ async function extractPdfText(pdfPath: string): Promise<string> {
     }
   }
 }
+
 
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';

@@ -294,13 +294,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Design files (PSD etc.) — use existing preview thumbnail ────────────
+    // ── Design files (PSD etc.) — render via sharp (works on PSD natively) ──
     if (DESIGN_EXTS.has(ext)) {
-      // Check if thumb-img already generated a preview for this PSD
+      let base64: string | null = null;
+
+      // 1. Try existing UI thumbnail cache first (fastest)
       const cached = getCachedThumb(normalized, false);
       if (cached) {
         try {
-          const base64 = fs.readFileSync(cached).toString('base64');
+          // Cache is webp — re-encode to JPEG for Ollama
+          const buf = await sharp(cached).jpeg({ quality: 82 }).toBuffer();
+          base64 = buf.toString('base64');
+        } catch { /* ignore */ }
+      }
+
+      // 2. If no cache, render directly with sharp (sharp reads PSD merged composite)
+      if (!base64) {
+        try {
+          base64 = await toBase64(normalized); // sharp opens PSD merged layer
+        } catch { /* PSD too complex or corrupted */ }
+      }
+
+      if (base64) {
+        try {
           const result = await callOllama({
             prompt: buildImagePrompt(true),
             images: [base64],
@@ -309,9 +325,12 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: true, ...result, type: 'psd-visual' });
         } catch { /* fall through to filename */ }
       }
+
+      // 3. Filename fallback only if sharp can't open the file at all
       const result = await callOllama({ prompt: buildFilenamePrompt(name, ext) }, 20000);
       return NextResponse.json({ success: true, ...result, type: 'design-filename' });
     }
+
 
     // ── Videos — use existing ffmpeg thumbnail or extract fresh ─────────────
     if (VIDEO_EXTS.has(ext)) {

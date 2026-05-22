@@ -1179,7 +1179,7 @@ export function OrganizeModal({ currentPath, onClose, toast }: {
 
 // ─── Stats Charts ──────────────────────────────────────────────────────────
 
-function DonutChart({ segments, size = 200, strokeWidth = 18 }: { segments: any[], size?: number, strokeWidth?: number }) {
+function DonutChart({ segments, size = 220, strokeWidth = 32 }: { segments: any[], size?: number, strokeWidth?: number }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const R = (size / 2) - strokeWidth;
   const circumference = 2 * Math.PI * R;
@@ -1227,9 +1227,17 @@ function DonutChart({ segments, size = 200, strokeWidth = 18 }: { segments: any[
               animate={{ opacity: 1, scale: 1 }} 
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.15 }}
-              style={{ textAlign: 'center' }}
+              style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}
             >
-              <div style={{ color: activeSegment.color, fontWeight: 700, fontSize: 18 }}>.{activeSegment.label}</div>
+              {activeSegment.label !== 'sin extensión' && (
+                <img 
+                  src={`https://api.iconify.design/vscode-icons:file-type-${activeSegment.label}.svg`} 
+                  style={{ width: 42, height: 42, marginBottom: 4 }}
+                  onError={(e) => { e.currentTarget.src = 'https://api.iconify.design/vscode-icons:default-file.svg'; }}
+                  alt=""
+                />
+              )}
+              <div style={{ color: activeSegment.color, fontWeight: 700, fontSize: 16 }}>.{activeSegment.label}</div>
               <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatSize(activeSegment.size)} ({activeSegment.count})</div>
             </motion.div>
           ) : (
@@ -1317,7 +1325,7 @@ function BarChart({ data, height = 140 }: { data: any[], height?: number }) {
 }
 
 // ─── Stats Panel ───────────────────────────────────────────
-export function StatsPanel({ path, onClose }: { path: string; onClose: () => void }) {
+export function StatsPanel({ path, onClose, renderGridCard }: { path: string; onClose: () => void; renderGridCard?: (entry: any) => React.ReactNode }) {
   const [stats, setStats] = useState<DiskStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -1399,6 +1407,27 @@ export function StatsPanel({ path, onClose }: { path: string; onClose: () => voi
                 <div className="stats-section-title" style={{ textAlign: 'center', marginBottom: 0 }}>Top 10 Más Pesados</div>
                 <BarChart data={topFilesData} />
               </motion.div>
+
+              {renderGridCard && stats.topFiles.length > 0 && (
+                <motion.div variants={itemVariants} style={{ width: '100%' }}>
+                  <div className="stats-section-title" style={{ marginBottom: 16, borderTop: '1px solid var(--border-subtle)', paddingTop: 32, textAlign: 'center' }}>
+                    Vista Previa de los Top 10
+                  </div>
+                  <div className="carousel-container" style={{ 
+                    display: 'flex', 
+                    overflowX: 'auto', 
+                    gap: 16, 
+                    padding: '8px 4px 24px 4px',
+                    scrollSnapType: 'x mandatory'
+                  }}>
+                    {stats.topFiles.map((file, i) => (
+                      <div key={i} style={{ flex: '0 0 240px', scrollSnapAlign: 'start' }}>
+                        {renderGridCard(file)}
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
             </div>
 
           </motion.div>

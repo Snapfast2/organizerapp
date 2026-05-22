@@ -1092,7 +1092,7 @@ export default function FileOrgApp() {
       </AnimatePresence>
 
       {showOrganize && <OrganizeModal currentPath={currentPath} onClose={() => setShowOrganize(false)} toast={toast} />}
-      {showStats && <StatsPanel path={currentPath} onClose={() => setShowStats(false)} />}
+      {showStats && <StatsPanel path={currentPath} onClose={() => setShowStats(false)} renderGridCard={renderGridCard} />}
 
       {/* Trash Modal */}
       <AnimatePresence>

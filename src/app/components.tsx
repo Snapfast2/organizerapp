@@ -1177,6 +1177,141 @@ export function OrganizeModal({ currentPath, onClose, toast }: {
   );
 }
 
+// ─── Stats Charts ──────────────────────────────────────────────────────────
+
+function DonutChart({ segments, size = 200, strokeWidth = 18 }: { segments: any[], size?: number, strokeWidth?: number }) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const R = (size / 2) - strokeWidth;
+  const circumference = 2 * Math.PI * R;
+  const cx = size / 2, cy = size / 2;
+  
+  let currentOffset = 0;
+  const renderedSegments = segments.map(seg => {
+    const dash = (seg.pct / 100) * circumference;
+    const offset = currentOffset;
+    currentOffset += dash;
+    return { ...seg, dash, offset };
+  });
+
+  const activeSegment = hoveredIdx !== null ? renderedSegments[hoveredIdx] : null;
+
+  return (
+    <div style={{ position: 'relative', width: size, height: size, margin: '0 auto' }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
+        <circle cx={cx} cy={cy} r={R} fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth={strokeWidth} />
+        {renderedSegments.map((seg, i) => (
+          <motion.circle key={i} cx={cx} cy={cy} r={R}
+            fill="none" stroke={seg.color} strokeWidth={strokeWidth}
+            strokeDashoffset={-seg.offset}
+            strokeLinecap="round"
+            initial={{ strokeDasharray: `0 ${circumference}` }}
+            animate={{ strokeDasharray: `${Math.max(0, seg.dash - 2)} ${circumference - Math.max(0, seg.dash - 2)}` }}
+            transition={{ duration: 0.9, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] }}
+            onMouseEnter={() => setHoveredIdx(i)}
+            onMouseLeave={() => setHoveredIdx(null)}
+            style={{ 
+              cursor: 'pointer', 
+              opacity: hoveredIdx !== null && hoveredIdx !== i ? 0.3 : 1, 
+              transition: 'opacity 0.2s',
+              filter: hoveredIdx === i ? `drop-shadow(0 0 6px ${seg.color}88)` : 'none'
+            }}
+          />
+        ))}
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+        <AnimatePresence mode="wait">
+          {activeSegment ? (
+            <motion.div 
+              key="active"
+              initial={{ opacity: 0, scale: 0.9 }} 
+              animate={{ opacity: 1, scale: 1 }} 
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.15 }}
+              style={{ textAlign: 'center' }}
+            >
+              <div style={{ color: activeSegment.color, fontWeight: 700, fontSize: 18 }}>.{activeSegment.label}</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatSize(activeSegment.size)} ({activeSegment.count})</div>
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="default"
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}
+            >
+              Distribución
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+function BarChart({ data, height = 140 }: { data: any[], height?: number }) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const max = Math.max(...data.map(d => d.value), 1);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height, width: '100%', position: 'relative', marginTop: 32 }}>
+      {data.map((item, i) => {
+        const pct = (item.value / max) * 100;
+        const isHovered = hoveredIdx === i;
+        return (
+          <div 
+            key={i} 
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', position: 'relative' }}
+            onMouseEnter={() => setHoveredIdx(i)}
+            onMouseLeave={() => setHoveredIdx(null)}
+          >
+            <div style={{ width: '100%', position: 'relative', flex: 1, cursor: 'pointer' }}>
+              <motion.div
+                style={{
+                  position: 'absolute', bottom: 0, left: 0, right: 0,
+                  borderRadius: '4px 4px 0 0',
+                  background: isHovered 
+                    ? `linear-gradient(180deg, ${item.color}, ${item.color}22)`
+                    : `linear-gradient(180deg, ${item.color}99, ${item.color}11)`,
+                  transition: 'background 0.2s',
+                  boxShadow: isHovered ? `0 -4px 12px ${item.color}44` : 'none'
+                }}
+                initial={{ height: '0%' }}
+                animate={{ height: `${pct}%` }}
+                transition={{ duration: 0.7, delay: 0.2 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
+              />
+            </div>
+            
+            <AnimatePresence>
+              {isHovered && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  style={{
+                    position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)',
+                    background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+                    padding: '8px 12px', borderRadius: 8, zIndex: 10, pointerEvents: 'none',
+                    minWidth: 160, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
+                  }}
+                >
+                  <div style={{ color: 'var(--text-primary)', fontSize: 11, fontWeight: 500, wordBreak: 'break-all', marginBottom: 4 }}>
+                    {item.name}
+                  </div>
+                  <div style={{ color: item.color, fontSize: 13, fontWeight: 800 }}>
+                    {formatSize(item.value)}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Stats Panel ───────────────────────────────────────────
 export function StatsPanel({ path, onClose }: { path: string; onClose: () => void }) {
   const [stats, setStats] = useState<DiskStats | null>(null);
@@ -1187,54 +1322,82 @@ export function StatsPanel({ path, onClose }: { path: string; onClose: () => voi
     fetch(`/api/stats?path=${encodeURIComponent(path)}`).then(r => r.json()).then(d => { setStats(d); setLoading(false); });
   }, [path]);
 
-  const COLORS = ['#0EC900','#00c8a0','#3FFF00','#00a8ff','#ff9900','#ff4488','#b44fff','#00e5ff'];
+  // Subtle monochromatic palette based on the primary accent color
+  const COLORS = ['#6EE7B7', '#34D399', '#10B981', '#059669', '#047857', '#065F46', '#064E3B', '#022C22'];
+
+  const segments = stats ? Object.entries(stats.byType)
+    .sort(([,a],[,b]) => b.size - a.size)
+    .slice(0, 8)
+    .map(([ext, data], i) => ({
+      label: ext,
+      size: data.size,
+      count: data.count,
+      pct: (data.size / stats.totalSize) * 100,
+      color: COLORS[i % COLORS.length]
+    })) : [];
+
+  const topFilesData = stats ? stats.topFiles.map((f, i) => ({
+    name: f.name,
+    value: f.size,
+    color: COLORS[i % COLORS.length]
+  })) : [];
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.1 } }
+  };
+  
+  const itemVariants = {
+    hidden: { opacity: 0, y: 15, scale: 0.95 },
+    show: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 400, damping: 24 } }
+  };
 
   return (
     <div className="modal-overlay">
-      <div className="modal" style={{ maxWidth: 580 }}>
+      <div className="modal" style={{ maxWidth: 640 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <div>
             <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <BarChart2 size={18} color="var(--accent)" /> Estadísticas de Disco
+              <BarChart2 size={18} color="var(--accent)" /> Dashboard de Almacenamiento
             </div>
             <div className="modal-subtitle" style={{ marginBottom: 0, wordBreak: 'break-all', fontSize: 12 }}>{path}</div>
           </div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={15} /></button>
         </div>
-        {loading && <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="spinner" /></div>}
+        
+        {loading && <div style={{ display: 'flex', justifyContent: 'center', padding: 64 }}><div className="spinner" /></div>}
+        
         {!loading && stats && (
-          <div style={{ overflow: 'auto', maxHeight: '68vh' }}>
-            <div className="stats-grid">
-              <div className="stat-card"><div className="stat-card-label">Tamaño total</div><div className="stat-card-value">{formatSize(stats.totalSize)}</div></div>
-              <div className="stat-card"><div className="stat-card-label">Archivos</div><div className="stat-card-value">{stats.fileCount.toLocaleString()}</div></div>
-              <div className="stat-card"><div className="stat-card-label">Carpetas</div><div className="stat-card-value">{stats.dirCount.toLocaleString()}</div></div>
-            </div>
-            <div className="stats-section-title">Distribución por tipo</div>
-            {Object.entries(stats.byType).sort(([,a],[,b]) => b.size - a.size).slice(0, 8).map(([ext, data], i) => {
-              const pct = stats.totalSize > 0 ? (data.size / stats.totalSize) * 100 : 0;
-              return (
-                <div className="type-bar" key={ext}>
-                  <div className="type-bar-header">
-                    <span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: 11 }}>
-                      .{ext} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({data.count})</span>
-                    </span>
-                    <span>{formatSize(data.size)}</span>
-                  </div>
-                  <div className="type-bar-track">
-                    <div className="type-bar-fill" style={{ width: `${pct}%`, background: COLORS[i % COLORS.length] }} />
-                  </div>
-                </div>
-              );
-            })}
-            <div className="stats-section-title">Top 10 archivos más grandes</div>
-            {stats.topFiles.map((f, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border-subtle)', fontSize: 12 }}>
-                <span style={{ color: 'var(--text-muted)', width: 18, textAlign: 'right', flexShrink: 0 }}>{i + 1}.</span>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{f.name}</span>
-                <span style={{ color: 'var(--accent)', fontWeight: 700, whiteSpace: 'nowrap' }}>{formatSize(f.size)}</span>
+          <motion.div variants={containerVariants} initial="hidden" animate="show" style={{ overflow: 'auto', maxHeight: '72vh', paddingRight: 8 }}>
+            
+            <motion.div variants={itemVariants} className="stats-grid" style={{ marginBottom: 32 }}>
+              <div className="stat-card" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                <div className="stat-card-label">Tamaño Total</div>
+                <div className="stat-card-value" style={{ color: 'var(--accent)' }}>{formatSize(stats.totalSize)}</div>
               </div>
-            ))}
-          </div>
+              <div className="stat-card" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                <div className="stat-card-label">Total de Archivos</div>
+                <div className="stat-card-value">{stats.fileCount.toLocaleString()}</div>
+              </div>
+              <div className="stat-card" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                <div className="stat-card-label">Carpetas</div>
+                <div className="stat-card-value">{stats.dirCount.toLocaleString()}</div>
+              </div>
+            </motion.div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 32, alignItems: 'center' }}>
+              <motion.div variants={itemVariants}>
+                <div className="stats-section-title" style={{ textAlign: 'center', marginBottom: 16 }}>Distribución por Tipo</div>
+                <DonutChart segments={segments} />
+              </motion.div>
+              
+              <motion.div variants={itemVariants}>
+                <div className="stats-section-title" style={{ textAlign: 'center', marginBottom: 0 }}>Top 10 Más Pesados</div>
+                <BarChart data={topFilesData} />
+              </motion.div>
+            </div>
+
+          </motion.div>
         )}
       </div>
     </div>

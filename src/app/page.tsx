@@ -1261,35 +1261,36 @@ export default function FileOrgApp() {
               {(() => {
                 const flyIcons = [Film, ImageIcon, Music, FileText, Code, Archive];
                 return (
-                  <div style={{ position: 'relative', height: 140, marginBottom: 8 }}>
-                    {/* Package box — destination */}
+                  <div style={{ position: 'relative', height: 160, marginBottom: 20 }}>
+                    {/* Package box — centered at bottom */}
                     <motion.div
-                      style={{ position: 'absolute', bottom: 4, left: '50%', transform: 'translateX(-50%)', color: 'var(--accent)' }}
-                      animate={{ scale: [1, 1.07, 1] }} transition={{ repeat: Infinity, duration: 1.8, ease: 'easeInOut' }}
+                      style={{ position: 'absolute', bottom: 0, left: '50%', marginLeft: -28, color: 'var(--accent)' }}
+                      animate={{ scale: [1, 1.08, 1] }} transition={{ repeat: Infinity, duration: 1.8, ease: 'easeInOut' }}
                     >
                       <Package size={56} strokeWidth={1.5} />
                     </motion.div>
 
-                    {/* Icons flying in from different positions toward center */}
+                    {/* Icons: start spread around top, fly DOWN toward the box */}
                     {flyIcons.map((Icon, i) => {
-                      const angle = (i / flyIcons.length) * Math.PI;
-                      const startX = Math.cos(angle - Math.PI / 2) * 160;
-                      const startY = -50 - Math.abs(Math.sin(angle) * 40);
-                      const delay = i * 0.22;
+                      // Spread across top in an arc: from -140px to +140px horizontally, start at top
+                      const spread = [-130, -80, -30, 30, 80, 130];
+                      const startX = spread[i];
+                      const startY = -70; // above the container center
+                      const delay = i * 0.2;
                       return (
                         <motion.div
                           key={i}
-                          style={{ position: 'absolute', top: '50%', left: '50%', color: 'var(--text-secondary)', display: 'flex' }}
-                          initial={{ x: startX, y: startY - 30, opacity: 0, scale: 1.2 }}
+                          style={{ position: 'absolute', bottom: 12, left: '50%', marginLeft: -10, color: 'var(--accent)', display: 'flex' }}
+                          initial={{ x: startX, y: startY, opacity: 0, scale: 1 }}
                           animate={{
-                            x: [startX, startX * 0.3, 0],
-                            y: [startY - 30, startY * 0.5, 20],
+                            x: [startX, startX * 0.4, 0],
+                            y: [startY, startY * 0.4, 0],
                             opacity: [0, 1, 0],
-                            scale: [1.2, 1, 0.3],
+                            scale: [1, 0.9, 0.2],
                           }}
-                          transition={{ delay, duration: 1.1, repeat: Infinity, repeatDelay: 1.8, ease: 'easeIn' }}
+                          transition={{ delay, duration: 0.9, repeat: Infinity, repeatDelay: 2, ease: 'easeIn' }}
                         >
-                          <Icon size={20} strokeWidth={1.5} />
+                          <Icon size={18} strokeWidth={1.5} />
                         </motion.div>
                       );
                     })}
@@ -1297,13 +1298,13 @@ export default function FileOrgApp() {
                 );
               })()}
 
-              {/* Check badge — icon perfectly centered inside circle */}
+              {/* Check badge — completely separate, below animation */}
               <motion.div
-                initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.25, damping: 12 }}
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56,
-                  borderRadius: '50%', background: 'rgba(14,201,0,0.15)', border: '1.5px solid rgba(14,201,0,0.3)', marginBottom: 14 }}
+                initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.3, damping: 12 }}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 54, height: 54,
+                  borderRadius: '50%', background: 'rgba(14,201,0,0.15)', border: '1.5px solid rgba(14,201,0,0.35)', marginBottom: 14 }}
               >
-                <Check size={28} strokeWidth={2.5} color="var(--success)" />
+                <Check size={26} strokeWidth={2.5} color="var(--success)" />
               </motion.div>
 
               <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700 }}>¡Proyecto Empaquetado!</h2>

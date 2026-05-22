@@ -1635,7 +1635,12 @@ export function DuplicateView({
                       <div style={{ width: 24, height: 24 }}>
                         <FileListIcon entry={mockEntry} />
                       </div>
-                      <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.path}>{name}</span>
+                      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={name}>{name}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.path}>
+                          {f.path.startsWith(cwd) ? f.path.substring(cwd.length).replace(/^[\\/]+/, '') : f.path}
+                        </span>
+                      </div>
                       <button 
                         className="btn btn-ghost btn-icon" 
                         title="Ver en carpeta"

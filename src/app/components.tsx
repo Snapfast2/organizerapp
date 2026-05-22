@@ -1322,8 +1322,8 @@ export function StatsPanel({ path, onClose }: { path: string; onClose: () => voi
     fetch(`/api/stats?path=${encodeURIComponent(path)}`).then(r => r.json()).then(d => { setStats(d); setLoading(false); });
   }, [path]);
 
-  // Subtle monochromatic palette based on the primary accent color
-  const COLORS = ['#6EE7B7', '#34D399', '#10B981', '#059669', '#047857', '#065F46', '#064E3B', '#022C22'];
+  // Vibrant premium palette (Tailwind 500s) for better distinction
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
   const segments = stats ? Object.entries(stats.byType)
     .sort(([,a],[,b]) => b.size - a.size)
@@ -1354,7 +1354,7 @@ export function StatsPanel({ path, onClose }: { path: string; onClose: () => voi
 
   return (
     <div className="modal-overlay">
-      <div className="modal" style={{ maxWidth: 640 }}>
+      <div className="modal" style={{ maxWidth: 800 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <div>
             <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1368,7 +1368,7 @@ export function StatsPanel({ path, onClose }: { path: string; onClose: () => voi
         {loading && <div style={{ display: 'flex', justifyContent: 'center', padding: 64 }}><div className="spinner" /></div>}
         
         {!loading && stats && (
-          <motion.div variants={containerVariants} initial="hidden" animate="show" style={{ overflow: 'auto', maxHeight: '72vh', paddingRight: 8 }}>
+          <motion.div variants={containerVariants} initial="hidden" animate="show" style={{ overflow: 'auto', maxHeight: '85vh', paddingRight: 8 }}>
             
             <motion.div variants={itemVariants} className="stats-grid" style={{ marginBottom: 32 }}>
               <div className="stat-card" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>

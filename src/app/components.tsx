@@ -1618,8 +1618,10 @@ export function DuplicateView({
             </div>
           )}
 
-          {!loading && duplicates && duplicates.map((group, i) => (
-            <div key={group.hash} style={{ marginBottom: 16, background: 'var(--bg-surface)', padding: 12, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+          {!loading && duplicates && duplicates.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16, alignItems: 'start' }}>
+              {duplicates.map((group, i) => (
+                <div key={group.hash} style={{ background: 'var(--bg-surface)', padding: 12, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>SHA-256: {group.hash.substring(0, 16)}...</span>
                 <span className="badge">{formatSize(group.files[0].size)} c/u</span>
@@ -1665,6 +1667,8 @@ export function DuplicateView({
               </div>
             </div>
           ))}
+          </div>
+        )}
       </div>
 
       <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>

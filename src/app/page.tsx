@@ -8,8 +8,9 @@ import {
   Trash2, Trash, Edit2, RefreshCw, BarChart2, Wand2, X, CheckCircle, AlertCircle, 
   Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
   Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
-  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, MoreVertical,
-  ChevronsUp, ArrowUpDown, SortAsc, SortDesc, Undo, Sparkles, Clapperboard, Globe, FolderSearch
+  FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, Check, Tag, Palette,
+  Sparkles, Loader, Cpu, Wifi, WifiOff, ChevronDown, CheckCircle2, FileText as FileTextIcon, History, Key, Lock, SearchCode, Package,
+  MoreVertical, ChevronsUp, ArrowUpDown, SortAsc, SortDesc, Undo, Clapperboard, Globe, FolderSearch
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
@@ -87,6 +88,7 @@ export default function FileOrgApp() {
   const searching = isSearching;
   const [searchQuery, setSearchQuery] = useState('');
   const [searchScope, setSearchScope] = useState<'global' | 'local'>('local'); // Default to local
+  const [packState, setPackState] = useState<{ path: string; currentFile: string; copied: number; total: number; message?: string } | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const fileContentRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -108,6 +110,50 @@ export default function FileOrgApp() {
       setSortDesc(false);
     }
   }, [sortBy]);
+
+  const handlePackProject = async (aepPath: string) => {
+    setPackState({ path: aepPath, currentFile: '', copied: 0, total: 0, message: 'Iniciando...' });
+    try {
+      const res = await fetch('/api/ae-collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aepPath })
+      });
+      
+      if (!res.body) throw new Error('Error al conectar con la API');
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\\n').filter(Boolean);
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+            if (data.type === 'error') {
+              alert('Error empaquetando: ' + data.message);
+              setPackState(null);
+              return;
+            } else if (data.type === 'info') {
+              setPackState(prev => prev ? { ...prev, message: data.message } : null);
+            } else if (data.type === 'progress') {
+              setPackState(prev => prev ? { ...prev, copied: data.copied, total: data.total, currentFile: data.currentFile, message: data.message || prev.message } : null);
+            } else if (data.type === 'done') {
+              setPackState(null);
+              refresh();
+              alert(`¡Empaquetado exitoso!\\nArchivos copiados: ${data.totalFiles}\\nTamaño: ${formatSize(data.totalBytes)}\\n\\nSe guardó en: ${data.destPath}`);
+              return;
+            }
+          } catch(e) {}
+        }
+      }
+    } catch (err: any) {
+      alert('Fallo al empaquetar: ' + err.message);
+      setPackState(null);
+    }
+  };
 
   // Scroll listener for scroll-to-top button
   useEffect(() => {
@@ -1115,6 +1161,31 @@ export default function FileOrgApp() {
       </main>
 
       {/* ─── MODALS ─── */}
+      {packState && (
+        <div className="loading-overlay">
+          <motion.div 
+            className="loading-box"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+          >
+            <Package size={32} className="spin-icon" style={{ color: 'var(--accent)', marginBottom: 12 }} />
+            <h3 style={{ margin: '0 0 10px', fontSize: 16 }}>📦 Empaquetando Proyecto</h3>
+            <p style={{ margin: '0 0 10px', fontSize: 13, opacity: 0.8 }}>{packState.message}</p>
+            {packState.total > 0 && (
+              <>
+                <div style={{ width: '100%', height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
+                  <div style={{ height: '100%', background: 'var(--accent)', width: `${(packState.copied / packState.total) * 100}%`, transition: 'width 0.2s' }} />
+                </div>
+                <div style={{ fontSize: 11, opacity: 0.6, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{packState.copied} de {packState.total} archivos</span>
+                  <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{packState.currentFile}</span>
+                </div>
+              </>
+            )}
+          </motion.div>
+        </div>
+      )}
+
       <AnimatePresence>
         {contextMenu && (
           <ContextMenu 
@@ -1141,6 +1212,7 @@ export default function FileOrgApp() {
               } catch (e: any) {}
             }}
             sortBy={sortBy} sortDesc={sortDesc} onSort={handleSort}
+            onPackProject={(p) => { setContextMenu(null); handlePackProject(p); }}
           />
         )}
       </AnimatePresence>

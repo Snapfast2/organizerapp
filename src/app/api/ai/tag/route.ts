@@ -3,8 +3,29 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import sharp from 'sharp';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string; numpages: number }>;
+
+/** Extract text from a PDF without crashing if pdf-parse has DOM issues */
+async function extractPdfText(pdfPath: string): Promise<string> {
+  try {
+    // Dynamic import so a crash doesn't kill the whole route module
+    const pdfParse = (await import('pdf-parse')).default ?? (await import('pdf-parse'));
+    const buffer = fs.readFileSync(pdfPath);
+    const data = await (pdfParse as any)(buffer);
+    return (data.text || '').trim();
+  } catch {
+    // Fallback: read raw bytes and extract printable ASCII text sequences
+    try {
+      const raw = fs.readFileSync(pdfPath);
+      const text = raw.toString('latin1').replace(/[^\x20-\x7E\xC0-\xFF\n\r]/g, ' ').replace(/\s{3,}/g, ' ');
+      // Extract any meaningful words (length > 3)
+      const words = text.match(/[A-Za-záéíóúüñÁÉÍÓÚÜÑ]{4,}/g) || [];
+      return words.slice(0, 200).join(' ');
+    } catch {
+      return '';
+    }
+  }
+}
+
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2-vision:11b';
@@ -216,16 +237,12 @@ export async function POST(request: NextRequest) {
 
     // ── PDFs — extract real text ─────────────────────────────────────────────
     if (ext === 'pdf') {
-      try {
-        const buffer = fs.readFileSync(normalized);
-        const pdfData = await pdfParse(buffer);
-        const text = pdfData.text?.trim();
-        if (text && text.length > 50) {
-          const result = await callOllama({ prompt: buildDocPrompt(name, text) }, 45000);
-          return NextResponse.json({ success: true, ...result, type: 'pdf' });
-        }
-      } catch { /* PDF parse failed */ }
-      // Fallback: filename
+      const text = await extractPdfText(normalized);
+      if (text && text.length > 50) {
+        const result = await callOllama({ prompt: buildDocPrompt(name, text) }, 45000);
+        return NextResponse.json({ success: true, ...result, type: 'pdf' });
+      }
+      // Fallback: filename only
       const result = await callOllama({ prompt: buildFilenamePrompt(name, ext) }, 20000);
       return NextResponse.json({ success: true, ...result, type: 'pdf-fallback' });
     }

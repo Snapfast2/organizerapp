@@ -1556,7 +1556,14 @@ export function DuplicateView({
             setProgressPct(null);
           }
         } else if (data.type === 'result') {
-          setDuplicates(data.duplicates || []);
+          const results = data.duplicates || [];
+          setDuplicates(results);
+          // Start with all groups collapsed
+          const allExts = new Set<string>(results.map((g: any) => {
+            const name = g.files[0].path.split(/[\/\\]/).pop() || '';
+            return name.includes('.') ? name.split('.').pop()?.toLowerCase() || 'sin extensión' : 'sin extensión';
+          }));
+          setCollapsedGroups(allExts);
           setLoading(false);
           es.close();
         } else if (data.type === 'error') {

@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { FileEntry } from '@/lib/types';
 
-function searchDir(
+async function searchDir(
   dirPath: string,
   query: string,
   typeFilter: string,
@@ -13,12 +13,12 @@ function searchDir(
   if (depth > 5 || results.length >= 200) return;
 
   try {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
     
     // Load metadata for this directory
     let metadata: Record<string, { color?: string; tags?: string[] }> = {};
     try {
-      const metaContent = fs.readFileSync(path.join(dirPath, '.fileorg.json'), 'utf8');
+      const metaContent = await fs.promises.readFile(path.join(dirPath, '.fileorg.json'), 'utf8');
       metadata = JSON.parse(metaContent);
     } catch { /* no metadata */ }
 
@@ -42,7 +42,7 @@ function searchDir(
         const matchesType = !typeFilter || typeFilter === 'all' || ext === typeFilter;
 
         if (matchesQuery && matchesType) {
-          const stat = fs.statSync(fullPath);
+          const stat = await fs.promises.stat(fullPath);
           results.push({
             name: entry.name,
             path: fullPath,
@@ -57,7 +57,7 @@ function searchDir(
         }
 
         if (entry.isDirectory()) {
-          searchDir(fullPath, query, typeFilter, results, depth + 1);
+          await searchDir(fullPath, query, typeFilter, results, depth + 1);
         }
       } catch {
         // skip
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
   const typeFilter = searchParams.get('type') || 'all';
 
   const results: FileEntry[] = [];
-  searchDir(path.normalize(searchPath), query, typeFilter, results);
+  await searchDir(path.normalize(searchPath), query, typeFilter, results);
 
   return NextResponse.json({
     entries: results,

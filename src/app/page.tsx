@@ -37,8 +37,10 @@ const CYCLE          = ICON_DUR + REPEAT_DELAY; // 3.4 s — the shared loop per
 const N              = FLY_ICONS.length;        // 6
 
 // Build keyframe arrays for the circle & box that pulse exactly when each icon arrives.
-// Each arrival is at (i * ICON_STEP + ICON_DUR) within the CYCLE.
-// We add 3 sub-keyframes per impact (before → peak → settle) using a ±PW window.
+// ARRIVAL_FRAC: the icon visually "hits" the box at ~67% of its travel time
+// (it's fading out after that), so fire the pulse there, not at ICON_DUR end.
+const ARRIVAL_FRAC = 0.67; // tune: 0=start of travel, 1=mathematical end
+
 function buildPulseKFs() {
   const PW = 0.022; // half-width in normalised time (~75ms at 3.4s)
   const times: number[]   = [0];
@@ -47,7 +49,8 @@ function buildPulseKFs() {
   const bdKF: string[]    = ['rgba(14,201,0,0.40)'];
 
   for (let i = 0; i < N; i++) {
-    const t = (i * ICON_STEP + ICON_DUR) / CYCLE; // normalised arrival time
+    // Fire at the moment the icon visually reaches the box center
+    const t = (i * ICON_STEP + ICON_DUR * ARRIVAL_FRAC) / CYCLE;
     times.push(  Math.max(0, t - PW),  t,           t + PW,              Math.min(1, t + PW * 3));
     scaleKF.push(1,                    1.24,         0.90,                1);
     bgKF.push(   'rgba(14,201,0,0.15)','rgba(14,201,0,0.45)','rgba(14,201,0,0.20)','rgba(14,201,0,0.15)');

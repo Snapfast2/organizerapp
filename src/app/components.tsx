@@ -1257,72 +1257,7 @@ function DonutChart({ segments, size = 220, strokeWidth = 32 }: { segments: any[
   );
 }
 
-function BarChart({ data, height = 140 }: { data: any[], height?: number }) {
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-  const max = Math.max(...data.map(d => d.value), 1);
 
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height, width: '100%', position: 'relative', marginTop: 32 }}>
-      {data.map((item, i) => {
-        const pct = (item.value / max) * 100;
-        const isHovered = hoveredIdx === i;
-        return (
-          <div 
-            key={i} 
-            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', position: 'relative' }}
-            onMouseEnter={() => setHoveredIdx(i)}
-            onMouseLeave={() => setHoveredIdx(null)}
-          >
-            <div style={{ width: '100%', position: 'relative', flex: 1, cursor: 'pointer' }}>
-              <motion.div
-                style={{
-                  position: 'absolute', bottom: 0, left: 0, right: 0,
-                  borderRadius: '4px 4px 0 0',
-                  background: isHovered 
-                    ? `linear-gradient(180deg, ${item.color}, ${item.color}22)`
-                    : `linear-gradient(180deg, ${item.color}99, ${item.color}11)`,
-                  transition: 'background 0.2s',
-                  boxShadow: isHovered ? `0 -4px 12px ${item.color}44` : 'none'
-                }}
-                initial={{ height: '0%' }}
-                animate={{ height: `${pct}%` }}
-                transition={{ duration: 0.7, delay: 0.2 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
-              />
-            </div>
-            
-            <AnimatePresence>
-              {isHovered && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.15 }}
-                  style={{
-                    position: 'absolute', 
-                    bottom: 'calc(100% + 8px)', 
-                    left: i <= 2 ? '0' : i >= data.length - 3 ? 'auto' : '50%',
-                    right: i >= data.length - 3 ? '0' : 'auto',
-                    transform: i <= 2 || i >= data.length - 3 ? 'none' : 'translateX(-50%)',
-                    background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
-                    padding: '8px 12px', borderRadius: 8, zIndex: 10, pointerEvents: 'none',
-                    minWidth: 160, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
-                  }}
-                >
-                  <div style={{ color: 'var(--text-primary)', fontSize: 11, fontWeight: 500, wordBreak: 'break-all', marginBottom: 4 }}>
-                    {item.name}
-                  </div>
-                  <div style={{ color: item.color, fontSize: 13, fontWeight: 800 }}>
-                    {formatSize(item.value)}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 // ─── Stats Panel ───────────────────────────────────────────
 export function StatsPanel({ path, onClose, renderGridCard }: { path: string; onClose: () => void; renderGridCard?: (entry: any) => React.ReactNode }) {
@@ -1403,25 +1338,29 @@ export function StatsPanel({ path, onClose, renderGridCard }: { path: string; on
                 <DonutChart segments={segments} />
               </motion.div>
               
-              <motion.div variants={itemVariants} style={{ width: '100%', maxWidth: 700 }}>
-                <div className="stats-section-title" style={{ textAlign: 'center', marginBottom: 0 }}>Top 10 Más Pesados</div>
-                <BarChart data={topFilesData} />
-              </motion.div>
-
               {renderGridCard && stats.topFiles.length > 0 && (
                 <motion.div variants={itemVariants} style={{ width: '100%' }}>
-                  <div className="stats-section-title" style={{ marginBottom: 16, borderTop: '1px solid var(--border-subtle)', paddingTop: 32, textAlign: 'center' }}>
-                    Vista Previa de los Top 10
+                  <div className="stats-section-title" style={{ textAlign: 'center', marginBottom: 24, borderTop: '1px solid var(--border-subtle)', paddingTop: 32 }}>
+                    Top 10 Archivos Más Pesados
                   </div>
-                  <div className="carousel-container" style={{ 
-                    display: 'flex', 
-                    overflowX: 'auto', 
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', 
                     gap: 16, 
-                    padding: '8px 4px 24px 4px',
-                    scrollSnapType: 'x mandatory'
+                    padding: '12px 4px'
                   }}>
                     {stats.topFiles.map((file, i) => (
-                      <div key={i} style={{ flex: '0 0 240px', scrollSnapAlign: 'start' }}>
+                      <div key={i} style={{ position: 'relative' }}>
+                        <div style={{
+                          position: 'absolute', top: -10, left: -10, width: 28, height: 28,
+                          background: i === 0 ? 'var(--accent)' : 'var(--bg-elevated)',
+                          color: i === 0 ? '#000' : 'var(--text-primary)',
+                          border: `1px solid ${i === 0 ? 'transparent' : 'var(--border-subtle)'}`,
+                          borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 800, fontSize: 13, zIndex: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                        }}>
+                          {i + 1}
+                        </div>
                         {renderGridCard(file)}
                       </div>
                     ))}

@@ -138,7 +138,115 @@ function PackAnimation() {
 }
 
 
+// ─── Sidebar Tree Components (adapted from Magic UI FileTree) ─────────────────
+
+interface SidebarItemProps {
+  label: string;
+  Icon: React.ElementType;
+  isActive: boolean;
+  onClick: () => void;
+  depth?: number;
+}
+
+function SidebarItem({ label, Icon, isActive, onClick, depth = 0 }: SidebarItemProps) {
+  return (
+    <div
+      className="tree-item-wrap"
+      onClick={onClick}
+      style={{ paddingLeft: depth * 12 }}
+    >
+      {isActive && (
+        <motion.div
+          layoutId="sidebar-pill"
+          className="tree-item-pill"
+          transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+        />
+      )}
+      <motion.div
+        className={`tree-item ${isActive ? 'active no-bg' : ''}`}
+        whileTap={{ scale: 0.97 }}
+        whileHover={isActive ? {} : { x: 2 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+      >
+        <motion.span
+          animate={{
+            scale: isActive ? 1.18 : 1,
+            color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
+          }}
+          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+          style={{ display: 'flex', lineHeight: 1 }}
+        >
+          <Icon size={14} strokeWidth={isActive ? 2 : 1.5} />
+        </motion.span>
+        <div className="tree-item-name" style={{ fontWeight: isActive ? 600 : 400 }}>
+          {label}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+interface SidebarSectionProps {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}
+
+function SidebarSection({ title, children, defaultOpen = true }: SidebarSectionProps) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div style={{ marginBottom: 4 }}>
+      {/* Section header — clickable to collapse */}
+      <motion.div
+        className="sidebar-section-title"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          userSelect: 'none',
+          paddingRight: 8,
+        }}
+        whileHover={{ opacity: 1 }}
+        whileTap={{ scale: 0.98 }}
+      >
+        <span>{title}</span>
+        <motion.span
+          animate={{ rotate: open ? 0 : -90 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+          style={{ display: 'flex', color: 'var(--text-muted)', opacity: 0.5 }}
+        >
+          <ChevronDown size={11} strokeWidth={2.5} />
+        </motion.span>
+      </motion.div>
+
+      {/* Animated content */}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="content"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div className="sidebar-tree">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function FileOrgApp() {
+
   const [currentPath, setCurrentPath] = useState<string>('C:\\');
 
   const [listing, setListing] = useState<DirectoryListing | null>(null);
@@ -1000,40 +1108,22 @@ export default function FileOrgApp() {
 
       {/* ─── SIDEBAR ─── */}
       <aside className="sidebar">
-        <div className="sidebar-section-title">Ubicaciones</div>
-        <div className="sidebar-tree">
-          {/* Inicio */}
-          {[{ path: 'C:\\Users', label: 'Inicio', Icon: HomeIcon }, ...drives.map(d => ({ path: d, label: d, Icon: HardDrive }))].map(({ path, label, Icon }) => {
-            const isActive = currentPath === path;
-            return (
-              <div key={path} className="tree-item-wrap" onClick={() => setCurrentPath(path)}>
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebar-pill"
-                    className="tree-item-pill"
-                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                  />
-                )}
-                <motion.div
-                  className={`tree-item ${isActive ? 'active no-bg' : ''}`}
-                  whileTap={{ scale: 0.96 }}
-                >
-                  <motion.span
-                    animate={{ scale: isActive ? 1.2 : 1, color: isActive ? 'var(--accent)' : 'var(--text-secondary)' }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                    style={{ display: 'flex', lineHeight: 1 }}
-                  >
-                    <Icon size={14} />
-                  </motion.span>
-                  <div className="tree-item-name">{label}</div>
-                </motion.div>
-              </div>
-            );
-          })}
-        </div>
 
-        <div className="sidebar-section-title">Accesos Rápidos</div>
-        <div className="sidebar-tree">
+        {/* ── Ubicaciones ── */}
+        <SidebarSection title="Ubicaciones" defaultOpen>
+          {[{ path: 'C:\\Users', label: 'Inicio', Icon: HomeIcon }, ...drives.map(d => ({ path: d, label: d, Icon: HardDrive }))].map(({ path, label, Icon }) => (
+            <SidebarItem
+              key={path}
+              label={label}
+              Icon={Icon}
+              isActive={currentPath === path}
+              onClick={() => setCurrentPath(path)}
+            />
+          ))}
+        </SidebarSection>
+
+        {/* ── Accesos Rápidos ── */}
+        <SidebarSection title="Accesos Rápidos" defaultOpen>
           {quickAccess.map(qa => {
             let Icon = Folder;
             if (qa.name === 'Escritorio') Icon = Monitor;
@@ -1042,35 +1132,20 @@ export default function FileOrgApp() {
             else if (qa.name === 'Imágenes') Icon = ImageIcon;
             else if (qa.name === 'Videos') Icon = Film;
             else if (qa.name === 'Música') Icon = Music;
-            const isActive = currentPath === qa.path;
             return (
-              <div key={qa.path} className="tree-item-wrap" onClick={() => setCurrentPath(qa.path)}>
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebar-pill"
-                    className="tree-item-pill"
-                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                  />
-                )}
-                <motion.div
-                  className={`tree-item ${isActive ? 'active no-bg' : ''}`}
-                  whileTap={{ scale: 0.96 }}
-                >
-                  <motion.span
-                    animate={{ scale: isActive ? 1.2 : 1, color: isActive ? 'var(--accent)' : 'var(--text-secondary)' }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                    style={{ display: 'flex', lineHeight: 1 }}
-                  >
-                    <Icon size={14} />
-                  </motion.span>
-                  <div className="tree-item-name">{qa.name}</div>
-                </motion.div>
-              </div>
+              <SidebarItem
+                key={qa.path}
+                label={qa.name}
+                Icon={Icon}
+                isActive={currentPath === qa.path}
+                onClick={() => setCurrentPath(qa.path)}
+              />
             );
           })}
-        </div>
+        </SidebarSection>
 
-        <div className="sidebar-section-title">Papelera</div>
+        {/* ── Papelera ── */}
+        <div className="sidebar-section-title" style={{ marginTop: 4 }}>Papelera</div>
         <div className="sidebar-tree" style={{ flex: 'none', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
           <div className="tree-item" onClick={() => setShowTrashModal(true)} 
                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
@@ -1091,6 +1166,7 @@ export default function FileOrgApp() {
           </div>
         </div>
       </aside>
+
 
       {/* ─── MAIN AREA ─── */}
       <main className="main-area" onContextMenu={e => e.preventDefault()}>

@@ -1131,7 +1131,7 @@ export default function FileOrgApp() {
         {showAITag && (() => {
           const targetEntries = selected.size > 0
             ? visualEntries.filter(e => selected.has(e.path) && !e.isDir)
-            : visualEntries.filter(e => !e.isDir).slice(0, 20);
+            : visualEntries.filter(e => !e.isDir);
           return (
             <AITagModal
               entries={targetEntries}

@@ -1940,7 +1940,12 @@ export function AITagModal({
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-subtle)', alignItems: 'center' }}>
+          {!running && done === 0 && total > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 'auto' }}>
+              ~{total <= 5 ? `${total * 3}s` : total <= 20 ? `${Math.round(total * 2.5 / 60)}–${Math.round(total * 4 / 60)} min` : `${Math.round(total * 2 / 60)}–${Math.round(total * 4 / 60)} min`} estimados
+            </span>
+          )}
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
           {!running && done === 0 && (
             <button

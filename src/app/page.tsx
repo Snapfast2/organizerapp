@@ -90,6 +90,7 @@ export default function FileOrgApp() {
   const [searchScope, setSearchScope] = useState<'global' | 'local'>('local'); // Default to local
   type PackFileStatus = { name: string; status: 'pending' | 'copying' | 'done' | 'error' };
   const [packState, setPackState] = useState<{ path: string; copied: number; total: number; message?: string; files: PackFileStatus[] } | null>(null);
+  const [packDone, setPackDone] = useState<{ totalFiles: number; totalBytes: number; destPath: string; files: PackFileStatus[] } | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const fileContentRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -147,9 +148,10 @@ export default function FileOrgApp() {
 
             if (data.state === 'done') {
               clearInterval(interval);
+              const finalFiles = data.files || [];
               setPackState(null);
               refresh();
-              alert(`¡Empaquetado exitoso!\nArchivos copiados: ${data.copied}\nTamaño: ${formatSize(data.totalBytes ?? 0)}\n\nSe guardó en:\n${data.destPath}`);
+              setPackDone({ totalFiles: data.copied, totalBytes: data.totalBytes ?? 0, destPath: data.destPath, files: finalFiles });
               resolve();
             } else if (data.state === 'error') {
               clearInterval(interval);
@@ -1172,40 +1174,153 @@ export default function FileOrgApp() {
         </AnimatePresence>
       </main>
 
-      {/* ─── MODALS ─── */}
-      {packState && (
-        <div className="loading-overlay">
-          <motion.div 
-            className="loading-box"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
+      {/* ─── PACK PROGRESS MODAL ─── */}
+      <AnimatePresence>
+        {packState && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}
           >
-            <Package size={32} className="spin-icon" style={{ color: 'var(--accent)', marginBottom: 12 }} />
-            <h3 style={{ margin: '0 0 10px', fontSize: 16 }}>📦 Empaquetando Proyecto</h3>
-            <p style={{ margin: '0 0 10px', fontSize: 13, opacity: 0.8 }}>{packState.message}</p>
-            {packState.total > 0 && (
-              <>
-                <div style={{ width: '100%', height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
-                  <div style={{ height: '100%', background: 'var(--accent)', width: `${(packState.copied / packState.total) * 100}%`, transition: 'width 0.2s' }} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.85, y: 20 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 260 }}
+              style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 16, padding: 28, width: 420, maxWidth: '90vw', boxShadow: '0 25px 60px rgba(0,0,0,0.6)' }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                <motion.div animate={{ rotate: [0, -10, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}>
+                  <Package size={28} color="var(--accent)" />
+                </motion.div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>Empaquetando Proyecto</div>
+                  <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>{packState.message}</div>
                 </div>
-                <div style={{ fontSize: 11, opacity: 0.6, display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <span>{packState.copied} de {packState.total} archivos</span>
-                </div>
-                <div style={{ maxHeight: 200, overflowY: 'auto', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
-                  {packState.files.map((f, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 13, borderBottom: i < packState.files.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
-                      {f.status === 'done' ? <CheckCircle size={14} color="var(--success)" /> : 
-                       f.status === 'copying' ? <RefreshCw size={14} className="spin-icon" color="var(--accent)" /> : 
-                       <Loader size={14} color="var(--text-muted)" />}
-                      <span style={{ opacity: f.status === 'pending' ? 0.6 : 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{f.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+              </div>
+
+              {/* Progress bar */}
+              {packState.total > 0 && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
+                    <span>{packState.copied} de {packState.total} archivos</span>
+                    <span>{Math.round((packState.copied / packState.total) * 100)}%</span>
+                  </div>
+                  <div style={{ height: 6, background: 'var(--border)', borderRadius: 99, overflow: 'hidden', marginBottom: 16 }}>
+                    <motion.div
+                      style={{ height: '100%', background: 'linear-gradient(90deg, var(--accent), #a78bfa)', borderRadius: 99, originX: 0 }}
+                      animate={{ width: `${(packState.copied / packState.total) * 100}%` }}
+                      transition={{ duration: 0.3 }}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* File list */}
+              <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {packState.files.slice(Math.max(0, packState.files.findIndex(f => f.status === 'copying') - 3), packState.files.findIndex(f => f.status === 'copying') + 8 || packState.files.length).map((f, i) => {
+                  const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
+                  const isVideo = ['mp4','mov','avi','mkv','webm','m4v'].includes(ext);
+                  const isImage = ['jpg','jpeg','png','gif','webp','psd','ai','svg'].includes(ext);
+                  const isAudio = ['mp3','wav','aac','ogg','flac'].includes(ext);
+                  const icon = isVideo ? '🎬' : isImage ? '🖼️' : isAudio ? '🎵' : '📄';
+                  return (
+                    <motion.div
+                      key={f.name + i}
+                      initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 8px', borderRadius: 8,
+                        background: f.status === 'copying' ? 'var(--accent-dim)' : 'transparent',
+                        fontSize: 13 }}
+                    >
+                      <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: f.status === 'pending' ? 0.4 : 1 }}>{f.name}</span>
+                      {f.status === 'done' && <CheckCircle size={14} color="var(--success)" />}
+                      {f.status === 'copying' && <RefreshCw size={14} className="spin-icon" color="var(--accent)" />}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </motion.div>
           </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
+
+      {/* ─── PACK SUCCESS MODAL ─── */}
+      <AnimatePresence>
+        {packDone && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)' }}
+            onClick={() => setPackDone(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.7, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.8, y: 20 }}
+              transition={{ type: 'spring', damping: 18, stiffness: 220 }}
+              onClick={e => e.stopPropagation()}
+              style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 20, padding: 32, width: 460, maxWidth: '92vw', boxShadow: '0 30px 80px rgba(0,0,0,0.7)', textAlign: 'center', position: 'relative', overflow: 'hidden' }}
+            >
+              {/* Flying file icons animation */}
+              <div style={{ position: 'relative', height: 120, marginBottom: 16 }}>
+                {/* Box / destination */}
+                <motion.div
+                  style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)' }}
+                  animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 2 }}
+                >
+                  <Package size={52} color="var(--accent)" />
+                </motion.div>
+                {/* Floating file icons */}
+                {['🎬','🖼️','🎵','📄','🖼️','🎬'].map((icon, i) => (
+                  <motion.div
+                    key={i}
+                    style={{ position: 'absolute', fontSize: 22, top: 0, left: `${10 + i * 15}%` }}
+                    initial={{ y: 0, opacity: 1, scale: 1 }}
+                    animate={{ y: [0, 60, 80], opacity: [1, 1, 0], scale: [1, 0.8, 0.4] }}
+                    transition={{ delay: i * 0.18, duration: 0.9, repeat: Infinity, repeatDelay: 1.5 }}
+                  >
+                    {icon}
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Check badge */}
+              <motion.div
+                initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.2, damping: 12 }}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 52, height: 52,
+                  borderRadius: '50%', background: 'rgba(14,201,0,0.15)', marginBottom: 14 }}
+              >
+                <CheckCircle size={30} color="var(--success)" />
+              </motion.div>
+
+              <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700 }}>¡Proyecto Empaquetado! 📦</h2>
+              <p style={{ margin: '0 0 20px', fontSize: 14, opacity: 0.7 }}>Todos los archivos fueron copiados exitosamente</p>
+
+              {/* Stats row */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 20, justifyContent: 'center' }}>
+                <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 18px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{packDone.totalFiles}</div>
+                  <div style={{ fontSize: 11, opacity: 0.6 }}>archivos</div>
+                </div>
+                <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 18px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{formatSize(packDone.totalBytes)}</div>
+                  <div style={{ fontSize: 11, opacity: 0.6 }}>copiados</div>
+                </div>
+              </div>
+
+              {/* Destination path */}
+              <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 14px', marginBottom: 22, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FolderOpen size={16} color="var(--accent)" style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 12, opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{packDone.destPath}</span>
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                onClick={() => setPackDone(null)}
+                style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+              >
+                ¡Genial!
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {contextMenu && (

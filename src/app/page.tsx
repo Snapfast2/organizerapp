@@ -1068,7 +1068,7 @@ export default function FileOrgApp() {
       const res = await fetch('/api/fs/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'move', paths: pathsToMove, dest: destPath })
+        body: JSON.stringify({ action: 'move', paths: pathsToMove, destPath: destPath })
       });
       if (res.ok) {
         const d = await res.json();

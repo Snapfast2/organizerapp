@@ -1,9 +1,5 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain } from 'electron';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const isDev = process.env.NODE_ENV === 'development';
 const NEXT_PORT = 3000;
@@ -18,7 +14,7 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    frame: false,           // frameless — usamos nuestra propia barra de título
+    frame: false,
     backgroundColor: '#0a0a0a',
     icon: path.join(__dirname, '../public/icon.png'),
     webPreferences: {
@@ -26,23 +22,16 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
-    show: false,            // no mostrar hasta que esté lista
+    show: false,
     titleBarStyle: 'hidden',
   });
 
-  // Cargar la app de Next.js
-  const url = isDev
-    ? `http://localhost:${NEXT_PORT}`
-    : `http://localhost:${NEXT_PORT}`;
+  mainWindow.loadURL(`http://localhost:${NEXT_PORT}`);
 
-  mainWindow.loadURL(url);
-
-  // Mostrar cuando esté lista (evita flash blanco)
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
   });
 
-  // Minimizar al tray en vez de cerrar
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
@@ -54,7 +43,6 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Abrir links externos en el navegador del sistema
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
@@ -62,7 +50,6 @@ function createWindow() {
 }
 
 function createTray() {
-  // Ícono del tray (16x16 o 32x32)
   const iconPath = path.join(__dirname, '../public/icon.png');
   const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
 
@@ -89,14 +76,13 @@ function createTray() {
 
   tray.setContextMenu(contextMenu);
 
-  // Doble click en tray → abrir ventana
   tray.on('double-click', () => {
     mainWindow?.show();
     mainWindow?.focus();
   });
 }
 
-// IPC: controles de ventana desde la UI (minimizar, maximizar, cerrar)
+// IPC: window controls from the UI
 ipcMain.on('window:minimize', () => mainWindow?.minimize());
 ipcMain.on('window:maximize', () => {
   if (mainWindow?.isMaximized()) {
@@ -117,9 +103,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    // En Windows/Linux: no salir, quedarse en tray
-  }
+  // Keep running in tray on Windows/Linux
 });
 
 app.on('before-quit', () => {

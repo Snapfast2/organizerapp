@@ -104,6 +104,19 @@ html, body {
   border-bottom: 1px solid var(--border);
   z-index: 100;
   position: relative;
+  /* Electron: makes the whole header draggable to move the window */
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+/* Electron: interactive elements inside the drag region must be excluded */
+.header button,
+.header input,
+.header a,
+.header-search,
+.header-actions {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .header::after {

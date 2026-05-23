@@ -376,6 +376,37 @@ function SidebarSection({ title, children, defaultOpen = true }: SidebarSectionP
 export default function FileOrgApp() {
 
   const [currentPath, setCurrentPath] = useState<string>('C:\\');
+  // Navigation history — back/forward like a browser
+  const [navHistory, setNavHistory] = useState<string[]>(['C:\\']);
+  const [navIndex, setNavIndex] = useState(0);
+
+  const navigate = useCallback((path: string) => {
+    setCurrentPath(path);
+    setNavHistory(prev => {
+      const trimmed = prev.slice(0, navIndex + 1);
+      return [...trimmed, path];
+    });
+    setNavIndex(prev => prev + 1);
+  }, [navIndex]);
+
+  const goBack = useCallback(() => {
+    if (navIndex > 0) {
+      const prev = navHistory[navIndex - 1];
+      setNavIndex(i => i - 1);
+      setCurrentPath(prev);
+    }
+  }, [navIndex, navHistory]);
+
+  const goForward = useCallback(() => {
+    if (navIndex < navHistory.length - 1) {
+      const next = navHistory[navIndex + 1];
+      setNavIndex(i => i + 1);
+      setCurrentPath(next);
+    }
+  }, [navIndex, navHistory]);
+
+  const canGoBack = navIndex > 0;
+  const canGoForward = navIndex < navHistory.length - 1;
 
   const [listing, setListing] = useState<DirectoryListing | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -447,7 +478,7 @@ export default function FileOrgApp() {
   const goUp = () => {
     if (currentPath.length > 3) {
       const parent = currentPath.substring(0, currentPath.lastIndexOf('\\')) || currentPath.substring(0, 3);
-      setCurrentPath(parent);
+      navigate(parent);
     }
   };
 
@@ -547,7 +578,7 @@ export default function FileOrgApp() {
       return;
     }
     if (entry.isDir) {
-      setCurrentPath(entry.path);
+      navigate(entry.path);
     } else {
       if (PREVIEWABLE.has(entry.ext)) {
         setPreviewEntry(entry);
@@ -1003,7 +1034,7 @@ export default function FileOrgApp() {
         if (focusedPath) {
           const entry = entries.find(x => x.path === focusedPath);
           if (entry) {
-            if (entry.isDir) setCurrentPath(entry.path);
+            if (entry.isDir) navigate(entry.path);
             else handleOpen(entry.path);
           }
         }
@@ -1230,10 +1261,59 @@ export default function FileOrgApp() {
   };
 
   return (
-    <div className="app-shell" onClick={() => { clearSelection(); closeContextMenu(); }}>
+    <div className={`app-shell${isElectron ? ' has-titlebar' : ''}`} onClick={() => { clearSelection(); closeContextMenu(); }}>
+
+      {/* ─── ELECTRON TITLE BAR (Discord style) ─── */}
+      {isElectron && (
+        <div className="electron-titlebar">
+          {/* Left: back / forward */}
+          <div className="titlebar-nav">
+            <button
+              className="titlebar-nav-btn"
+              onClick={goBack}
+              disabled={!canGoBack}
+              title="Atrás"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M10 3L5 8L10 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            <button
+              className="titlebar-nav-btn"
+              onClick={goForward}
+              disabled={!canGoForward}
+              title="Adelante"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M6 3L11 8L6 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Center: icon + name */}
+          <div className="titlebar-center">
+            <FolderOpen size={14} color="var(--accent)" strokeWidth={2.5} />
+            <span>FileOrganizer</span>
+          </div>
+
+          {/* Right: window controls */}
+          <div className="titlebar-win-controls">
+            <button className="titlebar-win-btn titlebar-minimize" onClick={() => (window as any).electronAPI.minimize()} title="Minimizar">
+              <span />
+            </button>
+            <button className="titlebar-win-btn titlebar-maximize" onClick={() => (window as any).electronAPI.maximize()} title="Maximizar">
+              <span />
+            </button>
+            <button className="titlebar-win-btn titlebar-close" onClick={() => (window as any).electronAPI.close()} title="Al tray">
+              <span /><span />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ─── HEADER ─── */}
       <header className="header">
-        <div className="header-logo"><FolderOpen size={20} color="var(--accent)" strokeWidth={2.5} /> FileOrganizer</div>
+        {!isElectron && <div className="header-logo"><FolderOpen size={20} color="var(--accent)" strokeWidth={2.5} /> FileOrganizer</div>}
         <div className="header-search">
           <button 
             className="btn btn-ghost btn-icon" 
@@ -1264,33 +1344,6 @@ export default function FileOrgApp() {
           <button className="btn btn-primary" style={{ padding: '0 12px', height: 30, fontSize: 11.5 }} onClick={() => setShowOrganize(true)}>
             <Wand2 size={13} /> Auto-Organizar
           </button>
-
-          {/* ── Electron window controls ── */}
-          {isElectron && (
-            <div className="win-controls">
-              <button
-                className="win-btn win-minimize"
-                onClick={() => (window as any).electronAPI.minimize()}
-                title="Minimizar"
-              >
-                <span />
-              </button>
-              <button
-                className="win-btn win-maximize"
-                onClick={() => (window as any).electronAPI.maximize()}
-                title="Maximizar / Restaurar"
-              >
-                <span />
-              </button>
-              <button
-                className="win-btn win-close"
-                onClick={() => (window as any).electronAPI.close()}
-                title="Minimizar al tray"
-              >
-                <span /><span />
-              </button>
-            </div>
-          )}
         </div>
       </header>
 
@@ -1306,7 +1359,7 @@ export default function FileOrgApp() {
                 label={label}
                 Icon={Icon}
                 isActive={currentPath === path}
-                onNavigate={setCurrentPath}
+                onNavigate={navigate}
                 onDropFiles={handleTreeNodeDrop}
               />
             ))}
@@ -1329,7 +1382,7 @@ export default function FileOrgApp() {
                   label={qa.name}
                   Icon={Icon}
                   isActive={currentPath === qa.path}
-                  onNavigate={setCurrentPath}
+                  onNavigate={navigate}
                   onDropFiles={handleTreeNodeDrop}
                 />
               );
@@ -1366,7 +1419,7 @@ export default function FileOrgApp() {
         <div className="path-input-row">
           <button className="btn btn-ghost btn-icon" onClick={goUp} disabled={!currentPath || currentPath.length <= 3}><ArrowUp size={16} /></button>
           <button className="btn btn-ghost btn-icon" onClick={refresh}><RefreshCw size={14} className={isLoading ? 'spinning' : ''} /></button>
-          <input className="path-input" value={pathInput} onChange={e => setPathInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && setCurrentPath(pathInput)} />
+          <input className="path-input" value={pathInput} onChange={e => setPathInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && navigate(pathInput)} />
         </div>
 
         {!showDuplicates && (

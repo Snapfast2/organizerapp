@@ -1256,6 +1256,33 @@ export default function FileOrgApp() {
           <button className="btn btn-primary" style={{ padding: '0 12px', height: 30, fontSize: 11.5 }} onClick={() => setShowOrganize(true)}>
             <Wand2 size={13} /> Auto-Organizar
           </button>
+
+          {/* ── Electron window controls ── */}
+          {typeof window !== 'undefined' && (window as any).electronAPI && (
+            <div className="win-controls">
+              <button
+                className="win-btn win-minimize"
+                onClick={() => (window as any).electronAPI.minimize()}
+                title="Minimizar"
+              >
+                <span />
+              </button>
+              <button
+                className="win-btn win-maximize"
+                onClick={() => (window as any).electronAPI.maximize()}
+                title="Maximizar / Restaurar"
+              >
+                <span />
+              </button>
+              <button
+                className="win-btn win-close"
+                onClick={() => (window as any).electronAPI.close()}
+                title="Minimizar al tray"
+              >
+                <span /><span />
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

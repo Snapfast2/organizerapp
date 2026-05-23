@@ -119,6 +119,73 @@ html, body {
   app-region: no-drag;
 }
 
+/* ── Electron window control buttons ─────────────── */
+.win-controls {
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+  gap: 0;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.win-btn {
+  width: 46px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: background 0.15s;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* minimize bar */
+.win-minimize span {
+  display: block;
+  width: 12px;
+  height: 1.5px;
+  background: var(--text-muted);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+.win-minimize:hover { background: rgba(255,255,255,0.08); }
+.win-minimize:hover span { background: #fff; }
+
+/* maximize square */
+.win-maximize span {
+  display: block;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 2px;
+  transition: border-color 0.15s;
+}
+.win-maximize:hover { background: rgba(255,255,255,0.08); }
+.win-maximize:hover span { border-color: #fff; }
+
+/* close X */
+.win-close {
+  border-radius: 0 0 0 0;
+}
+.win-close span {
+  display: block;
+  width: 12px;
+  height: 1.5px;
+  background: var(--text-muted);
+  border-radius: 2px;
+  position: absolute;
+  transition: background 0.15s;
+}
+.win-close span:first-child { transform: rotate(45deg); }
+.win-close span:last-child  { transform: rotate(-45deg); }
+.win-close:hover { background: rgba(232, 17, 35, 0.85); }
+.win-close:hover span { background: #fff; }
+
 .header::after {
   content: '';
   position: absolute;

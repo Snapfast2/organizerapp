@@ -47,3 +47,6 @@ next-env.d.ts
 *.psd
 *.mkv
 *.avi
+
+electron-dist/
+dist/

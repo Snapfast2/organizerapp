@@ -47,6 +47,10 @@ function PopupContent() {
   const [movedTo, setMovedTo] = useState('');
 
   useEffect(() => {
+    // Ensure body and html are transparent for the frameless window
+    document.body.style.background = 'transparent';
+    document.documentElement.style.background = 'transparent';
+    
     // Slide-in animation
     setTimeout(() => setVisible(true), 50);
   }, []);
@@ -76,14 +80,14 @@ function PopupContent() {
     }}>
       <div style={{
         width: 390,
-        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-        borderRadius: 16,
-        border: '1px solid rgba(74, 222, 128, 0.25)',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.08)',
+        background: '#0a0a0a',
+        borderRadius: 12,
+        border: '1px solid rgba(74, 222, 128, 0.15)',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.02)',
         padding: '18px 20px 16px',
         fontFamily: "'Inter', -apple-system, sans-serif",
         color: '#fff',
-        transform: visible ? 'translateX(0) translateY(0)' : 'translateX(30px) translateY(10px)',
+        transform: visible ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.95)',
         opacity: visible ? 1 : 0,
         transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease',
         position: 'relative',
@@ -146,8 +150,8 @@ function PopupContent() {
                   key={dest.path}
                   onClick={() => handleMove(dest)}
                   style={{
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.05)',
                     borderRadius: 8,
                     padding: '8px 10px',
                     color: '#fff',
@@ -162,13 +166,13 @@ function PopupContent() {
                     fontFamily: 'inherit',
                   }}
                   onMouseEnter={e => {
-                    e.currentTarget.style.background = 'rgba(74,222,128,0.12)';
-                    e.currentTarget.style.borderColor = 'rgba(74,222,128,0.3)';
+                    e.currentTarget.style.background = 'rgba(74,222,128,0.1)';
+                    e.currentTarget.style.borderColor = 'rgba(74,222,128,0.2)';
                     e.currentTarget.style.transform = 'scale(1.02)';
                   }}
                   onMouseLeave={e => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
                     e.currentTarget.style.transform = 'scale(1)';
                   }}
                 >

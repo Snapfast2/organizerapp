@@ -54,8 +54,8 @@ function showNextPopup() {
   activePopup = new BrowserWindow({
     width: W,
     height: H,
-    x: sw - W - 20,
-    y: sh - H - 20,
+    x: Math.round((sw - W) / 2),
+    y: Math.round((sh - H) / 2),
     frame: false,
     alwaysOnTop: true,
     resizable: false,

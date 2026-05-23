@@ -2,33 +2,39 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
+import { 
+  FileIcon, Video, Image as ImageIcon, Music, FileText, FileArchive, 
+  Clapperboard, FolderOpen, Monitor, CheckCircle2, X
+} from 'lucide-react';
 
-// ── File type → emoji ──────────────────────────────────────────
-function fileIcon(ext: string): string {
+// ── File type → icon component ──────────────────────────────────
+function getFileIcon(ext: string) {
   const video = ['mp4', 'mov', 'avi', 'mkv', 'webm'];
   const image = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
   const audio = ['mp3', 'wav', 'ogg', 'flac', 'aac'];
   const doc   = ['pdf', 'doc', 'docx', 'txt', 'xlsx'];
   const zip   = ['zip', 'rar', '7z', 'tar', 'gz'];
   const ae    = ['aep', 'aet'];
-  if (ae.includes(ext))    return '🎬';
-  if (video.includes(ext)) return '🎥';
-  if (image.includes(ext)) return '🖼️';
-  if (audio.includes(ext)) return '🎵';
-  if (doc.includes(ext))   return '📄';
-  if (zip.includes(ext))   return '📦';
-  return '📁';
+  
+  if (ae.includes(ext))    return Clapperboard;
+  if (video.includes(ext)) return Video;
+  if (image.includes(ext)) return ImageIcon;
+  if (audio.includes(ext)) return Music;
+  if (doc.includes(ext))   return FileText;
+  if (zip.includes(ext))   return FileArchive;
+  return FileIcon;
 }
 
-// ── Destination button icon ────────────────────────────────────
-function destIcon(label: string): string {
-  if (label.toLowerCase().includes('escritorio')) return '🖥️';
-  if (label.toLowerCase().includes('video'))      return '🎥';
-  if (label.toLowerCase().includes('imagen'))     return '🖼️';
-  if (label.toLowerCase().includes('document'))   return '📄';
-  if (label.toLowerCase().includes('música'))     return '🎵';
-  if (label.toLowerCase().includes('proyecto'))   return '🎬';
-  return '📂';
+// ── Destination button icon component ───────────────────────────
+function getDestIcon(label: string) {
+  const l = label.toLowerCase();
+  if (l.includes('escritorio')) return Monitor;
+  if (l.includes('video'))      return Video;
+  if (l.includes('imagen'))     return ImageIcon;
+  if (l.includes('document'))   return FileText;
+  if (l.includes('música'))     return Music;
+  if (l.includes('proyecto'))   return Clapperboard;
+  return FolderOpen;
 }
 
 interface Destination { label: string; path: string; }
@@ -47,11 +53,8 @@ function PopupContent() {
   const [movedTo, setMovedTo] = useState('');
 
   useEffect(() => {
-    // Ensure body and html are transparent for the frameless window
     document.body.style.background = 'transparent';
     document.documentElement.style.background = 'transparent';
-    
-    // Slide-in animation
     setTimeout(() => setVisible(true), 50);
   }, []);
 
@@ -72,114 +75,126 @@ function PopupContent() {
     api?.popupIgnore();
   };
 
+  const MainIcon = done ? CheckCircle2 : getFileIcon(ext);
+
   return (
     <div style={{
       width: '100vw', height: '100vh',
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 0, margin: 0, boxSizing: 'border-box',
     }}>
       <div style={{
-        width: 390,
+        width: '100%', height: '100%',
         background: '#0a0a0a',
         borderRadius: 12,
-        border: '1px solid rgba(74, 222, 128, 0.15)',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.02)',
+        border: '1px solid rgba(74, 222, 128, 0.2)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
         padding: '18px 20px 16px',
         fontFamily: "'Inter', -apple-system, sans-serif",
         color: '#fff',
-        transform: visible ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.95)',
+        transform: visible ? 'scale(1)' : 'scale(0.95)',
         opacity: visible ? 1 : 0,
-        transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease',
+        transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease',
         position: 'relative',
         overflow: 'hidden',
+        boxSizing: 'border-box',
       }}>
-        {/* Accent glow */}
+        {/* Accent glow top */}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, height: 2,
           background: 'linear-gradient(90deg, transparent, #4ade80, transparent)',
-          borderRadius: '16px 16px 0 0',
+          opacity: 0.8
         }} />
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
           <div style={{
-            width: 42, height: 42, borderRadius: 10,
-            background: 'rgba(74, 222, 128, 0.12)',
+            width: 44, height: 44, borderRadius: 10,
+            background: 'rgba(74, 222, 128, 0.1)',
             border: '1px solid rgba(74, 222, 128, 0.2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 22, flexShrink: 0,
+            flexShrink: 0,
           }}>
-            {done ? '✅' : fileIcon(ext)}
+            <MainIcon size={22} color="var(--accent)" strokeWidth={2} />
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 10, color: '#4ade80', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>
-              {done ? 'Movido correctamente' : '📥 Nuevo archivo descargado'}
+          <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+            <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>
+              {done ? 'Movido correctamente' : 'Nuevo archivo descargado'}
             </div>
             <div style={{
-              fontSize: 13, fontWeight: 600, color: '#fff',
+              fontSize: 14, fontWeight: 500, color: '#fff',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               lineHeight: 1.3,
             }}>
               {fileName}
             </div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
               {done ? `→ ${movedTo}` : fileSize}
             </div>
           </div>
           {!done && (
             <button onClick={handleIgnore} style={{
-              background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)',
-              cursor: 'pointer', padding: '2px 4px', fontSize: 18, lineHeight: 1,
-              flexShrink: 0, transition: 'color 0.15s',
+              background: 'none', border: 'none', color: 'var(--text-muted)',
+              cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'color 0.15s, background 0.15s', borderRadius: 6,
             }}
-              onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.3)')}
-            >×</button>
+              onMouseEnter={e => {
+                e.currentTarget.style.color = '#fff';
+                e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = 'var(--text-muted)';
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <X size={16} />
+            </button>
           )}
         </div>
 
         {/* Destinations */}
         {!done && (
           <>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
               ¿A dónde va?
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              {dests.map((dest) => (
-                <button
-                  key={dest.path}
-                  onClick={() => handleMove(dest)}
-                  style={{
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.05)',
-                    borderRadius: 8,
-                    padding: '8px 10px',
-                    color: '#fff',
-                    fontSize: 12,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 7,
-                    transition: 'background 0.15s, border-color 0.15s, transform 0.1s',
-                    textAlign: 'left',
-                    fontFamily: 'inherit',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = 'rgba(74,222,128,0.1)';
-                    e.currentTarget.style.borderColor = 'rgba(74,222,128,0.2)';
-                    e.currentTarget.style.transform = 'scale(1.02)';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
-                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
-                >
-                  <span style={{ fontSize: 14 }}>{destIcon(dest.label)}</span>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dest.label}</span>
-                </button>
-              ))}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {dests.map((dest) => {
+                const DestIcon = getDestIcon(dest.label);
+                return (
+                  <button
+                    key={dest.path}
+                    onClick={() => handleMove(dest)}
+                    style={{
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: 8,
+                      padding: '10px 12px',
+                      color: '#fff',
+                      fontSize: 12.5,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      transition: 'all 0.15s ease',
+                      textAlign: 'left',
+                      fontFamily: 'inherit',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'rgba(74,222,128,0.08)';
+                      e.currentTarget.style.borderColor = 'rgba(74,222,128,0.3)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)';
+                    }}
+                  >
+                    <DestIcon size={16} color="var(--accent)" strokeWidth={2} />
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dest.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </>
         )}

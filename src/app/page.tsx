@@ -1217,44 +1217,44 @@ export default function FileOrgApp() {
 
       {/* ─── SIDEBAR ─── */}
       <aside className="sidebar">
-
-        {/* ── Ubicaciones ── */}
-        <SidebarSection title="Ubicaciones" defaultOpen>
-          {[{ path: 'C:\\Users', label: 'Inicio', Icon: HomeIcon }, ...drives.map(d => ({ path: d, label: d, Icon: HardDrive }))].map(({ path, label, Icon }) => (
-            <TreeNode
-              key={path}
-              path={path}
-              label={label}
-              Icon={Icon}
-              isActive={currentPath === path}
-              onNavigate={setCurrentPath}
-            />
-          ))}
-        </SidebarSection>
-
-        {/* ── Accesos Rápidos ── */}
-        <SidebarSection title="Accesos Rápidos" defaultOpen>
-          {quickAccess.map(qa => {
-            let Icon = Folder;
-            if (qa.name === 'Escritorio') Icon = Monitor;
-            else if (qa.name === 'Descargas') Icon = ArrowDown;
-            else if (qa.name === 'Documentos') Icon = FileText;
-            else if (qa.name === 'Imágenes') Icon = ImageIcon;
-            else if (qa.name === 'Videos') Icon = Film;
-            else if (qa.name === 'Música') Icon = Music;
-            return (
+        <div className="sidebar-scroll-area" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+          {/* ── Ubicaciones ── */}
+          <SidebarSection title="Ubicaciones" defaultOpen>
+            {[{ path: 'C:\\Users', label: 'Inicio', Icon: HomeIcon }, ...drives.map(d => ({ path: d, label: d, Icon: HardDrive }))].map(({ path, label, Icon }) => (
               <TreeNode
-                key={qa.path}
-                path={qa.path}
-                label={qa.name}
+                key={path}
+                path={path}
+                label={label}
                 Icon={Icon}
-                isActive={currentPath === qa.path}
+                isActive={currentPath === path}
                 onNavigate={setCurrentPath}
               />
-            );
-          })}
-        </SidebarSection>
+            ))}
+          </SidebarSection>
 
+          {/* ── Accesos Rápidos ── */}
+          <SidebarSection title="Accesos Rápidos" defaultOpen>
+            {quickAccess.map(qa => {
+              let Icon = Folder;
+              if (qa.name === 'Escritorio') Icon = Monitor;
+              else if (qa.name === 'Descargas') Icon = ArrowDown;
+              else if (qa.name === 'Documentos') Icon = FileText;
+              else if (qa.name === 'Imágenes') Icon = ImageIcon;
+              else if (qa.name === 'Videos') Icon = Film;
+              else if (qa.name === 'Música') Icon = Music;
+              return (
+                <TreeNode
+                  key={qa.path}
+                  path={qa.path}
+                  label={qa.name}
+                  Icon={Icon}
+                  isActive={currentPath === qa.path}
+                  onNavigate={setCurrentPath}
+                />
+              );
+            })}
+          </SidebarSection>
+        </div>
 
         {/* ── Papelera ── */}
         <div className="sidebar-section-title" style={{ marginTop: 4 }}>Papelera</div>

@@ -591,6 +591,14 @@ export default function FileOrgApp() {
   const [deleteEntry, setDeleteEntry] = useState<FileEntry | null>(null);
   const [showOrganize, setShowOrganize] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [isElectron, setIsElectron] = useState(false);
+
+  // Detect Electron after mount (preload injects window.electronAPI client-side only)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).electronAPI) {
+      setIsElectron(true);
+    }
+  }, []);
   
   const [inlineRenameEntry, setInlineRenameEntry] = useState<FileEntry | null>(null);
   const [bulkAction, setBulkAction] = useState<'group' | 'zip' | 'rename' | 'move' | 'copy' | 'delete' | null>(null);
@@ -1258,7 +1266,7 @@ export default function FileOrgApp() {
           </button>
 
           {/* ── Electron window controls ── */}
-          {typeof window !== 'undefined' && (window as any).electronAPI && (
+          {isElectron && (
             <div className="win-controls">
               <button
                 className="win-btn win-minimize"

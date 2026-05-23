@@ -38,7 +38,22 @@ export async function POST(request: NextRequest) {
         const items = [];
         for (const p of paths) {
           const dest = path.join(destPath, path.basename(p));
-          fs.renameSync(p, dest);
+          try {
+            fs.renameSync(p, dest);
+          } catch (err: any) {
+            if (err.code === 'EXDEV') {
+              const stat = fs.statSync(p);
+              if (stat.isDirectory()) {
+                fs.cpSync(p, dest, { recursive: true });
+                fs.rmSync(p, { recursive: true, force: true });
+              } else {
+                fs.copyFileSync(p, dest);
+                fs.unlinkSync(p);
+              }
+            } else {
+              throw err;
+            }
+          }
           items.push({ originalPath: p, newPath: dest });
         }
         return NextResponse.json({ 

@@ -1077,9 +1077,12 @@ export default function FileOrgApp() {
         const destName = destPath.split('\\').pop() || destPath;
         toast(`Movidos ${pathsToMove.length} items a ${destName}`, 'success');
         clearSelection();
+      } else {
+        const err = await res.json();
+        toast(`Error al mover: ${err.error || 'Desconocido'}`, 'error');
       }
-    } catch {
-      toast('Error al mover items', 'error');
+    } catch (e: any) {
+      toast(`Error de red al mover items`, 'error');
     }
   };
 

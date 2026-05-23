@@ -148,14 +148,16 @@ interface TreeNodeProps {
   onNavigate: (path: string) => void;
   depth?: number;
   isRoot?: boolean;
+  onDropFiles?: (paths: string[], targetPath: string) => void;
 }
 
 // A single node in the sidebar tree — arrow expands, label navigates (Magic UI style)
-function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot = false }: TreeNodeProps) {
+function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot = false, onDropFiles }: TreeNodeProps) {
   const [open, setOpen] = useState(false);
   const [childFolders, setChildFolders] = useState<{ name: string; path: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const toggle = async (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -186,6 +188,22 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot =
           onNavigate(path);
           if (!open) toggle(e);
         }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+          e.dataTransfer.dropEffect = 'move';
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+          try {
+            const data = JSON.parse(e.dataTransfer.getData('application/json'));
+            if (data.paths && data.paths.length > 0 && onDropFiles) {
+              onDropFiles(data.paths, path);
+            }
+          } catch {}
+        }}
         whileHover={{ backgroundColor: isActive ? undefined : 'rgba(255,255,255,0.04)' }}
         whileTap={{ scale: 0.985 }}
         style={{
@@ -198,7 +216,7 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot =
           paddingBottom: 3,
           borderRadius: 5,
           cursor: 'pointer',
-          backgroundColor: isActive ? 'rgba(74,222,128,0.1)' : 'transparent',
+          backgroundColor: isDragOver ? 'rgba(74,222,128,0.2)' : isActive ? 'rgba(74,222,128,0.1)' : 'transparent',
           position: 'relative',
           userSelect: 'none',
         }}
@@ -292,6 +310,7 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot =
                     isActive={false}
                     onNavigate={onNavigate}
                     depth={depth + 1}
+                    onDropFiles={onDropFiles}
                   />
                 </motion.div>
               ))
@@ -1042,6 +1061,28 @@ export default function FileOrgApp() {
     } catch {}
   };
 
+  const handleTreeNodeDrop = async (paths: string[], destPath: string) => {
+    const pathsToMove = paths.filter(p => p !== destPath);
+    if (pathsToMove.length === 0) return;
+    try {
+      const res = await fetch('/api/fs/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'move', paths: pathsToMove, dest: destPath })
+      });
+      if (res.ok) {
+        const d = await res.json();
+        if (d.undoAction) setUndoHistory(prev => [...prev, d.undoAction]);
+        refresh();
+        const destName = destPath.split('\\').pop() || destPath;
+        toast(`Movidos ${pathsToMove.length} items a ${destName}`, 'success');
+        clearSelection();
+      }
+    } catch {
+      toast('Error al mover items', 'error');
+    }
+  };
+
   const handleTrashDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     try {
@@ -1228,6 +1269,7 @@ export default function FileOrgApp() {
                 Icon={Icon}
                 isActive={currentPath === path}
                 onNavigate={setCurrentPath}
+                onDropFiles={handleTreeNodeDrop}
               />
             ))}
           </SidebarSection>
@@ -1250,6 +1292,7 @@ export default function FileOrgApp() {
                   Icon={Icon}
                   isActive={currentPath === qa.path}
                   onNavigate={setCurrentPath}
+                  onDropFiles={handleTreeNodeDrop}
                 />
               );
             })}

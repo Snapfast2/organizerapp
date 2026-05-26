@@ -462,11 +462,9 @@ app.whenReady().then(() => {
             if (importedItem) {
               importedItem.parentFolder = currentParent;
               // Scroll project panel to show the imported item:
-              // Deselect everything, then reselect only this item
-              // so AE is forced to bring it into view
-              for (var s = 1; s <= app.project.numItems; s++) {
-                try { app.project.items[s].selected = false; } catch(se) {}
-              }
+              // Use AE's native Deselect All (no loop, no folder opening)
+              // then select only our item — AE scrolls to show it
+              try { app.executeCommand(app.findMenuCommandId("Deselect All")); } catch(de) {}
               importedItem.selected = true;
             }
             app.endUndoGroup();

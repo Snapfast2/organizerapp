@@ -241,7 +241,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, path: fullPath, projectFolder });
       }
 
-      case 'migrate-project': {
+      // ── Register any .aep in the Hub at its current path (no moving) ──
+      case 'register-project': {
         const { filePath: aepPath } = body;
         if (!aepPath) return NextResponse.json({ error: 'Falta filePath' }, { status: 400 });
 
@@ -250,15 +251,57 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'El archivo .aep no existe' }, { status: 404 });
         }
 
-        const aepBaseName = path.basename(normAepPath, '.aep');
-        const parentDir = path.dirname(normAepPath);
+        const aepName = path.basename(normAepPath);
+        // Check if it's already in the Hub
+        const already = db.recentProjects.find(
+          p => path.normalize(p.path).toLowerCase() === normAepPath.toLowerCase()
+        );
+        if (already) {
+          // Bump to top
+          db.recentProjects = db.recentProjects.filter(
+            p => path.normalize(p.path).toLowerCase() !== normAepPath.toLowerCase()
+          );
+          db.recentProjects.unshift({ ...already, lastOpened: new Date().toISOString() });
+          saveProjectsDb(db);
+          return NextResponse.json({ success: true, alreadyRegistered: true, path: normAepPath });
+        }
 
-        // Check if already inside its own folder (folder name matches project name)
-        if (path.basename(parentDir) === aepBaseName) {
+        // Detect if the .aep is already in its own named folder
+        const aepBase = path.basename(normAepPath, '.aep');
+        const parentDir = path.dirname(normAepPath);
+        const projectFolder = path.basename(parentDir) === aepBase ? parentDir : undefined;
+
+        db.recentProjects.unshift({
+          path: normAepPath,
+          name: aepName,
+          lastOpened: new Date().toISOString(),
+          projectFolder,
+        });
+        if (db.recentProjects.length > 20) db.recentProjects = db.recentProjects.slice(0, 20);
+        saveProjectsDb(db);
+
+        return NextResponse.json({ success: true, path: normAepPath, projectFolder });
+      }
+
+      case 'migrate-project': {
+        const { filePath: aepPath, targetDirectory } = body;
+        if (!aepPath) return NextResponse.json({ error: 'Falta filePath' }, { status: 400 });
+
+        const normAepPath = path.normalize(aepPath);
+        if (!fs.existsSync(normAepPath)) {
+          return NextResponse.json({ error: 'El archivo .aep no existe' }, { status: 404 });
+        }
+
+        const aepBaseName = path.basename(normAepPath, '.aep');
+        // If targetDirectory is provided (e.g. E:\Motion), move there. Otherwise same dir.
+        const destRoot = targetDirectory ? path.normalize(targetDirectory) : path.dirname(normAepPath);
+
+        // Check if already inside its own folder — only relevant when NOT moving to a new dir
+        if (!targetDirectory && path.basename(path.dirname(normAepPath)) === aepBaseName) {
           return NextResponse.json({ error: 'El proyecto ya tiene su propia carpeta' }, { status: 400 });
         }
 
-        const projectFolder = path.join(parentDir, aepBaseName);
+        const projectFolder = path.join(destRoot, aepBaseName);
         const newAepPath = path.join(projectFolder, `${aepBaseName}.aep`);
 
         // Create the folder structure

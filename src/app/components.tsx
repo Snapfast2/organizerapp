@@ -8,7 +8,8 @@ import {
   Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
   Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
   FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, Check, Tag, Palette,
-  Sparkles, Loader, Cpu, Wifi, WifiOff, ChevronDown, Package, Clapperboard
+  Sparkles, Loader, Cpu, Wifi, WifiOff, ChevronDown, Package, Clapperboard,
+  BookmarkPlus, FolderInput
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
@@ -734,7 +735,7 @@ export function PreviewModal({ entry, allPreviewable, onClose }: {
 }
 
 // ─── Context Menu ──────────────────────────────────────────
-export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, onMoveTo, onUnzip, onMetadata, sortBy, sortDesc, onSort, aeLinkedProjects, onOpenAEProject, onPackProject, onImportAE }: {
+export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, onMoveTo, onUnzip, onMetadata, sortBy, sortDesc, onSort, aeLinkedProjects, onOpenAEProject, onPackProject, onImportAE, onRegisterInHub, onMoveToMotion }: {
   x: number; y: number; entry: FileEntry | null;
   onClose: () => void; onRename: () => void; onDelete: () => void;
   onMkdir: () => void; onOpen: () => void; onPreview: () => void;
@@ -745,6 +746,8 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
   onOpenAEProject?: (path: string) => void;
   onPackProject?: (path: string) => void;
   onImportAE?: (path: string) => void;
+  onRegisterInHub?: (path: string) => void;   // Add .aep to Hub at current location
+  onMoveToMotion?: (path: string) => void;    // Move .aep to E:\Motion + create folder structure
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
@@ -804,6 +807,20 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
             <div className="context-menu-item accent" onClick={() => onPackProject && onPackProject(entry.path)}>
               <Package size={13} /> Empaquetar Proyecto
             </div>
+          )}
+          {entry.ext === 'aep' && onRegisterInHub && (
+            <>
+              <div className="context-menu-sep" />
+              <div className="context-menu-section-label" style={{ color: '#4ade80', fontSize: 9.5 }}>🎬 HUB DE PROYECTOS</div>
+              <div className="context-menu-item" style={{ color: '#4ade80' }} onClick={() => { onRegisterInHub(entry.path); onClose(); }}>
+                <BookmarkPlus size={13} color="#4ade80" /> Agregar al Hub
+              </div>
+              {onMoveToMotion && (
+                <div className="context-menu-item" style={{ color: '#4ade80' }} onClick={() => { onMoveToMotion(entry.path); onClose(); }}>
+                  <FolderInput size={13} color="#4ade80" /> Mover a Motion + Hub
+                </div>
+              )}
+            </>
           )}
           {!entry.isDir && onImportAE && entry.ext !== 'aep' && (
             <div className="context-menu-item" style={{ color: '#e5b3ff' }} onClick={() => onImportAE(entry.path)}>

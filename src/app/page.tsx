@@ -1823,6 +1823,47 @@ export default function FileOrgApp() {
                 toast('Importando a After Effects...', 'success');
               }
             } : undefined}
+            onRegisterInHub={async (aepPath) => {
+              try {
+                const res = await fetch('/api/ae-hub', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'register-project', filePath: aepPath })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                  toast(data.alreadyRegistered ? '✓ Ya estaba en el Hub (movido al top)' : '✓ Proyecto agregado al Hub', 'success');
+                } else {
+                  toast(data.error || 'Error al registrar', 'error');
+                }
+              } catch {
+                toast('Error de red', 'error');
+              }
+            }}
+            onMoveToMotion={async (aepPath) => {
+              try {
+                const res = await fetch('/api/ae-hub', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'migrate-project', filePath: aepPath, targetDirectory: 'E:\\Motion' })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                  const assetMsg = data.copiedAssets > 0 ? `, ${data.copiedAssets} asset(s) copiados` : '';
+                  toast(`✓ Movido a E:\\Motion${assetMsg}`, 'success');
+                  if (data.relinkScript) {
+                    const api = (window as any).electronAPI;
+                    api?.aeRunRelinkScript?.(data.relinkScript);
+                  }
+                  // Navigate to the new project folder
+                  navigate(data.projectFolder);
+                } else {
+                  toast(data.error || 'Error al mover', 'error');
+                }
+              } catch {
+                toast('Error de red', 'error');
+              }
+            }}
           />
         )}
       </AnimatePresence>

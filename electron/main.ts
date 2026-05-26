@@ -285,99 +285,106 @@ app.whenReady().then(() => {
       
       const aePath = match[1].trim();
 
-      // ── STEP 1: Detect which AE project is active ───────────────
-      // Strategy A: Try to get project path via AE command line
-      let activeAepPath = '';
-      const tempResultPath = path.join(os.tmpdir(), 'ae_active_project_result.txt');
-      try {
-        if (fs.existsSync(tempResultPath)) fs.unlinkSync(tempResultPath);
-
-        const safeTemp = tempResultPath.replace(/\\/g, '/');
-        const getProjectScript = [
-          'try {',
-          `  var result = (app.project && app.project.file) ? app.project.file.fsName : "";`,
-          `  var f = new File("${safeTemp}");`,
-          '  f.open("w"); f.write(result); f.close();',
-          '} catch(err) {',
-          `  var f = new File("${safeTemp}");`,
-          '  f.open("w"); f.write(""); f.close();',
-          '}',
-        ].join('\n');
-
-        const tempGetProjJsx = path.join(os.tmpdir(), 'ae_get_proj.jsx');
-        fs.writeFileSync(tempGetProjJsx, getProjectScript);
-
-        // Use /r flag (run script file) instead of -s for reliability
-        exec(`"${aePath}" -r "${tempGetProjJsx}"`);
-
-        // Poll up to 6 seconds
-        for (let i = 0; i < 30; i++) {
-          await new Promise(r => setTimeout(r, 200));
-          if (fs.existsSync(tempResultPath)) {
-            const raw = fs.readFileSync(tempResultPath, 'utf-8').trim();
-            if (raw) {
-              // Normalize: AE may return forward slashes on Windows
-              activeAepPath = path.normalize(raw);
-            }
-            break;
-          }
-        }
-      } catch { /* Strategy A failed, will use fallback */ }
-
-      // ── STEP 2: Find projectFolder — DB lookup with smart fallback ──
+      // ── STEP 1 & 2: Find projectFolder — DB first (instant), AE query only if needed ──
       let projectFolder: string | null = null;
+      let activeAepPath = '';
+
+      // Helper: resolve projectFolder from DB projects list
+      const resolveProjectFolder = (projects: any[]): string | null => {
+        // A: exact match by AE-reported path
+        if (activeAepPath) {
+          const exact = projects.find(
+            p => path.normalize(p.path).toLowerCase() === activeAepPath.toLowerCase()
+          );
+          if (exact?.projectFolder && fs.existsSync(exact.projectFolder)) return exact.projectFolder;
+        }
+        // B: infer from folder structure (E:\Motion\Proj\Proj.aep → E:\Motion\Proj)
+        const withFolder = projects.map((p: any) => {
+          if (p.projectFolder && fs.existsSync(p.projectFolder)) return p;
+          const aepBase = path.basename(p.path, '.aep');
+          const parentDir = path.dirname(p.path);
+          if (path.basename(parentDir) === aepBase && fs.existsSync(parentDir)) {
+            return { ...p, projectFolder: parentDir };
+          }
+          return null;
+        }).filter(Boolean);
+
+        if (withFolder.length === 0) return null;
+
+        // Sort by most recently opened
+        const sorted = [...withFolder].sort(
+          (a: any, b: any) => new Date(b.lastOpened).getTime() - new Date(a.lastOpened).getTime()
+        );
+        return sorted[0].projectFolder;
+      };
+
+      // ── Fast path: read DB immediately (no AE query needed in 95% of cases) ──
       try {
         const dbData = JSON.parse(fs.readFileSync(AE_PROJECTS_DB_PATH, 'utf-8'));
         const projects: any[] = dbData.recentProjects || [];
+        projectFolder = resolveProjectFolder(projects);
 
-        if (activeAepPath) {
-          // Try exact match first (normalize both sides for comparison)
-          const exactMatch = projects.find(
-            p => path.normalize(p.path).toLowerCase() === activeAepPath.toLowerCase()
+        if (projectFolder) {
+          console.log(`[SmartCollect] Fast path → ${projectFolder}`);
+
+          // Persist inferred projectFolder if it was missing
+          const needsPatch = projects.some(p => !p.projectFolder &&
+            path.normalize(path.join(path.dirname(p.path))).toLowerCase() ===
+            path.normalize(projectFolder!).toLowerCase()
           );
-          if (exactMatch?.projectFolder && fs.existsSync(exactMatch.projectFolder)) {
-            projectFolder = exactMatch.projectFolder;
-          }
-        }
-
-        // Fallback: use the most recently opened project that has (or can infer) a valid projectFolder
-        // This covers the case where Strategy A fails or path comparison misses
-        if (!projectFolder) {
-          // Also infer projectFolder for projects where the .aep sits inside a same-named folder
-          const withFolder = projects.map((p: any) => {
-            if (p.projectFolder && fs.existsSync(p.projectFolder)) return p;
-            // Infer: E:\Motion\PaLosde30\PaLosde30.aep → projectFolder = E:\Motion\PaLosde30
-            const aepBase = path.basename(p.path, '.aep');
-            const parentDir = path.dirname(p.path);
-            if (path.basename(parentDir) === aepBase && fs.existsSync(parentDir)) {
-              return { ...p, projectFolder: parentDir };
-            }
-            return null;
-          }).filter(Boolean);
-
-          const sorted = withFolder
-            .sort((a: any, b: any) => new Date(b.lastOpened).getTime() - new Date(a.lastOpened).getTime());
-
-          if (sorted.length > 0) {
-            projectFolder = sorted[0].projectFolder;
-            const projName = sorted[0].name || path.basename(projectFolder!);
-            console.log(`[SmartCollect] Fallback project: ${projName} → ${projectFolder}`);
-
-            // Persist the inferred projectFolder back to DB so next time it's found directly
-            try {
-              const freshDb = JSON.parse(fs.readFileSync(AE_PROJECTS_DB_PATH, 'utf-8'));
-              freshDb.recentProjects = (freshDb.recentProjects || []).map((p: any) => {
-                if (path.normalize(p.path).toLowerCase() === path.normalize(sorted[0].path).toLowerCase()) {
-                  return { ...p, projectFolder };
-                }
-                return p;
-              });
-              fs.writeFileSync(AE_PROJECTS_DB_PATH, JSON.stringify(freshDb, null, 2));
-            } catch { /* ignore write error */ }
+          if (needsPatch) {
+            const patched = { ...dbData, recentProjects: projects.map((p: any) => {
+              const parentDir = path.dirname(p.path);
+              if (!p.projectFolder && path.basename(parentDir) === path.basename(p.path, '.aep')) {
+                return { ...p, projectFolder: parentDir };
+              }
+              return p;
+            })};
+            fs.writeFileSync(AE_PROJECTS_DB_PATH, JSON.stringify(patched, null, 2));
           }
         }
       } catch (dbErr) {
         console.error('[SmartCollect] DB read failed:', dbErr);
+      }
+
+      // ── Slow path: only query AE if DB lookup found nothing (rare edge case) ──
+      if (!projectFolder) {
+        console.log('[SmartCollect] DB miss — querying AE for active project...');
+        const tempResultPath = path.join(os.tmpdir(), 'ae_active_project_result.txt');
+        try {
+          if (fs.existsSync(tempResultPath)) fs.unlinkSync(tempResultPath);
+          const safeTemp = tempResultPath.replace(/\\/g, '/');
+          const scriptLines = [
+            'try {',
+            `  var result = (app.project && app.project.file) ? app.project.file.fsName : "";`,
+            `  var f = new File("${safeTemp}");`,
+            '  f.open("w"); f.write(result); f.close();',
+            '} catch(err) {',
+            `  var f = new File("${safeTemp}");`,
+            '  f.open("w"); f.write(""); f.close();',
+            '}',
+          ].join('\n');
+          const tempJsx = path.join(os.tmpdir(), 'ae_get_proj.jsx');
+          fs.writeFileSync(tempJsx, scriptLines);
+          exec(`"${aePath}" -r "${tempJsx}"`);
+
+          // Short poll — max 1.5 seconds (we already know DB failed so we're in edge case)
+          for (let i = 0; i < 8; i++) {
+            await new Promise(r => setTimeout(r, 200));
+            if (fs.existsSync(tempResultPath)) {
+              const raw = fs.readFileSync(tempResultPath, 'utf-8').trim();
+              if (raw) activeAepPath = path.normalize(raw);
+              break;
+            }
+          }
+
+          // Re-try DB lookup with AE-reported path
+          if (activeAepPath) {
+            const dbData = JSON.parse(fs.readFileSync(AE_PROJECTS_DB_PATH, 'utf-8'));
+            projectFolder = resolveProjectFolder(dbData.recentProjects || []);
+            if (projectFolder) console.log(`[SmartCollect] AE query path → ${projectFolder}`);
+          }
+        } catch { /* ignore */ }
       }
 
       // ── STEP 3: Copy asset to project folder if we have one ─────

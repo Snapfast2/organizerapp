@@ -8,7 +8,12 @@ import util from 'util';
 
 const execAsync = util.promisify(exec);
 
-const AE_PROJECTS_DB_PATH = path.join(process.cwd(), 'ae-projects.json');
+// Resolve ae-projects.json reliably from the project root regardless of cwd
+// __dirname in Electron main = .../electron/ (dev) or .../app/electron/ (prod)
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const AE_PROJECTS_DB_PATH = path.join(PROJECT_ROOT, 'ae-projects.json');
+console.log('[DB] ae-projects.json path:', AE_PROJECTS_DB_PATH);
+
 
 const EXT_TO_ASSETS_SUBFOLDER: Record<string, string> = {
   png: 'Images', jpg: 'Images', jpeg: 'Images', webp: 'Images', tif: 'Images',
@@ -335,15 +340,40 @@ app.whenReady().then(() => {
           }
         }
 
-        // Fallback: use the most recently opened project that has a valid projectFolder
+        // Fallback: use the most recently opened project that has (or can infer) a valid projectFolder
         // This covers the case where Strategy A fails or path comparison misses
         if (!projectFolder) {
-          const sorted = [...projects]
-            .filter(p => p.projectFolder && fs.existsSync(p.projectFolder))
-            .sort((a, b) => new Date(b.lastOpened).getTime() - new Date(a.lastOpened).getTime());
+          // Also infer projectFolder for projects where the .aep sits inside a same-named folder
+          const withFolder = projects.map((p: any) => {
+            if (p.projectFolder && fs.existsSync(p.projectFolder)) return p;
+            // Infer: E:\Motion\PaLosde30\PaLosde30.aep → projectFolder = E:\Motion\PaLosde30
+            const aepBase = path.basename(p.path, '.aep');
+            const parentDir = path.dirname(p.path);
+            if (path.basename(parentDir) === aepBase && fs.existsSync(parentDir)) {
+              return { ...p, projectFolder: parentDir };
+            }
+            return null;
+          }).filter(Boolean);
+
+          const sorted = withFolder
+            .sort((a: any, b: any) => new Date(b.lastOpened).getTime() - new Date(a.lastOpened).getTime());
+
           if (sorted.length > 0) {
             projectFolder = sorted[0].projectFolder;
-            console.log(`[SmartCollect] Using fallback project: ${sorted[0].name} → ${projectFolder}`);
+            const projName = sorted[0].name || path.basename(projectFolder!);
+            console.log(`[SmartCollect] Fallback project: ${projName} → ${projectFolder}`);
+
+            // Persist the inferred projectFolder back to DB so next time it's found directly
+            try {
+              const freshDb = JSON.parse(fs.readFileSync(AE_PROJECTS_DB_PATH, 'utf-8'));
+              freshDb.recentProjects = (freshDb.recentProjects || []).map((p: any) => {
+                if (path.normalize(p.path).toLowerCase() === path.normalize(sorted[0].path).toLowerCase()) {
+                  return { ...p, projectFolder };
+                }
+                return p;
+              });
+              fs.writeFileSync(AE_PROJECTS_DB_PATH, JSON.stringify(freshDb, null, 2));
+            } catch { /* ignore write error */ }
           }
         }
       } catch (dbErr) {

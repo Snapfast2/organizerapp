@@ -1,21 +1,40 @@
 {
-  "recentProjects": [
-    {
-      "path": "E:\\Motion\\End Game test.aep",
-      "name": "End Game test.aep",
-      "lastOpened": "2026-05-26T16:09:01.408Z"
-    }
-  ],
-  "groups": [
-    {
-      "id": "group-1779811685955",
-      "name": "End Game",
-      "projectPaths": []
-    },
-    {
-      "id": "group-1779812376222",
-      "name": "Luminal Eye",
-      "projectPaths": []
-    }
-  ]
+    "recentProjects":  [
+                           {
+                               "path":  "E:\\Motion\\PaLosde30\\PaLosde30.aep",
+                               "name":  "PaLosde30.aep",
+                               "lastOpened":  "2026-05-26T22:04:08.418Z",
+                               "projectFolder":  "E:\\Motion\\PaLosde30"
+                           },
+                           {
+                               "path":  "E:\\Motion\\LuminalTest\\LuminalTest.aep",
+                               "name":  "LuminalTest.aep",
+                               "lastOpened":  "2026-05-26T18:19:49.955Z",
+                               "projectFolder":  "E:\\Motion\\LuminalTest",
+                               "colorLabel":  "red"
+                           },
+                           {
+                               "path":  "E:\\Motion\\End Game test\\End Game test.aep",
+                               "name":  "End Game test.aep",
+                               "lastOpened":  "2026-05-26T16:09:01.408Z",
+                               "colorLabel":  "red",
+                               "projectFolder":  "E:\\Motion\\End Game test"
+                           }
+                       ],
+    "groups":  [
+                   {
+                       "id":  "group-1779811685955",
+                       "name":  "End Game",
+                       "projectPaths":  [
+
+                                        ]
+                   },
+                   {
+                       "id":  "group-1779812376222",
+                       "name":  "Luminal Eye",
+                       "projectPaths":  [
+                                            "E:\\Motion\\End Game test\\End Game test.aep"
+                                        ]
+                   }
+               ]
 }

@@ -54,6 +54,7 @@ function PopupContent() {
   const [moving, setMoving] = useState(false);
   const [done, setDone] = useState(false);
   const [movedTo, setMovedTo] = useState('');
+  const [deleteOriginal, setDeleteOriginal] = useState(false);
   
   // Mouse tracking for reactive MagicCard effect
   const [mouseX, setMouseX] = useState(-1000);
@@ -112,9 +113,9 @@ function PopupContent() {
     setMoving(true);
     const api = (window as any).electronAPI;
     if (api) {
-      api.popupImportAE(filePath);
+      api.popupImportAE(filePath, deleteOriginal);
     }
-    setMovedTo("After Effects");
+    setMovedTo('After Effects');
     setDone(true);
     setTimeout(() => api?.popupIgnore(), 1600);
   };
@@ -265,37 +266,53 @@ function PopupContent() {
                   ¿A dónde va?
                 </div>
                 {isAE && (
-                  <button
-                    onClick={handleAEImport}
-                    style={{
-                      background: 'rgba(215, 142, 255, 0.1)',
-                      border: '1px solid rgba(215, 142, 255, 0.3)',
-                      borderRadius: 8,
-                      padding: '10px 12px',
-                      color: '#e5b3ff',
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      transition: 'all 0.15s ease',
-                      width: '100%',
-                      marginBottom: 8,
-                      fontFamily: 'inherit',
-                      WebkitAppRegion: 'no-drag',
-                    } as any}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = 'rgba(215, 142, 255, 0.2)';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = 'rgba(215, 142, 255, 0.1)';
-                    }}
-                  >
-                    <Clapperboard size={16} color="#e5b3ff" strokeWidth={2.5} />
-                    <span>Importar a After Effects</span>
-                  </button>
+                  <>
+                    <button
+                      onClick={handleAEImport}
+                      style={{
+                        background: 'rgba(215, 142, 255, 0.1)',
+                        border: '1px solid rgba(215, 142, 255, 0.3)',
+                        borderRadius: 8,
+                        padding: '10px 12px',
+                        color: '#e5b3ff',
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        transition: 'all 0.15s ease',
+                        width: '100%',
+                        marginBottom: 6,
+                        fontFamily: 'inherit',
+                        WebkitAppRegion: 'no-drag',
+                      } as any}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(215, 142, 255, 0.2)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(215, 142, 255, 0.1)'; }}
+                    >
+                      <Clapperboard size={16} color="#e5b3ff" strokeWidth={2.5} />
+                      <span>Importar a After Effects</span>
+                    </button>
+                    {/* Delete original checkbox */}
+                    <label
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 7,
+                        marginBottom: 8, cursor: 'pointer',
+                        WebkitAppRegion: 'no-drag',
+                      } as any}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={deleteOriginal}
+                        onChange={e => setDeleteOriginal(e.target.checked)}
+                        style={{ accentColor: '#e5b3ff', cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        Eliminar original tras copiar al proyecto
+                      </span>
+                    </label>
+                  </>
                 )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {dests.map((dest) => {

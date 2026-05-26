@@ -17,6 +17,38 @@ interface RecentProject {
   dependencyCount?: number;
   exists?: boolean;
   colorLabel?: string; // AE-style color label: 'none'|'red'|'yellow'|'green'|'blue'|'purple'|'pink'
+  projectFolder?: string; // Root folder of the project (contains .aep + Assets/ Renders/ etc.)
+}
+
+// Extension → Assets subfolder mapping
+const EXT_TO_FOLDER: Record<string, string> = {
+  png: 'Images', jpg: 'Images', jpeg: 'Images', webp: 'Images', tif: 'Images',
+  tiff: 'Images', exr: 'Images', nef: 'Images', dpx: 'Images', psd: 'Images',
+  gif: 'Images',
+  mp4: 'Video', mov: 'Video', avi: 'Video', mkv: 'Video', webm: 'Video',
+  mxf: 'Video', m4v: 'Video', '3gp': 'Video',
+  mp3: 'Audio', wav: 'Audio', aac: 'Audio', flac: 'Audio', aif: 'Audio',
+  aiff: 'Audio', ogg: 'Audio', m4a: 'Audio',
+  ai: 'Vector', svg: 'Vector', eps: 'Vector',
+  ttf: 'Fonts', otf: 'Fonts',
+  c4d: 'Other', jsx: 'Other', jsxbin: 'Other', txt: 'Other', json: 'Other',
+};
+
+function getAssetSubfolder(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase().replace('.', '');
+  return EXT_TO_FOLDER[ext] || 'Other';
+}
+
+function createProjectFolderStructure(projectFolder: string) {
+  const subfolders = [
+    'Assets/Images', 'Assets/Video', 'Assets/Audio',
+    'Assets/Vector', 'Assets/Fonts', 'Assets/Other',
+    'Renders', 'Exports'
+  ];
+  fs.mkdirSync(projectFolder, { recursive: true });
+  for (const sub of subfolders) {
+    fs.mkdirSync(path.join(projectFolder, sub), { recursive: true });
+  }
 }
 
 interface VisualGroup {
@@ -150,72 +182,193 @@ export async function POST(request: NextRequest) {
         const { name, directory } = body;
         if (!name) return NextResponse.json({ error: 'Falta nombre' }, { status: 400 });
 
-        const targetDir = directory || 'E:\\Motion';
+        const rootDir = directory || 'E:\\Motion';
+        const projectBaseName = name.replace(/\.aep$/i, '').trim();
+        const projectFolder = path.join(rootDir, projectBaseName);
         
-        // Ensure directory exists
+        // Create the full folder structure
         try {
-          if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
-          }
+          createProjectFolderStructure(projectFolder);
         } catch (e: any) {
           return NextResponse.json({ error: `No se pudo crear la carpeta: ${e.message}` }, { status: 500 });
         }
 
-        const cleanName = name.endsWith('.aep') ? name : `${name}.aep`;
-        const fullPath = path.join(targetDir, cleanName);
+        const cleanName = `${projectBaseName}.aep`;
+        const fullPath = path.join(projectFolder, cleanName);
 
         // Find AE Path
         let aePath = '';
         try {
           const { stdout: regOut } = await execAsync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe" /ve');
           const match = regOut.match(/REG_SZ\s+(.+)$/im);
-          if (match) {
-            aePath = match[1].trim();
-          }
+          if (match) aePath = match[1].trim();
         } catch {
-          // Fallback to common path
           const fallback = 'C:\\Program Files\\Adobe\\Adobe After Effects 2024\\Support Files\\AfterFX.exe';
-          if (fs.existsSync(fallback)) {
-            aePath = fallback;
-          }
+          if (fs.existsSync(fallback)) aePath = fallback;
         }
 
         if (!aePath) {
           return NextResponse.json({ error: 'No se encontró la instalación de After Effects' }, { status: 404 });
         }
 
-        // Generate JSX Script
+        // Generate JSX Script — create and save the project at the new path
         const scriptContent = `
           try {
             app.newProject();
             var myFile = new File("${fullPath.replace(/\\/g, '/')}");
             app.project.save(myFile);
-          } catch(e) {
-            // silent error
-          }
+          } catch(e) {}
         `;
 
         const tempJsx = path.join(require('os').tmpdir(), `ae_create_${Date.now()}.jsx`);
         fs.writeFileSync(tempJsx, scriptContent);
-        
         const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
-
-        // Run After Effects asynchronously so we don't block the API
         exec(`"${aePath}" -s "${evalScript}"`, (err) => {
-          if (err) console.error("Error al abrir AE con el proyecto nuevo:", err);
+          if (err) console.error('Error al abrir AE:', err);
         });
 
-        // Add to recent projects
+        // Add to recent projects with projectFolder
         db.recentProjects = db.recentProjects.filter(p => path.normalize(p.path) !== path.normalize(fullPath));
         db.recentProjects.unshift({
           path: fullPath,
           name: cleanName,
-          lastOpened: new Date().toISOString()
+          lastOpened: new Date().toISOString(),
+          projectFolder
         });
+        if (db.recentProjects.length > 20) db.recentProjects = db.recentProjects.slice(0, 20);
 
         saveProjectsDb(db);
+        return NextResponse.json({ success: true, path: fullPath, projectFolder });
+      }
 
-        return NextResponse.json({ success: true, path: fullPath });
+      case 'migrate-project': {
+        const { filePath: aepPath } = body;
+        if (!aepPath) return NextResponse.json({ error: 'Falta filePath' }, { status: 400 });
+
+        const normAepPath = path.normalize(aepPath);
+        if (!fs.existsSync(normAepPath)) {
+          return NextResponse.json({ error: 'El archivo .aep no existe' }, { status: 404 });
+        }
+
+        const aepBaseName = path.basename(normAepPath, '.aep');
+        const parentDir = path.dirname(normAepPath);
+
+        // Check if already inside its own folder (folder name matches project name)
+        if (path.basename(parentDir) === aepBaseName) {
+          return NextResponse.json({ error: 'El proyecto ya tiene su propia carpeta' }, { status: 400 });
+        }
+
+        const projectFolder = path.join(parentDir, aepBaseName);
+        const newAepPath = path.join(projectFolder, `${aepBaseName}.aep`);
+
+        // Create the folder structure
+        try {
+          createProjectFolderStructure(projectFolder);
+        } catch (e: any) {
+          return NextResponse.json({ error: `Error al crear estructura: ${e.message}` }, { status: 500 });
+        }
+
+        // Move the .aep into the new folder
+        fs.copyFileSync(normAepPath, newAepPath);
+
+        // Find all linked assets for this project
+        const linksDb = getLinksDb();
+        const oldToNew: Record<string, string> = {};
+        const copiedAssets: string[] = [];
+        const missingAssets: string[] = [];
+
+        for (const [assetPath, projects] of Object.entries(linksDb)) {
+          const linkedToThis = projects.some(
+            p => path.normalize(p).toLowerCase() === normAepPath.toLowerCase()
+          );
+          if (!linkedToThis) continue;
+
+          if (!fs.existsSync(assetPath)) {
+            missingAssets.push(assetPath);
+            continue;
+          }
+
+          const subfolder = getAssetSubfolder(assetPath);
+          const destDir = path.join(projectFolder, 'Assets', subfolder);
+          const destPath = path.join(destDir, path.basename(assetPath));
+
+          // If destPath already exists, add a suffix to avoid collision
+          const finalDest = fs.existsSync(destPath)
+            ? path.join(destDir, `${path.basename(assetPath, path.extname(assetPath))}_copy${path.extname(assetPath)}`)
+            : destPath;
+
+          try {
+            fs.copyFileSync(assetPath, finalDest);
+            oldToNew[assetPath] = finalDest;
+            copiedAssets.push(finalDest);
+          } catch (copyErr) {
+            missingAssets.push(assetPath);
+          }
+        }
+
+        // Build a relinking ExtendScript if AE is available
+        let relinkScript = '';
+        if (Object.keys(oldToNew).length > 0) {
+          const mapping = JSON.stringify(oldToNew).replace(/\\/g, '/');
+          relinkScript = `
+            try {
+              var mapping = ${mapping.replace(/\\/g, '/')};
+              var normMap = {};
+              for (var k in mapping) {
+                normMap[k.replace(/\\\\/g, '/')] = mapping[k].replace(/\\\\/g, '/');
+              }
+              for (var i = 1; i <= app.project.items.length; i++) {
+                var item = app.project.items[i];
+                if (item instanceof FootageItem && item.file) {
+                  var fp = item.file.fsName.replace(/\\\\/g, '/');
+                  if (normMap[fp]) {
+                    var nf = new File(normMap[fp]);
+                    if (nf.exists) {
+                      item.replace(new ImportOptions(nf));
+                    }
+                  }
+                }
+              }
+              app.project.save();
+            } catch(e) {}
+          `;
+        }
+
+        // Delete original .aep after copy
+        try { fs.unlinkSync(normAepPath); } catch {}
+
+        // Update DB
+        const projectEntry = db.recentProjects.find(
+          p => path.normalize(p.path).toLowerCase() === normAepPath.toLowerCase()
+        );
+        if (projectEntry) {
+          projectEntry.path = newAepPath;
+          projectEntry.name = `${aepBaseName}.aep`;
+          projectEntry.projectFolder = projectFolder;
+        } else {
+          db.recentProjects.unshift({
+            path: newAepPath,
+            name: `${aepBaseName}.aep`,
+            lastOpened: new Date().toISOString(),
+            projectFolder
+          });
+        }
+        // Update group references
+        db.groups.forEach(g => {
+          g.projectPaths = g.projectPaths.map(p =>
+            path.normalize(p).toLowerCase() === normAepPath.toLowerCase() ? newAepPath : p
+          );
+        });
+        saveProjectsDb(db);
+
+        return NextResponse.json({
+          success: true,
+          newAepPath,
+          projectFolder,
+          copiedAssets: copiedAssets.length,
+          missingAssets,
+          relinkScript: relinkScript.trim() || null
+        });
       }
 
       case 'create-group': {

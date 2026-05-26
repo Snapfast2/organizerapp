@@ -1,11 +1,28 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, screen, Notification } from 'electron';
 import path from 'path';
+import os from 'os';
 import fs from 'fs';
 import chokidar from 'chokidar';
 import { exec, execSync } from 'child_process';
 import util from 'util';
 
 const execAsync = util.promisify(exec);
+
+const AE_PROJECTS_DB_PATH = path.join(process.cwd(), 'ae-projects.json');
+
+const EXT_TO_ASSETS_SUBFOLDER: Record<string, string> = {
+  png: 'Images', jpg: 'Images', jpeg: 'Images', webp: 'Images', tif: 'Images',
+  tiff: 'Images', exr: 'Images', nef: 'Images', dpx: 'Images', psd: 'Images', gif: 'Images',
+  mp4: 'Video', mov: 'Video', avi: 'Video', mkv: 'Video', webm: 'Video', mxf: 'Video', m4v: 'Video',
+  mp3: 'Audio', wav: 'Audio', aac: 'Audio', flac: 'Audio', aif: 'Audio', aiff: 'Audio', ogg: 'Audio', m4a: 'Audio',
+  ai: 'Vector', svg: 'Vector', eps: 'Vector',
+  ttf: 'Fonts', otf: 'Fonts',
+};
+
+function getAssetSubfolder(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase().replace('.', '');
+  return EXT_TO_ASSETS_SUBFOLDER[ext] || 'Other';
+}
 
 const isDev = process.env.NODE_ENV === 'development';
 const NEXT_PORT = 3000;
@@ -252,109 +269,180 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.on('popup-import-ae', async (e, filePath) => {
+  ipcMain.on('popup-import-ae', async (e, payload: { filePath: string; deleteOriginal?: boolean } | string) => {
+    const filePath = typeof payload === 'string' ? payload : payload.filePath;
+    const deleteOriginal = typeof payload === 'string' ? false : (payload.deleteOriginal ?? false);
     try {
       // Find AE path
       const { stdout: regOut } = await execAsync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe" /ve');
       const match = regOut.match(/REG_SZ\s+(.+)$/im);
-      if (!match) throw new Error("After Effects no encontrado en el registro");
+      if (!match) throw new Error('After Effects no encontrado en el registro');
       
       const aePath = match[1].trim();
-      const ext = path.extname(filePath).toLowerCase().replace('.', '');
-      
-      let folderPath = ["Other"];
-      if (['aep', 'prproj', 'mogrt', 'ffx', 'jsx', 'jsxbin', 'psd', 'aet', 'aepx', 'sqpreset'].includes(ext)) {
-        folderPath = ["Adobe"];
-      } else if (['png', 'jpg', 'jpeg', 'nef', 'exr', 'tif', 'dpx', 'pam', 'pbm', 'pcx', 'ptx', 'webp'].includes(ext)) {
-        folderPath = ["Image"];
-      } else if (ext === 'gif') {
-        folderPath = ["Image", "GIFs"]; // Subcarpeta
-      } else if (['mp4', 'avi', 'mov', 'webm', 'mkv', '3gp', 'm4v', 'apng', 'mxf'].includes(ext)) {
-        folderPath = ["Video"];
-      } else if (['mp3', 'wav', 'wma', 'flac', 'aac', 'ac3', 'aif', 'aiff', 'mpa', 'm4a', 'mp2', 'ogg', 'oga', 'ogm', 'ogv'].includes(ext)) {
-        folderPath = ["Audio"];
+
+      // ── STEP 1: Ask AE which project is currently open ──────────
+      const tempResultPath = path.join(os.tmpdir(), 'ae_active_project_result.txt');
+      if (fs.existsSync(tempResultPath)) fs.unlinkSync(tempResultPath);
+
+      const getProjectScript = `
+        try {
+          var result = (app.project && app.project.file) ? app.project.file.fsName : "";
+          var f = new File("${tempResultPath.replace(/\\/g, '/')}");
+          f.open("w"); f.write(result); f.close();
+        } catch(e) {
+          var f = new File("${tempResultPath.replace(/\\/g, '/')}");
+          f.open("w"); f.write(""); f.close();
+        }
+      `;
+      const tempGetProjJsx = path.join(os.tmpdir(), 'ae_get_proj.jsx');
+      fs.writeFileSync(tempGetProjJsx, getProjectScript);
+      const getEval = `$.evalFile('${tempGetProjJsx.replace(/\\/g, '/')}');`;
+      await execAsync(`"${aePath}" -s "${getEval}"`);
+
+      // Wait up to 4s for AE to write the file
+      let activeAepPath = '';
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 200));
+        if (fs.existsSync(tempResultPath)) {
+          activeAepPath = fs.readFileSync(tempResultPath, 'utf-8').trim();
+          break;
+        }
+      }
+
+      // ── STEP 2: Find project folder in our DB ───────────────────
+      let projectFolder: string | null = null;
+      if (activeAepPath) {
+        try {
+          const dbData = JSON.parse(fs.readFileSync(AE_PROJECTS_DB_PATH, 'utf-8'));
+          const entry = (dbData.recentProjects || []).find(
+            (p: any) => path.normalize(p.path).toLowerCase() === path.normalize(activeAepPath).toLowerCase()
+          );
+          if (entry?.projectFolder && fs.existsSync(entry.projectFolder)) {
+            projectFolder = entry.projectFolder;
+          }
+        } catch { /* no DB */ }
+      }
+
+      // ── STEP 3: Copy asset to project folder if we have one ─────
+      let importPath = filePath; // Default: import from original location
+      let copiedToProject = false;
+
+      if (projectFolder) {
+        const subfolder = getAssetSubfolder(filePath);
+        const destDir = path.join(projectFolder, 'Assets', subfolder);
+        fs.mkdirSync(destDir, { recursive: true });
+
+        const baseName = path.basename(filePath);
+        let destPath = path.join(destDir, baseName);
+        // Handle name collisions
+        if (fs.existsSync(destPath)) {
+          const ext = path.extname(baseName);
+          const stem = path.basename(baseName, ext);
+          destPath = path.join(destDir, `${stem}_${Date.now()}${ext}`);
+        }
+        try {
+          fs.copyFileSync(filePath, destPath);
+          importPath = destPath;
+          copiedToProject = true;
+          // Delete original if requested
+          if (deleteOriginal) {
+            try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+          }
+        } catch { /* if copy fails, fall back to original path */ }
+      }
+
+      // ── STEP 4: Import into AE from importPath ──────────────────
+
+      const ext = path.extname(importPath).toLowerCase().replace('.', '');
+      let folderPath = ['Other'];
+      if (['aep', 'prproj', 'mogrt', 'ffx', 'jsx', 'jsxbin', 'psd', 'aet', 'aepx'].includes(ext)) {
+        folderPath = ['Adobe'];
+      } else if (['png', 'jpg', 'jpeg', 'nef', 'exr', 'tif', 'dpx', 'webp', 'gif', 'psd'].includes(ext)) {
+        folderPath = ['Image'];
+      } else if (['mp4', 'avi', 'mov', 'webm', 'mkv', '3gp', 'm4v', 'mxf'].includes(ext)) {
+        folderPath = ['Video'];
+      } else if (['mp3', 'wav', 'flac', 'aac', 'aif', 'aiff', 'ogg', 'm4a'].includes(ext)) {
+        folderPath = ['Audio'];
       } else if (['ttf', 'otf'].includes(ext)) {
-        folderPath = ["Font"];
+        folderPath = ['Font'];
       } else if (['ai', 'eps', 'svg'].includes(ext)) {
-        folderPath = ["Vector"];
-      } else if (['c4d', 'prst', 'expr', 'json', 'mgjson', 'csv', 'tsv', 'txt'].includes(ext)) {
-        folderPath = ["Other"];
+        folderPath = ['Vector'];
       }
 
       const script = `
         try {
-          var fileToImport = new File("${filePath.replace(/\\/g, '/')}");
-          
+          var fileToImport = new File("${importPath.replace(/\\/g, '/')}");
           if (!fileToImport.exists) {
             app.project.items.addFolder("FileOrg Error: Archivo no existe");
           } else if (app.project) {
             app.beginUndoGroup("Importar desde FileOrg");
-            
             var folderNames = ${JSON.stringify(folderPath)};
             var currentParent = app.project.rootFolder;
-            
             for (var f = 0; f < folderNames.length; f++) {
               var fName = folderNames[f];
               var found = null;
-              
               for (var i = 1; i <= app.project.items.length; i++) {
                 var item = app.project.items[i];
                 if (item instanceof FolderItem && item.name === fName && item.parentFolder === currentParent) {
-                  found = item;
-                  break;
+                  found = item; break;
                 }
               }
-              
-              if (!found) {
-                found = app.project.items.addFolder(fName);
-                found.parentFolder = currentParent;
-              }
-              
+              if (!found) { found = app.project.items.addFolder(fName); found.parentFolder = currentParent; }
               currentParent = found;
             }
-            
-            var targetFolder = currentParent;
-            
             var importOptions = new ImportOptions(fileToImport);
-            if (importOptions.canImportAs(ImportAsType.FOOTAGE)) {
-              importOptions.importAs = ImportAsType.FOOTAGE;
-            }
+            if (importOptions.canImportAs(ImportAsType.FOOTAGE)) importOptions.importAs = ImportAsType.FOOTAGE;
             importOptions.sequence = false;
             importOptions.forceAlphabetical = false;
-
             var importedItem = app.project.importFile(importOptions);
-            
-            if (importedItem) {
-              importedItem.parentFolder = targetFolder;
-            } else {
-              app.project.items.addFolder("FileOrg Error: importFile fallo silenciosamente");
-            }
-            
+            if (importedItem) importedItem.parentFolder = currentParent;
             app.endUndoGroup();
           }
         } catch (err) {
-          if (app && app.project) {
-            app.project.items.addFolder("FileOrg Error: " + err.toString().substring(0, 50));
-          }
+          if (app && app.project) app.project.items.addFolder("FileOrg Error: " + err.toString().substring(0, 50));
         }
       `;
-      
-      const tempJsx = path.join(require('os').tmpdir(), 'ae_import_fileorg.jsx');
+
+      const tempJsx = path.join(os.tmpdir(), 'ae_import_fileorg.jsx');
       fs.writeFileSync(tempJsx, script);
-      
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
-      
       exec(`"${aePath}" -s "${evalScript}"`, (err) => {
         if (err) {
-          console.error("Error ejecutando AE:", err);
+          console.error('Error ejecutando AE:', err);
           new Notification({ title: 'Error en After Effects', body: 'Hubo un problema al enviar el archivo.' }).show();
         } else {
-          new Notification({ title: 'Enviado a After Effects', body: `Archivo ${path.basename(filePath)} importado.` }).show();
+          const notice = copiedToProject
+            ? `${path.basename(filePath)} copiado al proyecto y importado.`
+            : `${path.basename(filePath)} importado desde su ubicación original.`;
+          new Notification({ title: 'Enviado a After Effects', body: notice }).show();
         }
       });
     } catch (err) {
-      console.error("Error importando a AE:", err);
+      console.error('Error importando a AE:', err);
       new Notification({ title: 'Error', body: 'No se pudo conectar con After Effects.' }).show();
+    }
+  });
+
+  // Open project folder in Explorer
+  ipcMain.on('open-project-folder', (_event, folderPath: string) => {
+    if (folderPath && fs.existsSync(folderPath)) {
+      shell.openPath(folderPath);
+    }
+  });
+
+  // Run a relinking script in AE (used after migrate)
+  ipcMain.on('ae-run-relink-script', async (_event, relinkScript: string) => {
+    try {
+      const { stdout: regOut } = await execAsync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe" /ve');
+      const match = regOut.match(/REG_SZ\s+(.+)$/im);
+      if (!match) return;
+      const aePath = match[1].trim();
+      const tempJsx = path.join(os.tmpdir(), 'ae_relink.jsx');
+      fs.writeFileSync(tempJsx, relinkScript);
+      const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
+      exec(`"${aePath}" -s "${evalScript}"`);
+    } catch (err) {
+      console.error('Error running relink script:', err);
     }
   });
 

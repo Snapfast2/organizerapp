@@ -16,5 +16,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // After Effects Integration
   isAEOpen: () => ipcRenderer.invoke('is-ae-open'),
-  popupImportAE: (filePath: string) => ipcRenderer.send('popup-import-ae', filePath),
+  popupImportAE: (filePath: string, deleteOriginal?: boolean) =>
+    ipcRenderer.send('popup-import-ae', { filePath, deleteOriginal: deleteOriginal ?? false }),
+
+  // Project folder management
+  openProjectFolder: (folderPath: string) => ipcRenderer.send('open-project-folder', folderPath),
+  aeRunRelinkScript: (script: string) => ipcRenderer.send('ae-run-relink-script', script),
 });

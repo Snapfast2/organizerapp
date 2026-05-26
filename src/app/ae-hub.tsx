@@ -14,6 +14,7 @@ interface RecentProject {
   dependencyCount?: number;
   exists?: boolean;
   colorLabel?: string;
+  projectFolder?: string;
 }
 
 // AE-style label system (matches AE's built-in labels)
@@ -76,7 +77,9 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
 
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   const [renamingGroupName, setRenamingGroupName] = useState('');
-  
+
+  const [migratingPath, setMigratingPath] = useState<string | null>(null);
+
   // Drag and drop target group ID
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   
@@ -282,6 +285,49 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
       }
     } catch {
       toast('Error de red', 'error');
+    }
+  };
+
+  const handleMigrate = async (project: RecentProject) => {
+    if (migratingPath) return;
+    setMigratingPath(project.path);
+    try {
+      const res = await fetch('/api/ae-hub', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'migrate-project', filePath: project.path })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const assetMsg = data.copiedAssets > 0 ? `, ${data.copiedAssets} asset(s) copiados` : '';
+        toast(`✓ Proyecto migrado${assetMsg}. Carpeta: ${data.projectFolder}`, 'success');
+        // If AE has a relink script, run it
+        if (data.relinkScript) {
+          const api = (window as any).electronAPI;
+          api?.aeRunRelinkScript?.(data.relinkScript);
+        }
+        fetchHubData();
+      } else {
+        toast(data.error || 'Error al migrar', 'error');
+      }
+    } catch {
+      toast('Error de red', 'error');
+    } finally {
+      setMigratingPath(null);
+    }
+  };
+
+  const handleOpenProjectFolder = (folderPath: string) => {
+    const api = (window as any).electronAPI;
+    if (api?.openProjectFolder) {
+      api.openProjectFolder(folderPath);
+    } else {
+      // Fallback: open via explorer through API
+      fetch('/api/fs/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'open-location', path: folderPath })
+      });
     }
   };
 
@@ -687,6 +733,34 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
                           </div>
                         </div>
 
+                        {/* Open Folder button (only if project has a dedicated folder) */}
+                        {project.projectFolder && (
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            style={{ width: 28, height: 28 }}
+                            onClick={() => handleOpenProjectFolder(project.projectFolder!)}
+                            title="Abrir carpeta del proyecto"
+                          >
+                            <FolderOpen size={13} color="var(--blue)" />
+                          </button>
+                        )}
+
+                        {/* Migrate button (shown for legacy projects without their own folder) */}
+                        {!project.projectFolder && (
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            style={{ width: 28, height: 28, opacity: migratingPath === project.path ? 0.5 : 1 }}
+                            onClick={() => handleMigrate(project)}
+                            title="Crear carpeta de proyecto y organizar assets"
+                            disabled={!!migratingPath}
+                          >
+                            {migratingPath === project.path
+                              ? <Loader size={13} className="spin-animation" />
+                              : <FolderPlus size={13} color="var(--yellow, #e8c540)" />
+                            }
+                          </button>
+                        )}
+
                         <button 
                           className="btn btn-ghost btn-icon hover-danger"
                           style={{ width: 28, height: 28 }}
@@ -1002,9 +1076,27 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
                       outline: 'none',
                     }}
                   />
-                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
-                    Se guardará en {projectDir || '—'}. Se creará la carpeta si no existe.
-                  </span>
+                  {/* Folder structure preview */}
+                  {projectName.trim() && (
+                    <div style={{
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '10px 14px',
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      color: 'var(--text-secondary)',
+                      lineHeight: 1.8,
+                    }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 9.5, marginBottom: 6, fontFamily: 'inherit', letterSpacing: '0.06em' }}>ESTRUCTURA A CREAR:</div>
+                      <div style={{ color: 'var(--accent)' }}>📁 {projectDir.trim() || 'E:\\Motion'}\</div>
+                      <div style={{ paddingLeft: 14, color: 'var(--text-primary)' }}>📁 <strong>{projectName.trim()}\</strong></div>
+                      <div style={{ paddingLeft: 28, color: 'var(--blue)' }}>🎬 {projectName.trim()}.aep</div>
+                      <div style={{ paddingLeft: 28, color: 'var(--text-secondary)' }}>📁 Assets\ → Images\ Video\ Audio\ Vector\</div>
+                      <div style={{ paddingLeft: 28, color: 'var(--text-secondary)' }}>📁 Renders\</div>
+                      <div style={{ paddingLeft: 28, color: 'var(--text-secondary)' }}>📁 Exports\</div>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>

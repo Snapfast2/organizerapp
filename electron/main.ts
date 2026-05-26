@@ -459,7 +459,16 @@ app.whenReady().then(() => {
             importOptions.sequence = false;
             importOptions.forceAlphabetical = false;
             var importedItem = app.project.importFile(importOptions);
-            if (importedItem) importedItem.parentFolder = currentParent;
+            if (importedItem) {
+              importedItem.parentFolder = currentParent;
+              // Scroll project panel to show the imported item:
+              // Deselect everything, then reselect only this item
+              // so AE is forced to bring it into view
+              for (var s = 1; s <= app.project.numItems; s++) {
+                try { app.project.items[s].selected = false; } catch(se) {}
+              }
+              importedItem.selected = true;
+            }
             app.endUndoGroup();
           }
         } catch (err) {
@@ -470,7 +479,20 @@ app.whenReady().then(() => {
       const tempJsx = path.join(os.tmpdir(), 'ae_import_fileorg.jsx');
       fs.writeFileSync(tempJsx, script);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
+
+      // Save window state before exec — AE focus steal can cause Electron to resize
+      const wasMaximized = mainWindow?.isMaximized() ?? false;
+      const savedBounds = mainWindow?.getBounds();
+
       exec(`"${aePath}" -s "${evalScript}"`, (err) => {
+        // Restore window state after AE gets/loses focus
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          if (wasMaximized) {
+            mainWindow.maximize();
+          } else if (savedBounds) {
+            mainWindow.setBounds(savedBounds);
+          }
+        }
         if (err) {
           console.error('Error ejecutando AE:', err);
           new Notification({ title: 'Error en After Effects', body: 'Hubo un problema al enviar el archivo.' }).show();

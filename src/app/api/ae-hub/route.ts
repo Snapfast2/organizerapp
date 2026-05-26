@@ -16,6 +16,7 @@ interface RecentProject {
   size?: number;
   dependencyCount?: number;
   exists?: boolean;
+  colorLabel?: string; // AE-style color label: 'none'|'red'|'yellow'|'green'|'blue'|'purple'|'pink'
 }
 
 interface VisualGroup {
@@ -287,6 +288,19 @@ export async function POST(request: NextRequest) {
         const normPath = path.normalize(filePath);
         group.projectPaths = group.projectPaths.filter(p => path.normalize(p) !== normPath);
 
+        saveProjectsDb(db);
+        return NextResponse.json({ success: true });
+      }
+
+      case 'set-color-label': {
+        const { filePath, colorLabel } = body;
+        if (!filePath) return NextResponse.json({ error: 'Falta filePath' }, { status: 400 });
+
+        const normPath = path.normalize(filePath);
+        const project = db.recentProjects.find(p => path.normalize(p.path) === normPath);
+        if (!project) return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 });
+
+        project.colorLabel = colorLabel || 'none';
         saveProjectsDb(db);
         return NextResponse.json({ success: true });
       }

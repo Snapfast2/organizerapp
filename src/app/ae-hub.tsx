@@ -13,6 +13,39 @@ interface RecentProject {
   size?: number;
   dependencyCount?: number;
   exists?: boolean;
+  colorLabel?: string;
+}
+
+// AE-style label system (matches AE's built-in labels)
+const AE_LABELS = [
+  { id: 'none',   color: '#444444', name: 'Sin etiqueta' },
+  { id: 'red',    color: '#E8406B', name: 'En Progreso'  },
+  { id: 'yellow', color: '#E8C540', name: 'En Revisión'  },
+  { id: 'green',  color: '#3ED47A', name: 'Entregado'    },
+  { id: 'blue',   color: '#4DA9FF', name: 'Archivado'    },
+  { id: 'purple', color: '#9B59F5', name: 'Referencia'   },
+  { id: 'pink',   color: '#F55FAD', name: 'Pendiente'    },
+];
+
+function getLabelColor(labelId?: string): string {
+  return AE_LABELS.find(l => l.id === labelId)?.color ?? AE_LABELS[0].color;
+}
+
+// Inline AEP file icon with dynamic color
+function AepIcon({ color, size = 36 }: { color: string; size?: number }) {
+  const dark = color === '#444444' ? '#111' : color + '22';
+  return (
+    <svg width={size} height={Math.round(size * 1.22)} viewBox="0 0 80.4 98.4" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Card body */}
+      <path d="M78.8,25.6V87c0,5.2-4.2,9.4-9.4,9.4H11.1c-5.2,0-9.4-4.2-9.4-9.4V11.5c0-5.2,4.2-9.4,9.4-9.4h44.1c2.5,0,4.9,1,6.7,2.7L76,18.9C77.8,20.7,78.8,23.1,78.8,25.6z" fill="#0a0a0a"/>
+      {/* Border / accent */}
+      <path d="M55.8,4.1c1.5,0,3,.6,4.1,1.7l14.7,14.7c1.1,1.1,1.7,2.5,1.7,4.1v64c0,3.2-2.6,5.7-5.7,5.7H9.8c-3.2,0-5.7-2.6-5.7-5.7V9.8c0-3.2,2.6-5.7,5.7-5.7H55.8 M55.8,0h-46C4.4,0,0,4.4,0,9.8v78.8c0,5.5,4.4,9.8,9.8,9.8h60.7c5.5,0,9.8-4.4,9.8-9.8v-64c0-2.6-1-5.1-2.9-7L62.8,2.9C60.9,1,58.4,0,55.8,0L55.8,0z" fill={color}/>
+      {/* Ae lettering */}
+      <path d="M34.7,45.1h-11l-2.8,7.8c0,.3-.2.4-.5.4h-5.2c-.3,0-.5-.2-.4-.5l10-29.2c.3-.9.4-1.8.4-2.7 c0-.2.1-.3.3-.3h7.2c.2,0,.3.1.4.2l11.2,32.1c.1.3,0,.5-.2.5h-5.8c-.2,0-.4-.1-.5-.3L34.7,45.1z M24.9,39.4h8.6c-.2-.5-4.1-12.8-4.3-13.8h0L24.9,39.4z M60,42.9h-8.9c0,2.1.6,3.7,1.8,4.9c1.1,1.2,2.8,1.8,5.1,1.8 c1.9,0,3.9-.3,5.7-1.1c.2-.1.3-.1.3.2v3.6c0,.2-.1.5-.3.6c-1.8.9-4.3,1.3-7,1.3c-4,0-6.9-1.1-8.8-3.4 c-1.9-2.3-2.8-5.2-2.8-8.6c0-3.6,1-6.6,2.9-9c2-2.4,4.6-3.6,8-3.6c3.2,0,5.6,1,7.2,3c1.6,2,2.4,4.4,2.4,7c0,.9,0,1.9-.2,2.8 c0,.2-.2.4-.4.4C63.4,42.9,61.7,42.9,60,42.9z M51.1,39.1h6.4c.8,0,1.6,0,2.4-.1c0-.2,0-.5,0-.7c0-1.2-.3-2.3-1-3.3 c-.7-1-1.7-1.5-3.2-1.5c-1.3-.1-2.5.5-3.3,1.6C51.7,36.3,51.2,37.7,51.1,39.1L51.1,39.1z" fill={color}/>
+      {/* AEP text small */}
+      <path d="M31.3,80.4h-4.6l-1.2,3.9c0,.1-.1.2-.2.2h-2.1c-.1,0-.2-.1-.2-.2L27.2,71 c.1-.4.2-.8.2-1.2c0-.1,0-.1.1-.1h3c.1,0,.1,0,.2.1l4.7,14.4c0,.1,0,.2-.1.2h-2.4c-.1,0-.2,0-.2-.1 L31.3,80.4z M27.2,77.9h3.6c-.1,0-1.7-5.5-1.8-5.9h0C28.8,72.8,28.2,74.9,27.2,77.9z M45.1,82.2l-.3,2.1c0,.1-.1.2-.2.2h-7.5c-.1,0-.2,0-.2-.2V69.9c0-.1,0-.2.1-.2h7.6c.1,0,.2,0,.2.2l.2,2.1c0,.1,0,.2-.2.2h-5.6v4.1h4.8 c.1,0,.2,0,.2.1v2.1c0,.1,0,.2-.2.2h-4.8V82H45C45.1,82,45.1,82.1,45.1,82.2z M46.8,84.3V69.9 c0-.1,0-.2.1-.2c.9,0,2.3,0,4,0c2,0,3.4.5,4.3,1.4c.9.9,1.4,2.1,1.4,3.4c0,1.6-.6,3-1.7,3.9c-1.3.9-2.8,1.3-4.3,1.2 h-.7c-.3,0-.7,0-.7,0v4.8c0,.1,0,.2-.2.2h-2.1C46.8,84.5,46.8,84.5,46.8,84.3C46.8,84.4,46.8,84.4,46.8,84.3z M49.2,72.2 v4.9c.5,0,.9,0,1.5,0c.8,0,1.6-.2,2.3-.7c.6-.5.9-.9.9-2c0-1.8-2.1-2.3-3-2.3C50.1,72.2,49.6,72.1,49.2,72.2z" fill="#ffffff"/>
+    </svg>
+  );
 }
 
 interface VisualGroup {
@@ -47,6 +80,9 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
   // Drag and drop target group ID
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   
+  // Color label picker open for project path
+  const [labelPickerFor, setLabelPickerFor] = useState<string | null>(null);
+
   // Toggle states for grouped lists
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
@@ -249,6 +285,25 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
     }
   };
 
+  // Color label action
+  const handleSetColorLabel = async (filePath: string, labelId: string) => {
+    try {
+      const res = await fetch('/api/ae-hub', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set-color-label', filePath, colorLabel: labelId })
+      });
+      if (res.ok) {
+        setLabelPickerFor(null);
+        fetchHubData();
+      } else {
+        toast('Error al guardar etiqueta', 'error');
+      }
+    } catch {
+      toast('Error de red', 'error');
+    }
+  };
+
   // Drag and Drop
   const handleDragStart = (e: React.DragEvent, path: string) => {
     e.dataTransfer.setData('text/plain', path);
@@ -434,6 +489,7 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
                     style={{
                       background: 'var(--bg-surface)',
                       border: '1px solid var(--border)',
+                      borderLeft: `3px solid ${getLabelColor(project.colorLabel)}`,
                       borderRadius: 'var(--radius-md)',
                       padding: '14px 18px',
                       display: 'flex',
@@ -441,21 +497,84 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
                       justifyContent: 'space-between',
                       cursor: 'grab',
                       transition: 'border-color 0.2s, box-shadow 0.2s',
+                      position: 'relative',
                     }}
                     whileHover={{ 
                       borderColor: 'var(--accent-dim)',
                       boxShadow: 'var(--shadow-card), 0 0 10px rgba(14,201,0,0.05)'
                     }}
                   >
+                    {/* Click outside handler */}
+                    {labelPickerFor === project.path && (
+                      <div
+                        style={{ position: 'fixed', inset: 0, zIndex: 199 }}
+                        onClick={() => setLabelPickerFor(null)}
+                      />
+                    )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1, minWidth: 0 }}>
-                      <div style={{ 
-                        width: 38, height: 38, 
-                        borderRadius: 'var(--radius-sm)', 
-                        background: 'rgba(14,201,0,0.08)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        <Clapperboard size={18} color="var(--accent)" />
+                      {/* AEP Icon with color label */}
+                      <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <div 
+                          style={{ cursor: 'pointer', lineHeight: 0 }}
+                          onClick={(e) => { e.stopPropagation(); setLabelPickerFor(labelPickerFor === project.path ? null : project.path); }}
+                          title="Click para cambiar etiqueta de color"
+                        >
+                          <AepIcon color={getLabelColor(project.colorLabel)} size={36} />
+                        </div>
+                        {/* Color label picker popover */}
+                        {labelPickerFor === project.path && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: -4 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            style={{
+                              position: 'absolute',
+                              top: 'calc(100% + 6px)',
+                              left: 0,
+                              zIndex: 200,
+                              background: 'var(--bg-elevated)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 10,
+                              boxShadow: 'var(--shadow-float)',
+                              padding: '10px 12px',
+                              minWidth: 200,
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: 8 }}>ETIQUETA AE</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {AE_LABELS.map(label => (
+                                <button
+                                  key={label.id}
+                                  onClick={() => handleSetColorLabel(project.path, label.id)}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    background: project.colorLabel === label.id ? 'rgba(255,255,255,0.07)' : 'transparent',
+                                    border: project.colorLabel === label.id ? `1px solid ${label.color}44` : '1px solid transparent',
+                                    borderRadius: 6,
+                                    padding: '5px 8px',
+                                    cursor: 'pointer',
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    transition: 'background 0.15s'
+                                  }}
+                                >
+                                  <span style={{
+                                    width: 12, height: 12,
+                                    borderRadius: '50%',
+                                    background: label.color,
+                                    flexShrink: 0,
+                                    boxShadow: project.colorLabel === label.id ? `0 0 6px ${label.color}88` : 'none'
+                                  }} />
+                                  <span style={{ fontSize: 11.5, color: 'var(--text-primary)' }}>{label.name}</span>
+                                  {project.colorLabel === label.id && (
+                                    <span style={{ marginLeft: 'auto', fontSize: 10, color: label.color }}>✓</span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
                       </div>
                       
                       <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>

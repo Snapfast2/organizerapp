@@ -1,7 +1,11 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, screen, Notification } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import chokidar from 'chokidar';
+import { exec, execSync } from 'child_process';
+import util from 'util';
+
+const execAsync = util.promisify(exec);
 
 const isDev = process.env.NODE_ENV === 'development';
 const NEXT_PORT = 3000;
@@ -40,8 +44,9 @@ function getFileSize(filePath: string): string {
 }
 
 // ─── Popup window ─────────────────────────────────────────────
-function showNextPopup() {
-  if (activePopup || pendingPopups.length === 0) return;
+async function showNextPopup() {
+  if (activePopup) return;
+  if (pendingPopups.length === 0) return;
 
   const { filePath } = pendingPopups.shift()!;
   const fileName = path.basename(filePath);
@@ -49,7 +54,7 @@ function showNextPopup() {
   const ext = path.extname(filePath).toLowerCase().replace('.', '');
 
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  const W = 400, H = 220;
+  const W = 400, H = 280;
 
   activePopup = new BrowserWindow({
     width: W,
@@ -61,13 +66,25 @@ function showNextPopup() {
     resizable: false,
     skipTaskbar: true,
     transparent: true,
-    hasShadow: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  // Check if After Effects is running
+  let isAERunning = false;
+  try {
+    const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq AfterFX.exe"');
+    if (stdout.includes('AfterFX.exe')) {
+      isAERunning = true;
+    }
+  } catch (e) {
+    // ignore
+  }
 
   // Encode popup data in URL params
   const params = new URLSearchParams({
@@ -77,6 +94,10 @@ function showNextPopup() {
     ext,
     dests: JSON.stringify(QUICK_DESTINATIONS),
   });
+
+  if (isAERunning) {
+    params.set('ae', '1');
+  }
 
   activePopup.loadURL(`http://localhost:${NEXT_PORT}/popup?${params.toString()}`);
 
@@ -201,8 +222,10 @@ ipcMain.on('popup:move', async (_event, { filePath, destDir }: { filePath: strin
     fs.renameSync(filePath, destPath);
     // Notify main window to refresh if it's showing the dest folder
     mainWindow?.webContents.send('fs:refresh');
+    new Notification({ title: 'FileOrganizer', body: `Archivo movido a ${path.basename(destDir)}` }).show();
   } catch (err) {
     console.error('popup:move error', err);
+    new Notification({ title: 'FileOrganizer Error', body: `No se pudo mover el archivo` }).show();
   }
   activePopup?.close();
 });
@@ -213,9 +236,128 @@ ipcMain.on('popup:ignore', () => {
 });
 
 // ─── App lifecycle ────────────────────────────────────────────
+app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
+
 app.whenReady().then(() => {
   createWindow();
   createTray();
+
+  // Handle AE Import
+  ipcMain.handle('is-ae-open', async () => {
+    try {
+      const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq AfterFX.exe"');
+      return stdout.includes('AfterFX.exe');
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.on('popup-import-ae', async (e, filePath) => {
+    try {
+      // Find AE path
+      const { stdout: regOut } = await execAsync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe" /ve');
+      const match = regOut.match(/REG_SZ\s+(.+)$/im);
+      if (!match) throw new Error("After Effects no encontrado en el registro");
+      
+      const aePath = match[1].trim();
+      const ext = path.extname(filePath).toLowerCase().replace('.', '');
+      
+      let folderPath = ["Other"];
+      if (['aep', 'prproj', 'mogrt', 'ffx', 'jsx', 'jsxbin', 'psd', 'aet', 'aepx', 'sqpreset'].includes(ext)) {
+        folderPath = ["Adobe"];
+      } else if (['png', 'jpg', 'jpeg', 'nef', 'exr', 'tif', 'dpx', 'pam', 'pbm', 'pcx', 'ptx', 'webp'].includes(ext)) {
+        folderPath = ["Image"];
+      } else if (ext === 'gif') {
+        folderPath = ["Image", "GIFs"]; // Subcarpeta
+      } else if (['mp4', 'avi', 'mov', 'webm', 'mkv', '3gp', 'm4v', 'apng', 'mxf'].includes(ext)) {
+        folderPath = ["Video"];
+      } else if (['mp3', 'wav', 'wma', 'flac', 'aac', 'ac3', 'aif', 'aiff', 'mpa', 'm4a', 'mp2', 'ogg', 'oga', 'ogm', 'ogv'].includes(ext)) {
+        folderPath = ["Audio"];
+      } else if (['ttf', 'otf'].includes(ext)) {
+        folderPath = ["Font"];
+      } else if (['ai', 'eps', 'svg'].includes(ext)) {
+        folderPath = ["Vector"];
+      } else if (['c4d', 'prst', 'expr', 'json', 'mgjson', 'csv', 'tsv', 'txt'].includes(ext)) {
+        folderPath = ["Other"];
+      }
+
+      const script = `
+        try {
+          var fileToImport = new File("${filePath.replace(/\\/g, '/')}");
+          
+          if (!fileToImport.exists) {
+            app.project.items.addFolder("FileOrg Error: Archivo no existe");
+          } else if (app.project) {
+            app.beginUndoGroup("Importar desde FileOrg");
+            
+            var folderNames = ${JSON.stringify(folderPath)};
+            var currentParent = app.project.rootFolder;
+            
+            for (var f = 0; f < folderNames.length; f++) {
+              var fName = folderNames[f];
+              var found = null;
+              
+              for (var i = 1; i <= app.project.items.length; i++) {
+                var item = app.project.items[i];
+                if (item instanceof FolderItem && item.name === fName && item.parentFolder === currentParent) {
+                  found = item;
+                  break;
+                }
+              }
+              
+              if (!found) {
+                found = app.project.items.addFolder(fName);
+                found.parentFolder = currentParent;
+              }
+              
+              currentParent = found;
+            }
+            
+            var targetFolder = currentParent;
+            
+            var importOptions = new ImportOptions(fileToImport);
+            if (importOptions.canImportAs(ImportAsType.FOOTAGE)) {
+              importOptions.importAs = ImportAsType.FOOTAGE;
+            }
+            importOptions.sequence = false;
+            importOptions.forceAlphabetical = false;
+
+            var importedItem = app.project.importFile(importOptions);
+            
+            if (importedItem) {
+              importedItem.parentFolder = targetFolder;
+            } else {
+              app.project.items.addFolder("FileOrg Error: importFile fallo silenciosamente");
+            }
+            
+            app.endUndoGroup();
+          }
+        } catch (err) {
+          if (app && app.project) {
+            app.project.items.addFolder("FileOrg Error: " + err.toString().substring(0, 50));
+          }
+        }
+      `;
+      
+      const tempJsx = path.join(require('os').tmpdir(), 'ae_import_fileorg.jsx');
+      fs.writeFileSync(tempJsx, script);
+      
+      const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
+      
+      exec(`"${aePath}" -s "${evalScript}"`, (err) => {
+        if (err) {
+          console.error("Error ejecutando AE:", err);
+          new Notification({ title: 'Error en After Effects', body: 'Hubo un problema al enviar el archivo.' }).show();
+        } else {
+          new Notification({ title: 'Enviado a After Effects', body: `Archivo ${path.basename(filePath)} importado.` }).show();
+        }
+      });
+    } catch (err) {
+      console.error("Error importando a AE:", err);
+      new Notification({ title: 'Error', body: 'No se pudo conectar con After Effects.' }).show();
+    }
+  });
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

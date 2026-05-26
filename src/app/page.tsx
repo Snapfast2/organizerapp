@@ -20,6 +20,8 @@ import {
   BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, MetadataModal, DuplicateView,
   AITagModal, AIStatusBar
 } from './components';
+import ClickSpark from '@/components/ui/click-spark';
+import AEProjectHub from './ae-hub';
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'heic', 'tiff', 'tif']);
 const VIDEO_EXTS = new Set(['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'wmv', 'flv', 'm4v']);
@@ -149,10 +151,11 @@ interface TreeNodeProps {
   depth?: number;
   isRoot?: boolean;
   onDropFiles?: (paths: string[], targetPath: string) => void;
+  isExpandable?: boolean;
 }
 
 // A single node in the sidebar tree — arrow expands, label navigates (Magic UI style)
-function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot = false, onDropFiles }: TreeNodeProps) {
+function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot = false, onDropFiles, isExpandable = true }: TreeNodeProps) {
   const [open, setOpen] = useState(false);
   const [childFolders, setChildFolders] = useState<{ name: string; path: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -186,7 +189,7 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot =
       <motion.div
         onClick={(e) => {
           onNavigate(path);
-          if (!open) toggle(e);
+          if (isExpandable && !open) toggle(e);
         }}
         onDragOver={(e) => {
           e.preventDefault();
@@ -222,23 +225,25 @@ function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot =
         }}
       >
         {/* Expand arrow */}
-        <motion.div
-          animate={{ rotate: open ? 90 : 0 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 14, height: 14, flexShrink: 0,
-            color: 'var(--text-muted)', opacity: 0.55, borderRadius: 3,
-          }}
-          onClick={(e) => { e.stopPropagation(); toggle(e); }}
-        >
-          {loading
-            ? <Loader size={9} className="spinning" />
-            : <ChevronRight size={10} strokeWidth={2.5} />
-          }
-        </motion.div>
-
-        {/* Folder icon */}
+        {isExpandable ? (
+          <motion.div
+            animate={{ rotate: open ? 90 : 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 14, height: 14, flexShrink: 0,
+              color: 'var(--text-muted)', opacity: 0.55, borderRadius: 3,
+            }}
+            onClick={(e) => { e.stopPropagation(); toggle(e); }}
+          >
+            {loading
+              ? <Loader size={9} className="spinning" />
+              : <ChevronRight size={10} strokeWidth={2.5} />
+            }
+          </motion.div>
+        ) : (
+          <div style={{ width: 14, height: 14, flexShrink: 0 }} />
+        )}        {/* Folder icon */}
         <motion.span
           animate={{
             color: isActive ? 'var(--accent)' : open ? 'var(--accent)' : 'var(--text-secondary)',
@@ -375,9 +380,9 @@ function SidebarSection({ title, children, defaultOpen = true }: SidebarSectionP
 
 export default function FileOrgApp() {
 
-  const [currentPath, setCurrentPath] = useState<string>('C:\\');
+  const [currentPath, setCurrentPath] = useState<string>('hub');
   // Navigation history — back/forward like a browser
-  const [navHistory, setNavHistory] = useState<string[]>(['C:\\']);
+  const [navHistory, setNavHistory] = useState<string[]>(['hub']);
   const [navIndex, setNavIndex] = useState(0);
 
   const navigate = useCallback((path: string) => {
@@ -430,7 +435,7 @@ export default function FileOrgApp() {
   const [hoveredVideo, setHoveredVideo] = useState<string | null>(null);
 
   // Context Menu state
-  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, entry: FileEntry } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, entry: FileEntry, isAEOpen?: boolean } | null>(null);
   const [showMoveTo, setShowMoveTo] = useState<string[] | null>(null); // paths to move
   const [showMetadataEntry, setShowMetadataEntry] = useState<FileEntry | null>(null);
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -476,6 +481,7 @@ export default function FileOrgApp() {
   const totalEntries = searchResults?.length ?? (listing?.entries.length ?? 0);
 
   const goUp = () => {
+    if (currentPath === 'hub') return;
     if (currentPath.length > 3) {
       const parent = currentPath.substring(0, currentPath.lastIndexOf('\\')) || currentPath.substring(0, 3);
       navigate(parent);
@@ -588,10 +594,16 @@ export default function FileOrgApp() {
     }
   };
 
-  const onContextMenu = (e: React.MouseEvent, entry: FileEntry) => {
+  const onContextMenu = async (e: React.MouseEvent, entry: FileEntry) => {
     e.preventDefault();
     e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, entry });
+    let isAEOpen = false;
+    try {
+      if (isElectron && (window as any).electronAPI) {
+        isAEOpen = await (window as any).electronAPI.isAEOpen();
+      }
+    } catch (err) {}
+    setContextMenu({ x: e.clientX, y: e.clientY, entry, isAEOpen });
   };
 
   const handleInlineRename = async (filePath: string, newName: string) => {
@@ -688,7 +700,7 @@ export default function FileOrgApp() {
   }, []);
 
   const refresh = useCallback(async () => {
-    if (!currentPath) return;
+    if (!currentPath || currentPath === 'hub') return;
     setIsLoading(true);
     try {
       const res = await fetch(`/api/fs?path=${encodeURIComponent(currentPath)}`);
@@ -696,11 +708,20 @@ export default function FileOrgApp() {
         const data = await res.json();
         setListing(data);
         setSearchResults(null);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        toast(`Error al abrir: ${errData.error || 'Directorio no accesible'}`, 'error');
+        if (currentPath !== 'C:\\') {
+          navigate('C:\\');
+        }
       }
-    } catch {}
-    setIsLoading(false);
-    fetchTrashCount();
-  }, [currentPath, fetchTrashCount]);
+    } catch {
+      toast('Error al leer el directorio', 'error');
+    } finally {
+      setIsLoading(false);
+      fetchTrashCount();
+    }
+  }, [currentPath, fetchTrashCount, navigate, toast]);
 
   const handleMetadataSave = useCallback(async (entry: FileEntry, color: string | null, tags: string[]) => {
     try {
@@ -753,7 +774,7 @@ export default function FileOrgApp() {
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const rootPath = searchScope === 'global' ? 'C:\\' : currentPath;
+        const rootPath = searchScope === 'global' ? 'C:\\' : (currentPath === 'hub' ? 'E:\\Motion' : currentPath);
         const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&path=${encodeURIComponent(rootPath)}`);
         if (res.ok) {
           const data = await res.json();
@@ -1261,7 +1282,8 @@ export default function FileOrgApp() {
   };
 
   return (
-    <div className={`app-shell${isElectron ? ' has-titlebar' : ''}`} onClick={() => { clearSelection(); closeContextMenu(); }}>
+    <ClickSpark sparkColor="#4ade80" sparkSize={6} sparkRadius={20} sparkCount={4} duration={300} extraScale={0.6}>
+      <div className={`app-shell${isElectron ? ' has-titlebar' : ''}`} onClick={() => { clearSelection(); closeContextMenu(); }}>
 
       {/* ─── ELECTRON TITLE BAR (Discord style) ─── */}
       {isElectron && (
@@ -1350,15 +1372,37 @@ export default function FileOrgApp() {
       {/* ─── SIDEBAR ─── */}
       <aside className="sidebar">
         <div className="sidebar-scroll-area" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+          {/* ── Navegación ── */}
+          <SidebarSection title="Navegación" defaultOpen>
+            <TreeNode
+              key="hub"
+              path="hub"
+              label="Hub de Proyectos"
+              Icon={Clapperboard}
+              isActive={currentPath === 'hub'}
+              onNavigate={navigate}
+              isExpandable={false}
+            />
+            <TreeNode
+              key="explorer"
+              path="E:\\Motion"
+              label="Explorador de Archivos"
+              Icon={FolderOpen}
+              isActive={currentPath !== 'hub'}
+              onNavigate={navigate}
+              isExpandable={false}
+            />
+          </SidebarSection>
+
           {/* ── Ubicaciones ── */}
           <SidebarSection title="Ubicaciones" defaultOpen>
-            {[{ path: 'C:\\Users', label: 'Inicio', Icon: HomeIcon }, ...drives.map(d => ({ path: d, label: d, Icon: HardDrive }))].map(({ path, label, Icon }) => (
+            {drives.map(d => (
               <TreeNode
-                key={path}
-                path={path}
-                label={label}
-                Icon={Icon}
-                isActive={currentPath === path}
+                key={d}
+                path={d}
+                label={d}
+                Icon={HardDrive}
+                isActive={currentPath === d}
                 onNavigate={navigate}
                 onDropFiles={handleTreeNodeDrop}
               />
@@ -1416,7 +1460,11 @@ export default function FileOrgApp() {
 
       {/* ─── MAIN AREA ─── */}
       <main className="main-area" onContextMenu={e => e.preventDefault()}>
-        <div className="path-input-row">
+        {currentPath === 'hub' ? (
+          <AEProjectHub navigate={navigate} toast={toast} />
+        ) : (
+          <>
+            <div className="path-input-row">
           <button className="btn btn-ghost btn-icon" onClick={goUp} disabled={!currentPath || currentPath.length <= 3}><ArrowUp size={16} /></button>
           <button className="btn btn-ghost btn-icon" onClick={refresh}><RefreshCw size={14} className={isLoading ? 'spinning' : ''} /></button>
           <input className="path-input" value={pathInput} onChange={e => setPathInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && navigate(pathInput)} />
@@ -1606,6 +1654,8 @@ export default function FileOrgApp() {
             </motion.button>
           )}
         </AnimatePresence>
+          </>
+        )}
       </main>
 
       {/* ─── PACK PROGRESS MODAL ─── */}
@@ -1766,6 +1816,13 @@ export default function FileOrgApp() {
             }}
             sortBy={sortBy} sortDesc={sortDesc} onSort={handleSort}
             onPackProject={(p) => { setContextMenu(null); handlePackProject(p); }}
+            onImportAE={contextMenu.isAEOpen ? (p) => {
+              setContextMenu(null);
+              if (isElectron && (window as any).electronAPI) {
+                (window as any).electronAPI.popupImportAE(p);
+                toast('Importando a After Effects...', 'success');
+              }
+            } : undefined}
           />
         )}
       </AnimatePresence>
@@ -1880,5 +1937,6 @@ export default function FileOrgApp() {
         </AnimatePresence>
       </div>
     </div>
+    </ClickSpark>
   );
 }

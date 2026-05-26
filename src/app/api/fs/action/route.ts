@@ -17,6 +17,39 @@ export async function POST(request: NextRequest) {
                         process.platform === 'darwin' ? `open "${srcPath}"` :
                         `xdg-open "${srcPath}"`;
         exec(command);
+
+        // If it's an After Effects project, register it in recent projects
+        if (srcPath.toLowerCase().endsWith('.aep')) {
+          try {
+            const AE_PROJECTS_DB_PATH = path.join(process.cwd(), 'ae-projects.json');
+            let db: any = { recentProjects: [], groups: [] };
+            if (fs.existsSync(AE_PROJECTS_DB_PATH)) {
+              try {
+                db = JSON.parse(fs.readFileSync(AE_PROJECTS_DB_PATH, 'utf-8'));
+              } catch {}
+            }
+            if (!db.recentProjects) db.recentProjects = [];
+            if (!db.groups) db.groups = [];
+
+            const normPath = path.normalize(srcPath);
+            db.recentProjects = db.recentProjects.filter((p: any) => path.normalize(p.path) !== normPath);
+            db.recentProjects.unshift({
+              path: normPath,
+              name: path.basename(normPath),
+              lastOpened: new Date().toISOString()
+            });
+
+            // Limit to 20
+            if (db.recentProjects.length > 20) {
+              db.recentProjects = db.recentProjects.slice(0, 20);
+            }
+
+            fs.writeFileSync(AE_PROJECTS_DB_PATH, JSON.stringify(db, null, 2));
+          } catch (e) {
+            console.error("Error adding recent project from open action:", e);
+          }
+        }
+
         return NextResponse.json({ success: true });
       }
 

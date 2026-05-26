@@ -13,4 +13,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Listen for fs refresh from main
   onFsRefresh: (cb: () => void) => ipcRenderer.on('fs:refresh', cb),
+
+  // After Effects Integration
+  isAEOpen: () => ipcRenderer.invoke('is-ae-open'),
+  popupImportAE: (filePath: string) => ipcRenderer.send('popup-import-ae', filePath),
 });

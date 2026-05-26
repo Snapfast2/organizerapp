@@ -8,7 +8,7 @@ import {
   Terminal, Monitor, Type, AlertTriangle, ArrowRight, Play, ZoomIn, ChevronLeft,
   Pause, Volume2, VolumeX, SkipBack, SkipForward, Maximize, FolderOpen, FileArchive,
   FolderPlus, MoveRight, Copy, CheckSquare, Square, ExternalLink, Info, Check, Tag, Palette,
-  Sparkles, Loader, Cpu, Wifi, WifiOff, ChevronDown, Package
+  Sparkles, Loader, Cpu, Wifi, WifiOff, ChevronDown, Package, Clapperboard
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
@@ -734,7 +734,7 @@ export function PreviewModal({ entry, allPreviewable, onClose }: {
 }
 
 // ─── Context Menu ──────────────────────────────────────────
-export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, onMoveTo, onUnzip, onMetadata, sortBy, sortDesc, onSort, aeLinkedProjects, onOpenAEProject, onPackProject }: {
+export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir, onOpen, onPreview, onOpenLocation, onMoveTo, onUnzip, onMetadata, sortBy, sortDesc, onSort, aeLinkedProjects, onOpenAEProject, onPackProject, onImportAE }: {
   x: number; y: number; entry: FileEntry | null;
   onClose: () => void; onRename: () => void; onDelete: () => void;
   onMkdir: () => void; onOpen: () => void; onPreview: () => void;
@@ -744,6 +744,7 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
   aeLinkedProjects?: string[];
   onOpenAEProject?: (path: string) => void;
   onPackProject?: (path: string) => void;
+  onImportAE?: (path: string) => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
@@ -802,6 +803,11 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
           {entry.ext === 'aep' && (
             <div className="context-menu-item accent" onClick={() => onPackProject && onPackProject(entry.path)}>
               <Package size={13} /> Empaquetar Proyecto
+            </div>
+          )}
+          {!entry.isDir && onImportAE && entry.ext !== 'aep' && (
+            <div className="context-menu-item" style={{ color: '#e5b3ff' }} onClick={() => onImportAE(entry.path)}>
+              <Clapperboard size={13} color="#e5b3ff" /> Importar a After Effects
             </div>
           )}
           <div className="context-menu-sep" />

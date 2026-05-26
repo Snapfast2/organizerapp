@@ -1681,3 +1681,81 @@ html, body {
 .file-list-item .file-checkbox:hover {
   background: var(--bg-hover);
 }
+
+/* Popup specific styles to override default html/body background */
+body.popup-page,
+html.popup-page {
+  background: transparent !important;
+  overflow: hidden !important;
+}
+
+/* Hide Next.js dev indicator in popup mode */
+body.popup-page nextjs-portal,
+body.popup-page [data-nextjs-portal],
+body.popup-page [data-nextjs-toast],
+body.popup-page [class*="nextjs"] {
+  display: none !important;
+}
+
+
+/* ─── AFTER EFFECTS PROJECT HUB STYLES ─── */
+
+.hub-container {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.hub-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.hub-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* Hover Accent for Text */
+.hover-accent {
+  transition: color 0.15s ease;
+}
+.hover-accent:hover {
+  color: var(--accent) !important;
+}
+
+/* Hover Underline */
+.hover-underline:hover {
+  text-decoration: underline;
+  color: var(--accent-light) !important;
+}
+
+/* Hover Danger */
+.hover-danger:hover {
+  color: var(--danger) !important;
+  background: var(--danger-bg) !important;
+}
+
+/* Glow Card Animation & Effects */
+.glow-card {
+  position: relative;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+}
+
+.glow-card:hover {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 15px var(--accent-glow), inset 0 0 5px rgba(14,201,0,0.1);
+  transform: translateY(-1px);
+}
+
+/* Group Selector Dropdown Logic */
+.group-selector-parent:hover .group-selector-dropdown {
+  display: block !important;
+}
+
+.dropdown-item {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.dropdown-item:hover {
+  background-color: var(--bg-hover) !important;
+  color: var(--accent) !important;
+}

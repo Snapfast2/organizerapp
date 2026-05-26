@@ -1,0 +1,41 @@
+.border-glow-card {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--border-radius);
+  background-color: var(--card-bg);
+  overflow: hidden;
+  padding: 1px; /* the thickness of the glow border */
+}
+
+.border-glow-card::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--glow-padding) * -1);
+  z-index: -1;
+  background: conic-gradient(
+    from var(--cursor-angle) at 50% 50%,
+    transparent,
+    var(--glow-color) calc(var(--cone-spread) * 1deg),
+    transparent calc(var(--cone-spread) * 2deg)
+  );
+  opacity: calc(var(--edge-proximity) / 100);
+  transition: opacity 0.3s;
+}
+
+.border-glow-inner {
+  background-color: var(--card-bg);
+  border-radius: calc(var(--border-radius) - 1px);
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.edge-light {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--border-radius);
+  z-index: 2;
+  pointer-events: none;
+  box-shadow: inset 0 0 20px var(--glow-color-20);
+}

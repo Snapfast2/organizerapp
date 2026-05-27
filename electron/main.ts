@@ -187,20 +187,106 @@ function createWindow() {
       nodeIntegration: false,
     },
     show: false,
+    opacity: 0,
     titleBarStyle: 'hidden',
   });
 
   mainWindow.loadURL(`http://localhost:${NEXT_PORT}`);
 
+  // ── Window animation helpers ─────────────────────────────────
+  const animateOpacity = (
+    win: BrowserWindow,
+    from: number,
+    to: number,
+    durationMs: number,
+    onDone?: () => void
+  ) => {
+    const steps = 30;
+    const interval = durationMs / steps;
+    const delta = (to - from) / steps;
+    let current = from;
+    let tick = 0;
+    win.setOpacity(from);
+    const timer = setInterval(() => {
+      tick++;
+      current += delta;
+      if (!win.isDestroyed()) win.setOpacity(Math.min(1, Math.max(0, current)));
+      if (tick >= steps) {
+        clearInterval(timer);
+        if (!win.isDestroyed()) win.setOpacity(to);
+        onDone?.();
+      }
+    }, interval);
+    return timer;
+  };
+
+  // ── Launch: fade + subtle scale up ──────────────────────────
   mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
-    startWatcher(); // start watching when app is ready
+    const win = mainWindow!;
+    const { width, height } = win.getBounds();
+    const startW = Math.round(width * 0.97);
+    const startH = Math.round(height * 0.97);
+    const display = screen.getDisplayMatching(win.getBounds());
+    const cx = display.workArea.x + display.workArea.width / 2;
+    const cy = display.workArea.y + display.workArea.height / 2;
+
+    // Start slightly smaller & centered
+    win.setBounds({
+      x: Math.round(cx - startW / 2),
+      y: Math.round(cy - startH / 2),
+      width: startW,
+      height: startH,
+    });
+    win.show();
+
+    // Animate opacity 0 → 1 (300ms)
+    animateOpacity(win, 0, 1, 300);
+
+    // Animate size to full (280ms) — scale feel
+    const totalSteps = 18;
+    const stepMs = 280 / totalSteps;
+    let step = 0;
+    const scaleTimer = setInterval(() => {
+      step++;
+      const t = step / totalSteps;
+      const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const w = Math.round(startW + (width - startW) * ease);
+      const h = Math.round(startH + (height - startH) * ease);
+      if (!win.isDestroyed()) {
+        win.setBounds({
+          x: Math.round(cx - w / 2),
+          y: Math.round(cy - h / 2),
+          width: w,
+          height: h,
+        });
+      }
+      if (step >= totalSteps) {
+        clearInterval(scaleTimer);
+        // Restore to original position if it was moved
+        if (!win.isDestroyed()) win.center();
+      }
+    }, stepMs);
+
+    startWatcher();
   });
 
+  // ── Restore from minimized: fade in ─────────────────────────
+  mainWindow.on('restore', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setOpacity(0);
+      animateOpacity(mainWindow, 0, 1, 250);
+    }
+  });
+
+  // ── Close (to tray): fade out → hide ────────────────────────
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
-      mainWindow?.hide();
+      const win = mainWindow!;
+      animateOpacity(win, 1, 0, 180, () => {
+        if (!win.isDestroyed()) win.hide();
+        if (!win.isDestroyed()) win.setOpacity(1); // reset for next show
+      });
     }
   });
 
@@ -226,7 +312,22 @@ function createTray() {
   ]);
 
   tray.setContextMenu(contextMenu);
-  tray.on('double-click', () => { mainWindow?.show(); mainWindow?.focus(); });
+  tray.on('double-click', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setOpacity(0);
+      mainWindow.show();
+      mainWindow.focus();
+      // Re-import animateOpacity inline for tray restore
+      const steps = 20, dur = 220;
+      let tick = 0;
+      const iv = setInterval(() => {
+        tick++;
+        const op = tick / steps;
+        if (!mainWindow!.isDestroyed()) mainWindow!.setOpacity(Math.min(1, op));
+        if (tick >= steps) { clearInterval(iv); mainWindow!.setOpacity(1); }
+      }, dur / steps);
+    }
+  });
 }
 
 // ─── IPC ──────────────────────────────────────────────────────
@@ -234,7 +335,10 @@ ipcMain.on('window:minimize', () => mainWindow?.minimize());
 ipcMain.on('window:maximize', () => {
   mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow?.maximize();
 });
-ipcMain.on('window:close', () => mainWindow?.hide());
+ipcMain.on('window:close', () => {
+  // Trigger the close event which handles the fade-out-to-tray animation
+  mainWindow?.close();
+});
 
 // Popup: user chose a destination
 ipcMain.on('popup:move', async (_event, { filePath, destDir }: { filePath: string; destDir: string }) => {

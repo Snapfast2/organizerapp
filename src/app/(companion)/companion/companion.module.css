@@ -5,7 +5,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
-  padding: 0;
+  padding: 24px; /* Give space for the box-shadow to fade out without clipping! */
   background: transparent;
   overflow: hidden;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;

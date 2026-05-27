@@ -43,11 +43,12 @@ export default function CompanionBubble() {
 
   const api = typeof window !== 'undefined' ? (window as any).electronAPI : null;
 
-  // Resize window to fit bubble content exactly
+  // Resize window to fit bubble content exactly (+ padding for shadow)
   const syncHeight = useCallback(() => {
     if (!bubbleRef.current || !api?.companion?.setHeight) return;
     const h = bubbleRef.current.getBoundingClientRect().height;
-    api.companion.setHeight(Math.ceil(h) + 2); // +2px for border
+    // Window height must include the 24px top and 24px bottom padding from .root
+    api.companion.setHeight(Math.ceil(h) + 48); 
   }, [api]);
 
   // Load active project + recents

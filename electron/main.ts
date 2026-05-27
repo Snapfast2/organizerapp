@@ -365,7 +365,7 @@ function createCompanion() {
   } catch { /* use defaults */ }
 
   companionWindow = new BrowserWindow({
-    width: 270,
+    width: 310, // 260px bubble + 48px padding for drop shadow
     height: 400,
     x: cx,
     y: cy,
@@ -375,7 +375,7 @@ function createCompanion() {
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
-    hasShadow: false,
+    hasShadow: false, // The OS shadow is disabled. The CSS drop-shadow is used instead.
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

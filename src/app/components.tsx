@@ -164,7 +164,7 @@ export function FileCheckbox({ selected, onToggle }: { selected: boolean; onTogg
 }
 
 // ─── Toast ────────────────────────────────────────────────
-type Toast = { id: number; message: string; type: 'success' | 'error' };
+type Toast = { id: number; message: string; type: 'success' | 'error' | 'info' };
 
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -1715,7 +1715,7 @@ export function DuplicateView({
   const [progressPct, setProgressPct] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  const { show: toast } = useToast();
+  const { toast } = useToast();
 
   const toggleGroup = (ext: string) => {
     setCollapsedGroups(prev => {
@@ -1990,7 +1990,7 @@ export function AITagModal({
   const [ollamaStatus, setOllamaStatus] = useState<{ available: boolean; modelAvailable?: boolean } | null>(null);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [newTag, setNewTag] = useState('');
-  const { show: toast } = useToast();
+  const { toast } = useToast();
 
   useEffect(() => {
     fetch('/api/ai/status').then(r => r.json()).then(setOllamaStatus);
@@ -2169,3 +2169,4 @@ export function AITagModal({
     </motion.div>
   );
 }
+

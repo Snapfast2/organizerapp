@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import util from 'util';
 
-const execAsync = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
 
 const AE_PROJECTS_DB_PATH = path.join(process.cwd(), 'ae-projects.json');
 const AE_LINKS_DB_PATH = path.join(process.cwd(), 'ae-links.json');
@@ -187,24 +187,33 @@ export async function POST(request: NextRequest) {
         const { name, directory } = body;
         if (!name) return NextResponse.json({ error: 'Falta nombre' }, { status: 400 });
 
+        // Strip chars dangerous in filesystem paths and JSX string literals
+        const safeName = name
+          .replace(/\.aep$/i, '')
+          .replace(/["'\\/<>:|?*\x00-\x1f]/g, '')
+          .trim();
+        if (!safeName) return NextResponse.json({ error: 'Nombre de proyecto inválido' }, { status: 400 });
+
         const rootDir = directory || 'E:\\Motion';
-        const projectBaseName = name.replace(/\.aep$/i, '').trim();
-        const projectFolder = path.join(rootDir, projectBaseName);
-        
-        // Create the full folder structure
+        const projectFolder = path.join(rootDir, safeName);
+
         try {
           createProjectFolderStructure(projectFolder);
         } catch (e: any) {
           return NextResponse.json({ error: `No se pudo crear la carpeta: ${e.message}` }, { status: 500 });
         }
 
-        const cleanName = `${projectBaseName}.aep`;
+        const cleanName = `${safeName}.aep`;
         const fullPath = path.join(projectFolder, cleanName);
 
-        // Find AE Path
+        // Find AE path via registry (execFile avoids shell injection)
         let aePath = '';
         try {
-          const { stdout: regOut } = await execAsync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe" /ve');
+          const { stdout: regOut } = await execFileAsync('reg', [
+            'query',
+            'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe',
+            '/ve'
+          ]);
           const match = regOut.match(/REG_SZ\s+(.+)$/im);
           if (match) aePath = match[1].trim();
         } catch {
@@ -216,23 +225,17 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'No se encontró la instalación de After Effects' }, { status: 404 });
         }
 
-        // Generate JSX Script — create and save the project at the new path
-        const scriptContent = `
-          try {
-            app.newProject();
-            var myFile = new File("${fullPath.replace(/\\/g, '/')}");
-            app.project.save(myFile);
-          } catch(e) {}
-        `;
-
-        const tempJsx = path.join(require('os').tmpdir(), `ae_create_${Date.now()}.jsx`);
+        // Write JSX to a temp file and launch AE with it via execFile (no shell interpolation)
+        const fullPathForward = fullPath.replace(/\\/g, '/');
+        const scriptContent = `try { app.newProject(); app.project.save(new File("${fullPathForward}")); } catch(e) {}`;
+        const tempJsx = path.join(os.tmpdir(), `ae_create_${Date.now()}.jsx`);
         fs.writeFileSync(tempJsx, scriptContent);
+        // evalFile path also uses forward slashes (AE ExtendScript requirement)
         const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
-        exec(`"${aePath}" -s "${evalScript}"`, (err) => {
+        execFile(aePath, ['-s', evalScript], (err) => {
           if (err) console.error('Error al abrir AE:', err);
         });
 
-        // Add to recent projects with projectFolder
         db.recentProjects = db.recentProjects.filter(p => path.normalize(p.path) !== path.normalize(fullPath));
         db.recentProjects.unshift({
           path: fullPath,

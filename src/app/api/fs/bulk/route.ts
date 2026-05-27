@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { BulkActionRequest } from '@/lib/types';
 import { moveToTrash } from '@/lib/trash';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export async function POST(request: NextRequest) {
   try {
@@ -119,14 +119,12 @@ export async function POST(request: NextRequest) {
 
       case 'zip': {
         if (!destPath || !newName) return NextResponse.json({ error: 'destPath and newName required' }, { status: 400 });
-        // Use PowerShell Compress-Archive
-        // Create an array of formatted paths
-        const formattedPaths = paths.map(p => `"${p}"`).join(',');
         const outZip = path.join(destPath, newName.endsWith('.zip') ? newName : `${newName}.zip`);
-        
-        const command = `powershell Compress-Archive -Path ${formattedPaths} -DestinationPath "${outZip}" -Force`;
-        await execAsync(command);
-        
+        // Use execFile with array args to prevent shell injection via filenames with quotes or special chars
+        await execFileAsync('powershell', [
+          '-NoProfile', '-NonInteractive', '-Command',
+          'Compress-Archive', '-Path', paths.join(','), '-DestinationPath', outZip, '-Force'
+        ]);
         return NextResponse.json({ success: true, newPath: outZip });
       }
 
@@ -137,8 +135,11 @@ export async function POST(request: NextRequest) {
           const baseDir = destPath || path.dirname(p);
           const zipNameWithoutExt = path.basename(p, path.extname(p));
           const targetDir = path.join(baseDir, zipNameWithoutExt);
-          const command = `powershell Expand-Archive -Path "${p}" -DestinationPath "${targetDir}" -Force`;
-          await execAsync(command);
+          // Use execFile with array args to prevent shell injection
+          await execFileAsync('powershell', [
+            '-NoProfile', '-NonInteractive', '-Command',
+            'Expand-Archive', '-Path', p, '-DestinationPath', targetDir, '-Force'
+          ]);
           items.push({ originalPath: p, newPath: targetDir });
         }
         return NextResponse.json({ success: true, items });

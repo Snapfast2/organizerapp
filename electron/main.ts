@@ -349,7 +349,11 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    // Only allow http/https links to open in the default browser.
+    // Blocking other protocols (file://, javascript:, custom handlers) prevents potential abuse.
+    if (url.startsWith('https://') || url.startsWith('http://')) {
+      shell.openExternal(url);
+    }
     return { action: 'deny' };
   });
 }

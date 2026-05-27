@@ -38,8 +38,6 @@ let isQuitting = false;
 let watcher: ReturnType<typeof chokidar.watch> | null = null;
 // Saved before the minimize-squish animation so restore always has correct bounds
 let savedBoundsBeforeMinimize: Electron.Rectangle | null = null;
-// Blocks the restore event animation while AE is stealing/returning focus
-let isImportingToAE = false;
 
 // Queue of pending download popups (one at a time)
 const pendingPopups: { filePath: string }[] = [];
@@ -271,13 +269,6 @@ function createWindow() {
     const win = mainWindow;
     if (!win || win.isDestroyed()) return;
 
-    // Skip animation if AE is currently stealing/returning focus
-    // (the restore event fires when AE takes over, not when user clicks taskbar)
-    if (isImportingToAE) {
-      const saved = savedBoundsBeforeMinimize;
-      if (saved) win.setBounds(saved);
-      return;
-    }
 
     // Always use the bounds saved before the squish animation
     // (win.getBounds() during restore may still be at the tiny animation size)
@@ -706,43 +697,19 @@ app.whenReady().then(() => {
       fs.writeFileSync(tempJsx, script);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
 
-      // Save window state before exec
+      // Save window state before exec — AE focus steal can cause Electron to resize
       const wasMaximized = mainWindow?.isMaximized() ?? false;
-      const savedBounds  = mainWindow ? { ...mainWindow.getBounds() } : null;
-      if (savedBounds) savedBoundsBeforeMinimize = savedBounds;
-      isImportingToAE = true;
-
-      // ⚠️ Do NOT call setResizable(false) / setMaximizable(false) on a
-      //    maximized window — Windows sends SC_RESTORE which unmaximizes it.
-      // For non-maximized windows, locking is safe:
-      if (!wasMaximized && mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setResizable(false);
-      }
-
-      // If AE causes an unmaximize event, re-maximize immediately
-      const handleUnmaximize = () => {
-        setTimeout(() => {
-          if (mainWindow && !mainWindow.isDestroyed() && isImportingToAE) {
-            mainWindow.maximize();
-          }
-        }, 30);
-      };
-      if (wasMaximized) mainWindow?.on('unmaximize', handleUnmaximize);
+      const savedBounds  = mainWindow?.getBounds();
 
       exec(`"${aePath}" -s "${evalScript}"`, (err) => {
-        // Restore window after AE takes focus (600ms gives AE time to settle)
-        setTimeout(() => {
-          isImportingToAE = false;
-          mainWindow?.off('unmaximize', handleUnmaximize);
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            if (!wasMaximized) mainWindow.setResizable(true);
-            if (wasMaximized) {
-              mainWindow.maximize();
-            } else if (savedBounds) {
-              mainWindow.setBounds(savedBounds);
-            }
+        // Restore window state after AE gets/loses focus
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          if (wasMaximized) {
+            mainWindow.maximize();
+          } else if (savedBounds) {
+            mainWindow.setBounds(savedBounds);
           }
-        }, 600);
+        }
         if (err) {
           console.error('Error ejecutando AE:', err);
           new Notification({ title: 'Error en After Effects', body: 'Hubo un problema al enviar el archivo.' }).show();

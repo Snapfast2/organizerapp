@@ -646,6 +646,14 @@ export default function FileOrgApp() {
         return;
       }
 
+      // Deselect all (Escape)
+      if (e.key === 'Escape' && selected.size > 0) {
+        e.preventDefault();
+        setSelected(new Set());
+        setLastSelectedPath(null);
+        return;
+      }
+
       // Navigate Up (Backspace)
       if (e.key === 'Backspace') {
         e.preventDefault();

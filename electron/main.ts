@@ -396,54 +396,31 @@ ipcMain.on('window:minimize', () => {
   const win = mainWindow;
   const saved = win.getBounds();
 
-  // Save BEFORE the squish animation changes the bounds
+  // Save BEFORE animation so restore has the correct bounds
   savedBoundsBeforeMinimize = { ...saved };
 
-  const display = screen.getDisplayMatching(saved);
-
-  // Notify renderer CSS layer first
+  // Notify renderer — it will run the Genie canvas animation
+  // and call electronAPI.minimize() when done (which hits this handler again?)
+  // No — the renderer calls window:minimize-now (a separate channel) to avoid loops
   win.webContents.send('window:animate:will-minimize');
 
-  // Target: bottom-center of the work area (taskbar direction)
-  const targetCX = display.workArea.x + display.workArea.width / 2;
-  const targetY  = display.workArea.y + display.workArea.height;
+  // Fade the OS window out immediately so the canvas Genie overlay is all that's visible
+  // (The canvas is rendered inside the window at z-index 99999)
+  // We do NOT minimize yet — the renderer will call 'window:minimize-execute' when Genie is done
+});
 
-  const easeInExpo = (t: number) => t === 0 ? 0 : Math.pow(2, 10 * t - 10);
-  const steps = 22, duration = 280;
-  let tick = 0;
-
-  const iv = setInterval(() => {
-    tick++;
-    const t = Math.min(tick / steps, 1);
-    const ease = easeInExpo(t);
-
-    // Shrink width (squeeze horizontally) and collapse height
-    const w = Math.max(8, Math.round(saved.width  * (1 - ease * 0.88)));
-    const h = Math.max(4, Math.round(saved.height * (1 - ease * 0.96)));
-
-    // Move toward bottom-center (taskbar)
-    const x = Math.round(saved.x + saved.width / 2 - w / 2
-                + (targetCX - saved.x - saved.width / 2) * ease * 0.6);
-    const y = Math.round(saved.y + (targetY - saved.y) * ease * 0.85);
-
-    // Fade out simultaneously
+// Called by the renderer after the Genie canvas animation completes
+ipcMain.on('window:minimize-execute', () => {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  const saved = savedBoundsBeforeMinimize || win.getBounds();
+  win.minimize();
+  setTimeout(() => {
     if (!win.isDestroyed()) {
-      win.setBounds({ x, y, width: w, height: h });
-      win.setOpacity(Math.max(0, 1 - ease));
+      win.setBounds(saved);
+      win.setOpacity(1);
     }
-
-    if (tick >= steps) {
-      clearInterval(iv);
-      win.minimize();
-      // Restore bounds immediately (window is hidden while minimized)
-      setTimeout(() => {
-        if (!win.isDestroyed()) {
-          win.setBounds(saved);
-          win.setOpacity(1);
-        }
-      }, 60);
-    }
-  }, duration / steps);
+  }, 60);
 });
 
 ipcMain.on('window:maximize', () => {

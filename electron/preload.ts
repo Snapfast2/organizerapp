@@ -2,9 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // Window controls
-  minimize: () => ipcRenderer.send('window:minimize'),
-  maximize: () => ipcRenderer.send('window:maximize'),
-  close:    () => ipcRenderer.send('window:close'),
+  minimize:        () => ipcRenderer.send('window:minimize'),
+  minimizeExecute: () => ipcRenderer.send('window:minimize-execute'), // called by Genie after animation
+  maximize:        () => ipcRenderer.send('window:maximize'),
+  close:           () => ipcRenderer.send('window:close'),
   isElectron: true,
 
   // Download popup actions

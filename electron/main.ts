@@ -698,16 +698,19 @@ app.whenReady().then(() => {
 
       // Save window state before exec — AE focus steal can cause Electron to resize
       const wasMaximized = mainWindow?.isMaximized() ?? false;
-      const savedBounds = mainWindow?.getBounds();
+      const savedBounds  = mainWindow ? { ...mainWindow.getBounds() } : null;
 
       exec(`"${aePath}" -s "${evalScript}"`, (err) => {
-        // Restore window state after AE gets/loses focus
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          if (wasMaximized) {
-            mainWindow.maximize();
-          } else if (savedBounds) {
-            mainWindow.setBounds(savedBounds);
-          }
+        // Restore window state after AE focus steal
+        if (mainWindow && !mainWindow.isDestroyed() && savedBounds) {
+          // Unmaximize first so setBounds works reliably
+          if (mainWindow.isMaximized()) mainWindow.unmaximize();
+          // Restore exact bounds silently (no animation — the window never left)
+          mainWindow.setBounds(savedBounds);
+          // Re-maximize if it was maximized before
+          if (wasMaximized) mainWindow.maximize();
+          // Keep savedBoundsBeforeMinimize in sync so restore event has correct data
+          savedBoundsBeforeMinimize = savedBounds;
         }
         if (err) {
           console.error('Error ejecutando AE:', err);

@@ -37,7 +37,7 @@ export default function CompanionBubble() {
   const [activeProject, setActiveProject] = useState<string | null>(null);
   const [recents, setRecents] = useState<RecentFile[]>([]);
   const [showRecents, setShowRecents] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [isAERunning, setIsAERunning] = useState(false);
   const bubbleRef = useRef<HTMLDivElement>(null);
 
@@ -79,40 +79,24 @@ export default function CompanionBubble() {
 
   return (
     <div className={styles.root}>
-      <div className={styles.bubble} ref={bubbleRef}>
+      <div className={`${styles.bubble} ${collapsed ? styles.bubbleCollapsed : styles.bubbleExpanded}`} ref={bubbleRef}>
 
         {/* ── Drag handle ───────────────────────────────── */}
         <div
-          className={styles.dragHandle}
+          className={collapsed ? styles.dragHandleCollapsed : styles.dragHandleExpanded}
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
           <div 
-            style={{ WebkitAppRegion: 'no-drag', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' } as React.CSSProperties}
+            style={{ WebkitAppRegion: 'no-drag', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' } as React.CSSProperties}
             onClick={() => setCollapsed(c => !c)}
-            title={collapsed ? 'Expandir' : 'Colapsar'}
+            title={collapsed ? 'MooMotion' : 'Colapsar menú'}
           >
             <span className={styles.cowIcon}>🐄</span>
           </div>
           
-          <div
-            className={styles.controls}
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            <button
-              className={styles.ctrl}
-              onClick={() => setCollapsed(c => !c)}
-              title={collapsed ? 'Expandir' : 'Colapsar'}
-            >
-              {collapsed ? '▲' : '▼'}
-            </button>
-            <button
-              className={`${styles.ctrl} ${styles.ctrlClose}`}
-              onClick={handleHide}
-              title="Cerrar"
-            >
-              ×
-            </button>
-          </div>
+          {!collapsed && (
+            <span className={styles.appName} style={{ pointerEvents: 'none' }}>MooMotion</span>
+          )}
         </div>
 
         {/* ── Body (hidden when collapsed) ─────────────── */}
@@ -181,6 +165,14 @@ export default function CompanionBubble() {
                 label="Destinos rápidos"
                 sublabel="Mover archivo"
                 onClick={() => handleOpenMain()}
+              />
+
+              {/* Hide Button */}
+              <ActionButton
+                icon="❌"
+                label="Ocultar Widget"
+                sublabel="Cierra este botón"
+                onClick={handleHide}
               />
             </div>
 

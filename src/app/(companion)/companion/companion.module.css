@@ -13,10 +13,8 @@
 
 /* ─── Bubble container ────────────────────────────────────────────── */
 .bubble {
-  width: 260px;
   background: rgba(8, 18, 10, 0.88);
   border: 1px solid rgba(74, 222, 128, 0.22);
-  border-radius: 18px;
   box-shadow:
     0 4px 24px rgba(0, 0, 0, 0.45),
     0 0 0 1px rgba(74, 222, 128, 0.08),
@@ -26,10 +24,37 @@
   overflow: hidden;
   color: #f0fdf4;
   user-select: none;
+  transition: opacity 0.2s, width 0.2s, border-radius 0.2s;
+}
+
+.bubbleCollapsed {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  opacity: 0.65;
+}
+
+.bubbleCollapsed:hover {
+  opacity: 1;
+}
+
+.bubbleExpanded {
+  width: 260px;
+  border-radius: 18px;
+  opacity: 1;
 }
 
 /* ─── Drag handle ─────────────────────────────────────────────────── */
-.dragHandle {
+.dragHandleCollapsed {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+}
+
+.dragHandleExpanded {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -39,12 +64,13 @@
   cursor: grab;
 }
 
-.dragHandle:active {
+.dragHandleCollapsed:active,
+.dragHandleExpanded:active {
   cursor: grabbing;
 }
 
 .cowIcon {
-  font-size: 17px;
+  font-size: 22px;
   line-height: 1;
   flex-shrink: 0;
   filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.5));
@@ -56,46 +82,6 @@
   letter-spacing: 0.04em;
   color: #86efac;
   flex: 1;
-}
-
-.controls {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
-.ctrl {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid rgba(74, 222, 128, 0.2);
-  background: rgba(74, 222, 128, 0.08);
-  color: #86efac;
-  font-size: 10px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s, border-color 0.15s;
-  padding: 0;
-  line-height: 1;
-}
-
-.ctrl:hover {
-  background: rgba(74, 222, 128, 0.2);
-  border-color: rgba(74, 222, 128, 0.4);
-}
-
-.ctrlClose {
-  font-size: 14px;
-  color: #fca5a5;
-  border-color: rgba(252, 165, 165, 0.2);
-  background: rgba(252, 165, 165, 0.06);
-}
-
-.ctrlClose:hover {
-  background: rgba(252, 165, 165, 0.18);
-  border-color: rgba(252, 165, 165, 0.4);
 }
 
 /* ─── Body ────────────────────────────────────────────────────────── */

@@ -1,17 +1,35 @@
 {
   "recentProjects": [
     {
-      "path": "E:\\Motion\\End Game test\\End Game test.aep",
-      "name": "End Game test.aep",
-      "lastOpened": "2026-05-27T05:32:12.637Z",
-      "projectFolder": "E:\\Motion\\End Game test"
+      "path": "E:\\Chequi\\test\\test.aep",
+      "name": "test.aep",
+      "lastOpened": "2026-05-27T14:33:04.438Z",
+      "projectFolder": "E:\\Chequi\\test",
+      "colorLabel": "yellow"
+    },
+    {
+      "path": "E:\\Motion\\HeroUI\\HeroUI.aep",
+      "name": "HeroUI.aep",
+      "lastOpened": "2026-05-27T14:28:59.945Z",
+      "projectFolder": "E:\\Motion\\HeroUI"
+    },
+    {
+      "path": "E:\\Motion\\Farm the Tomato\\Farm the Tomato.aep",
+      "name": "Farm the Tomato.aep",
+      "lastOpened": "2026-05-27T14:28:00.766Z",
+      "projectFolder": "E:\\Motion\\Farm the Tomato"
     },
     {
       "path": "E:\\Motion\\PaLosde30\\PaLosde30.aep",
       "name": "PaLosde30.aep",
-      "lastOpened": "2026-05-27T04:01:05.047Z",
-      "projectFolder": "E:\\Motion\\PaLosde30",
-      "colorLabel": "yellow"
+      "lastOpened": "2026-05-27T14:26:15.401Z",
+      "projectFolder": "E:\\Motion\\PaLosde30"
+    },
+    {
+      "path": "E:\\Motion\\End Game test\\End Game test.aep",
+      "name": "End Game test.aep",
+      "lastOpened": "2026-05-27T05:32:12.637Z",
+      "projectFolder": "E:\\Motion\\End Game test"
     },
     {
       "path": "E:\\Motion\\LuminalTest\\LuminalTest.aep",
@@ -24,13 +42,16 @@
     {
       "id": "group-1779811685955",
       "name": "End Game",
-      "projectPaths": []
+      "projectPaths": [
+        "E:\\Motion\\Farm the Tomato\\Farm the Tomato.aep"
+      ]
     },
     {
       "id": "group-1779812376222",
       "name": "Luminal Eye",
       "projectPaths": [
-        "E:\\Motion\\End Game test\\End Game test.aep"
+        "E:\\Motion\\End Game test\\End Game test.aep",
+        "E:\\Motion\\PaLosde30\\PaLosde30.aep"
       ]
     }
   ]

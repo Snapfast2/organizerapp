@@ -17,7 +17,7 @@ import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
 import { 
   InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail, FileListItem, FileGridItem,
   VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal, BulkActionToolbar,
-  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon,
+  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, DuplicateView,
   AITagModal, AIStatusBar
 } from '../components';
 import ClickSpark from '@/components/ui/click-spark';

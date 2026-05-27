@@ -1351,8 +1351,8 @@ export function StatsPanel({ path, onClose, renderGridCard }: { path: string; on
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal" style={{ maxWidth: 800 }}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 800 }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <div>
             <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -234,6 +234,9 @@ function createWindow() {
     win.setOpacity(0);
     win.show();
 
+    // Notify renderer to play Framer Motion CSS layer in sync
+    win.webContents.send('window:animate:will-show');
+
     // Opacity: 0 → 1 fast (200ms, easeOutExpo)
     tween(200, 20, (t) => {
       if (!win.isDestroyed()) win.setOpacity(Math.min(1, easeOutExpo(t)));
@@ -271,11 +274,13 @@ function createWindow() {
 
     win.setBounds({
       x: Math.round(cx - width * startScale / 2),
-      y: Math.round(cy - height / 2 + height * 0.1), // slightly lower = coming up from taskbar
+      y: Math.round(cy - height / 2 + height * 0.1),
       width: Math.round(width * startScale),
       height: Math.round(height * startScale),
     });
     win.setOpacity(0);
+    // Notify renderer CSS layer immediately
+    setTimeout(() => { if (!win.isDestroyed()) win.webContents.send('window:animate:did-show'); }, 30);
 
     // Fade in (220ms)
     tween(220, 20, (t) => {
@@ -305,6 +310,8 @@ function createWindow() {
     if (!isQuitting) {
       e.preventDefault();
       const win = mainWindow!;
+      // Notify renderer CSS layer first
+      win.webContents.send('window:animate:will-hide');
       tween(180, 18, (t) => {
         if (!win.isDestroyed()) win.setOpacity(Math.max(0, 1 - easeInExpo(t)));
       }, () => {
@@ -379,6 +386,9 @@ ipcMain.on('window:minimize', () => {
   const win = mainWindow;
   const saved = win.getBounds();
   const display = screen.getDisplayMatching(saved);
+
+  // Notify renderer CSS layer first
+  win.webContents.send('window:animate:will-minimize');
 
   // Target: bottom-center of the work area (taskbar direction)
   const targetCX = display.workArea.x + display.workArea.width / 2;

@@ -14,6 +14,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Listen for fs refresh from main
   onFsRefresh: (cb: () => void) => ipcRenderer.on('fs:refresh', cb),
 
+  // Window animation sync — lets React play CSS animations in sync with Electron
+  onWindowAnimate: (event: string, cb: () => void) => {
+    const channel = `window:animate:${event}`;
+    const handler = () => cb();
+    ipcRenderer.on(channel, handler);
+    // Return cleanup function
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
   // After Effects Integration
   isAEOpen: () => ipcRenderer.invoke('is-ae-open'),
   popupImportAE: (filePath: string, deleteOriginal?: boolean) =>

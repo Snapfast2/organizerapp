@@ -45,21 +45,27 @@ export default function AnimationShell({ children }: { children: React.ReactNode
       }, { duration: 0.28, ease: [0.4, 0, 1, 1] });
     };
 
-    const handleDidShow = () => {
+    const handleDidShow = async () => {
       if (prefersReduced) {
         animate(scope.current, { scale: 1, opacity: 1, filter: 'blur(0px)', y: 0 }, { duration: 0 });
         return;
       }
-      // Spring bounce: comes in from slightly below with blur clearing
+      // Force reset to start state instantly (clears any stale blur/opacity from will-hide)
+      await animate(scope.current, {
+        scale: 0.90,
+        opacity: 0,
+        filter: 'blur(12px)',
+        y: 30,
+      }, { duration: 0 });
+      // Then spring in
       animate(scope.current, {
-        scale: [0.90, 1.02, 1],
-        opacity: [0, 0.85, 1],
-        filter: ['blur(12px)', 'blur(2px)', 'blur(0px)'],
-        y: [30, -4, 0],
+        scale: 1,
+        opacity: 1,
+        filter: 'blur(0px)',
+        y: 0,
       }, {
-        duration: 0.42,
-        times: [0, 0.65, 1],
-        ease: 'easeOut',
+        ...springRestore,
+        filter: { duration: 0.38, ease: 'easeOut' },
       });
     };
 

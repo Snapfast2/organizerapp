@@ -1197,6 +1197,16 @@ export default function FileOrgApp() {
 
 
 
+  // Pending rename timer — click on already-selected filename starts rename (like Windows Explorer)
+  const pendingRenameRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelPendingRename = () => {
+    if (pendingRenameRef.current) { clearTimeout(pendingRenameRef.current); pendingRenameRef.current = null; }
+  };
+  const startPendingRename = (entry: FileEntry) => {
+    cancelPendingRename();
+    pendingRenameRef.current = setTimeout(() => setInlineRenameEntry(entry), 500);
+  };
+
   const renderGridCard = (entry: FileEntry, forceCover: boolean = false) => {
     const isSelected = selected.has(entry.path);
     const isReturning = returningItems.includes(entry.path);
@@ -1216,7 +1226,8 @@ export default function FileOrgApp() {
         onDragStart={(e: any) => handleDragStart(e, entry)}
         onDragOver={(e: any) => handleDragOver(e, entry)}
         onDrop={(e: any) => handleDrop(e, entry)}
-        onClick={e => { e.stopPropagation(); setFocusedPath(entry.path); handleClick(e, entry); }}
+        onClick={e => { e.stopPropagation(); cancelPendingRename(); setFocusedPath(entry.path); handleClick(e, entry); }}
+        onDoubleClick={cancelPendingRename}
         onContextMenu={e => onContextMenu(e, entry)}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1, boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' }}
@@ -1247,7 +1258,14 @@ export default function FileOrgApp() {
               {isEditing ? (
                 <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
               ) : (
-                <div className="video-card-name" title={entry.name} onDoubleClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+                <div
+                  className="video-card-name"
+                  title={entry.name}
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (isSelected && !entry.isDir) startPendingRename(entry);
+                  }}
+                >{entry.name}</div>
               )}
               <div className="video-card-meta">
                 {formatSize(entry.size)}
@@ -1263,7 +1281,14 @@ export default function FileOrgApp() {
             {isEditing ? (
               <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
             ) : (
-              <div className="file-card-name" title={entry.name} onDoubleClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+              <div
+                className="file-card-name"
+                title={entry.name}
+                onClick={e => {
+                  e.stopPropagation();
+                  if (isSelected && !entry.isDir) startPendingRename(entry);
+                }}
+              >{entry.name}</div>
             )}
             {entry.tags && entry.tags.length > 0 && (
               <div style={{ fontSize: 10, color: 'var(--accent)', textAlign: 'center', marginTop: 2 }}>{entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</div>
@@ -1586,7 +1611,8 @@ export default function FileOrgApp() {
                       onDragStart={(e: any) => handleDragStart(e, entry)}
                       onDragOver={(e: any) => handleDragOver(e, entry)}
                       onDrop={(e: any) => handleDrop(e, entry)}
-                      onClick={e => { e.stopPropagation(); setFocusedPath(entry.path); handleClick(e, entry); }}
+                      onClick={e => { e.stopPropagation(); cancelPendingRename(); setFocusedPath(entry.path); handleClick(e, entry); }}
+                      onDoubleClick={cancelPendingRename}
                       onContextMenu={e => onContextMenu(e, entry)}
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -1599,7 +1625,13 @@ export default function FileOrgApp() {
                       {isEditing ? (
                         <div style={{ flex: 1 }}><InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} /></div>
                       ) : (
-                        <div className="file-list-name" onDoubleClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+                        <div
+                          className="file-list-name"
+                          onClick={e => {
+                            e.stopPropagation();
+                            if (isSelected && !entry.isDir) startPendingRename(entry);
+                          }}
+                        >{entry.name}</div>
                       )}
                       {entry.tags && entry.tags.length > 0 && (
                         <div style={{ display: 'flex', gap: 4, marginRight: 16 }}>

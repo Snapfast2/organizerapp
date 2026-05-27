@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback, useRef, useDeferredValue, useMemo, useReducer } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
@@ -28,247 +28,11 @@ import AEProjectHub from '../ae-hub';
 import PackAnimation from './_components/PackAnimation';
 
 
-// ─── Sidebar Tree Components (adapted from Magic UI FileTree) ─────────────────
-
-interface TreeNodeProps {
-  path: string;
-  label: string;
-  Icon?: React.ElementType;
-  isActive: boolean;
-  onNavigate: (path: string) => void;
-  depth?: number;
-  isRoot?: boolean;
-  onDropFiles?: (paths: string[], targetPath: string) => void;
-  isExpandable?: boolean;
-}
-
-// A single node in the sidebar tree — arrow expands, label navigates (Magic UI style)
-function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, isRoot = false, onDropFiles, isExpandable = true }: TreeNodeProps) {
-  const [open, setOpen] = useState(false);
-  const [childFolders, setChildFolders] = useState<{ name: string; path: string }[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [fetched, setFetched] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  const toggle = async (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (!open && !fetched) {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/fs?path=${encodeURIComponent(path)}`);
-        const data = await res.json();
-        const dirs = (data.entries ?? [])
-          .filter((e: { isDir: boolean }) => e.isDir)
-          .map((e: { name: string; path: string }) => ({ name: e.name, path: e.path }));
-        setChildFolders(dirs);
-        setFetched(true);
-      } catch { /* ignore */ }
-      setLoading(false);
-    }
-    setOpen(o => !o);
-  };
-
-  // Magic UI style: FolderOpen when expanded
-  const FolderIcon = open ? FolderOpen : (Icon ?? Folder);
-
-  return (
-    <div style={{ position: 'relative' }}>
-      {/* Row */}
-      <motion.div
-        onClick={(e) => {
-          onNavigate(path);
-          if (isExpandable && !open) toggle(e);
-        }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragOver(true);
-          e.dataTransfer.dropEffect = 'move';
-        }}
-        onDragLeave={() => setIsDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-          try {
-            const data = JSON.parse(e.dataTransfer.getData('application/json'));
-            if (data.paths && data.paths.length > 0 && onDropFiles) {
-              onDropFiles(data.paths, path);
-            }
-          } catch {}
-        }}
-        whileHover={{ backgroundColor: isActive ? undefined : 'rgba(255,255,255,0.04)' }}
-        whileTap={{ scale: 0.985 }}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 5,
-          paddingLeft: 8 + depth * 16,
-          paddingRight: 8,
-          paddingTop: 3,
-          paddingBottom: 3,
-          borderRadius: 5,
-          cursor: 'pointer',
-          backgroundColor: isDragOver ? 'rgba(74,222,128,0.2)' : isActive ? 'rgba(74,222,128,0.1)' : 'transparent',
-          position: 'relative',
-          userSelect: 'none',
-        }}
-      >
-        {/* Expand arrow */}
-        {isExpandable ? (
-          <motion.div
-            animate={{ rotate: open ? 90 : 0 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 14, height: 14, flexShrink: 0,
-              color: 'var(--text-muted)', opacity: 0.55, borderRadius: 3,
-            }}
-            onClick={(e) => { e.stopPropagation(); toggle(e); }}
-          >
-            {loading
-              ? <Loader size={9} className="spinning" />
-              : <ChevronRight size={10} strokeWidth={2.5} />
-            }
-          </motion.div>
-        ) : (
-          <div style={{ width: 14, height: 14, flexShrink: 0 }} />
-        )}        {/* Folder icon */}
-        <motion.span
-          animate={{
-            color: isActive ? 'var(--accent)' : open ? 'var(--accent)' : 'var(--text-secondary)',
-            scale: isActive ? 1.08 : 1,
-          }}
-          transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-          style={{ display: 'flex', flexShrink: 0 }}
-        >
-          <FolderIcon size={13} strokeWidth={1.6} />
-        </motion.span>
-
-        {/* Label */}
-        <span style={{
-          fontSize: 12.5,
-          color: isActive ? 'var(--accent)' : 'var(--text-primary)',
-          fontWeight: isActive ? 600 : 400,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          flex: 1,
-          letterSpacing: '-0.01em',
-        }}>
-          {label}
-        </span>
-      </motion.div>
-
-      {/* Children */}
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            key="children"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            style={{ overflow: 'hidden', position: 'relative' }}
-          >
-            {/* Magic UI indent guide line */}
-            <div style={{
-              position: 'absolute',
-              left: 8 + depth * 16 + 15,
-              top: 0,
-              bottom: 6,
-              width: 1,
-              background: 'var(--border-subtle)',
-              opacity: 0.6,
-            }} />
-
-            {childFolders.length === 0 && fetched ? (
-              <div style={{
-                paddingLeft: 8 + (depth + 1) * 16 + 14,
-                paddingTop: 3, paddingBottom: 3,
-                fontSize: 11.5, color: 'var(--text-muted)', opacity: 0.45,
-                letterSpacing: '-0.01em',
-              }}>
-                Vacío
-              </div>
-            ) : (
-              childFolders.map((child, i) => (
-                <motion.div
-                  key={child.path}
-                  initial={{ opacity: 0, x: -3 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.025, duration: 0.13 }}
-                >
-                  <TreeNode
-                    path={child.path}
-                    label={child.name}
-                    isActive={false}
-                    onNavigate={onNavigate}
-                    depth={depth + 1}
-                    onDropFiles={onDropFiles}
-                  />
-                </motion.div>
-              ))
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-
-interface SidebarSectionProps {
-  title: string;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-}
-
-function SidebarSection({ title, children, defaultOpen = true }: SidebarSectionProps) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  return (
-    <div style={{ marginBottom: 4 }}>
-      <motion.div
-        className="sidebar-section-title"
-        onClick={() => setOpen(o => !o)}
-        style={{
-          cursor: 'pointer', display: 'flex', alignItems: 'center',
-          justifyContent: 'space-between', userSelect: 'none', paddingRight: 8,
-        }}
-        whileTap={{ scale: 0.98 }}
-      >
-        <span>{title}</span>
-        <motion.span
-          animate={{ rotate: open ? 0 : -90 }}
-          transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-          style={{ display: 'flex', color: 'var(--text-muted)', opacity: 0.5 }}
-        >
-          <ChevronDown size={11} strokeWidth={2.5} />
-        </motion.span>
-      </motion.div>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            key="content"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            style={{ overflow: 'hidden' }}
-          >
-            <div className="sidebar-tree">{children}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
+import { TreeNode, SidebarSection } from './_components/SidebarTree';
 
 export default function FileOrgApp() {
 
-  // Navigation history — single useReducer so NAVIGATE/GO_BACK/GO_FORWARD always see fresh state
+  // Navigation history â€” single useReducer so NAVIGATE/GO_BACK/GO_FORWARD always see fresh state
   type NavState = { history: string[]; index: number; current: string };
   type NavAction =
     | { type: 'NAVIGATE'; path: string }
@@ -338,7 +102,7 @@ export default function FileOrgApp() {
   const [isScanningAE, setIsScanningAE] = useState(false);
   const closeContextMenu = () => setContextMenu(null);
   
-  // Toasts — using the shared useToast hook from components.tsx
+  // Toasts â€” using the shared useToast hook from components.tsx
   const { toasts, toast } = useToast();
 
   // Undo System
@@ -377,7 +141,7 @@ export default function FileOrgApp() {
     }
   };
 
-  // Toggle sort column: same field → flip direction, new field → asc
+  // Toggle sort column: same field â†’ flip direction, new field â†’ asc
   const handleSort = useCallback((field: string) => {
     if (sortBy === field) {
       setSortDesc(prev => !prev);
@@ -387,7 +151,7 @@ export default function FileOrgApp() {
     }
   }, [sortBy]);
 
-  // Ref to the active pack polling interval — cleared on unmount or when pack finishes
+  // Ref to the active pack polling interval â€” cleared on unmount or when pack finishes
   const packIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     return () => {
@@ -408,7 +172,7 @@ export default function FileOrgApp() {
       const { jobId, error: startError } = await startRes.json();
       if (startError) throw new Error(startError);
 
-      // 2. Poll every 300ms — interval stored in ref so it can be cleared on unmount
+      // 2. Poll every 300ms â€” interval stored in ref so it can be cleared on unmount
       await new Promise<void>((resolve, reject) => {
         packIntervalRef.current = setInterval(async () => {
           if (!mounted) {
@@ -484,7 +248,7 @@ export default function FileOrgApp() {
     obs.observe(sentinel);
     return () => obs.disconnect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Intentionally empty — callback uses only stable setState, sentinel ref checked above
+  }, []); // Intentionally empty â€” callback uses only stable setState, sentinel ref checked above
 
   // Reset visible count when navigating to a new folder
   useEffect(() => { setVisibleCount(100); }, [currentPath]);
@@ -663,7 +427,7 @@ export default function FileOrgApp() {
     }
   }, [toast]);
 
-  // Called when AITagModal closes — refresh to show new tags on file cards
+  // Called when AITagModal closes â€” refresh to show new tags on file cards
   const handleAITagClose = useCallback(() => {
     setAITagEntries(null);
     refresh(); // reload directory so tags appear on file cards
@@ -717,7 +481,7 @@ export default function FileOrgApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'undo', undoAction: lastAction })
       });
-      toast('Acción deshecha exitosamente', 'success');
+      toast('AcciÃ³n deshecha exitosamente', 'success');
       refresh();
     } catch {
       toast('Error al deshacer', 'error');
@@ -823,7 +587,7 @@ export default function FileOrgApp() {
         body: JSON.stringify({ action: 'unzip', paths: [path], destPath: currentPath })
       });
       if (!res.ok) throw new Error('Unzip failed');
-      toast('Archivo extraído exitosamente', 'success');
+      toast('Archivo extraÃ­do exitosamente', 'success');
       refresh();
     } catch {
       toast('Error al extraer archivo', 'error');
@@ -1170,7 +934,7 @@ export default function FileOrgApp() {
               <div className="video-card-meta">
                 {formatSize(entry.size)}
                 {entry.tags && entry.tags.length > 0 && (
-                  <span style={{ color: 'var(--accent)', marginLeft: 6 }}>• {entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</span>
+                  <span style={{ color: 'var(--accent)', marginLeft: 6 }}>â€¢ {entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</span>
                 )}
               </div>
             </div>
@@ -1196,7 +960,7 @@ export default function FileOrgApp() {
     <ClickSpark sparkColor="#4ade80" sparkSize={6} sparkRadius={20} sparkCount={4} duration={300} extraScale={0.6}>
       <div className={`app-shell${isElectron ? ' has-titlebar' : ''}`} onClick={() => { clearSelection(); closeContextMenu(); }}>
 
-      {/* ─── ELECTRON TITLE BAR (Discord style) ─── */}
+      {/* â”€â”€â”€ ELECTRON TITLE BAR (Discord style) â”€â”€â”€ */}
       {isElectron && (
         <div className="electron-titlebar">
           {/* Left: back / forward */}
@@ -1205,7 +969,7 @@ export default function FileOrgApp() {
               className="titlebar-nav-btn"
               onClick={goBack}
               disabled={!canGoBack}
-              title="Atrás"
+              title="AtrÃ¡s"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M10 3L5 8L10 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1244,7 +1008,7 @@ export default function FileOrgApp() {
         </div>
       )}
 
-      {/* ─── HEADER ─── */}
+      {/* â”€â”€â”€ HEADER â”€â”€â”€ */}
       <header className="header">
         {!isElectron && <div className="header-logo"><FolderOpen size={20} color="var(--accent)" strokeWidth={2.5} /> FileOrganizer</div>}
         <div className="header-search">
@@ -1252,7 +1016,7 @@ export default function FileOrgApp() {
             className="btn btn-ghost btn-icon" 
             style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', padding: 0, width: 26, height: 26, zIndex: 10 }}
             onClick={() => setSearchScope(prev => prev === 'global' ? 'local' : 'global')}
-            title={searchScope === 'global' ? "Buscando en todo (Click para buscar solo aquí)" : "Buscando solo aquí (Click para buscar en todo)"}
+            title={searchScope === 'global' ? "Buscando en todo (Click para buscar solo aquÃ­)" : "Buscando solo aquÃ­ (Click para buscar en todo)"}
           >
             {searchScope === 'global' ? <Globe size={14} color="var(--text-muted)" /> : <FolderSearch size={14} color="var(--text-muted)" />}
           </button>
@@ -1273,18 +1037,18 @@ export default function FileOrgApp() {
           >
             {isScanningAE ? <RefreshCw size={16} className="spin-animation" color="var(--accent)" /> : <Clapperboard size={16} color="var(--accent)" />}
           </button>
-          <button className="btn btn-ghost btn-icon" onClick={() => setShowStats(true)} title="Estadísticas de disco"><BarChart2 size={16} /></button>
+          <button className="btn btn-ghost btn-icon" onClick={() => setShowStats(true)} title="EstadÃ­sticas de disco"><BarChart2 size={16} /></button>
           <button className="btn btn-primary" style={{ padding: '0 12px', height: 30, fontSize: 11.5 }} onClick={() => setShowOrganize(true)}>
             <Wand2 size={13} /> Auto-Organizar
           </button>
         </div>
       </header>
 
-      {/* ─── SIDEBAR ─── */}
+      {/* â”€â”€â”€ SIDEBAR â”€â”€â”€ */}
       <aside className="sidebar">
         <div className="sidebar-scroll-area" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-          {/* ── Navegación ── */}
-          <SidebarSection title="Navegación" defaultOpen>
+          {/* â”€â”€ NavegaciÃ³n â”€â”€ */}
+          <SidebarSection title="NavegaciÃ³n" defaultOpen>
             <TreeNode
               key="hub"
               path="hub"
@@ -1305,7 +1069,7 @@ export default function FileOrgApp() {
             />
           </SidebarSection>
 
-          {/* ── Ubicaciones ── */}
+          {/* â”€â”€ Ubicaciones â”€â”€ */}
           <SidebarSection title="Ubicaciones" defaultOpen>
             {drives.map(d => (
               <TreeNode
@@ -1320,16 +1084,16 @@ export default function FileOrgApp() {
             ))}
           </SidebarSection>
 
-          {/* ── Accesos Rápidos ── */}
-          <SidebarSection title="Accesos Rápidos" defaultOpen>
+          {/* â”€â”€ Accesos RÃ¡pidos â”€â”€ */}
+          <SidebarSection title="Accesos RÃ¡pidos" defaultOpen>
             {quickAccess.map(qa => {
               let Icon = Folder;
               if (qa.name === 'Escritorio') Icon = Monitor;
               else if (qa.name === 'Descargas') Icon = ArrowDown;
               else if (qa.name === 'Documentos') Icon = FileText;
-              else if (qa.name === 'Imágenes') Icon = ImageIcon;
+              else if (qa.name === 'ImÃ¡genes') Icon = ImageIcon;
               else if (qa.name === 'Videos') Icon = Film;
-              else if (qa.name === 'Música') Icon = Music;
+              else if (qa.name === 'MÃºsica') Icon = Music;
               return (
                 <TreeNode
                   key={qa.path}
@@ -1345,7 +1109,7 @@ export default function FileOrgApp() {
           </SidebarSection>
         </div>
 
-        {/* ── Papelera ── */}
+        {/* â”€â”€ Papelera â”€â”€ */}
         <div className="sidebar-section-title" style={{ marginTop: 4 }}>Papelera</div>
         <div className="sidebar-tree" style={{ flex: 'none', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
           <div className="tree-item" onClick={() => setShowTrashModal(true)} 
@@ -1369,7 +1133,7 @@ export default function FileOrgApp() {
       </aside>
 
 
-      {/* ─── MAIN AREA ─── */}
+      {/* â”€â”€â”€ MAIN AREA â”€â”€â”€ */}
       <main className="main-area" onContextMenu={e => e.preventDefault()}>
         {currentPath === 'hub' ? (
           <AEProjectHub navigate={navigate} toast={toast} />
@@ -1400,7 +1164,7 @@ export default function FileOrgApp() {
           <div className="toolbar-group">
             <span style={{ fontSize: 11, color: 'var(--text-muted)', userSelect: 'none' }}>Ordenar:</span>
             {(['name','type','size','created','modified'] as const).map(field => {
-              const labels: Record<string,string> = { name:'Nombre', type:'Tipo', size:'Tamaño', created:'Creación', modified:'Modificado' };
+              const labels: Record<string,string> = { name:'Nombre', type:'Tipo', size:'TamaÃ±o', created:'CreaciÃ³n', modified:'Modificado' };
               const active = sortBy === field;
               return (
                 <button
@@ -1437,7 +1201,7 @@ export default function FileOrgApp() {
             {listing?.entries.length === 0 && !searching && (
               <motion.div key="empty-state" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="empty-state">
                 <FolderOpen size={48} color="var(--border)" />
-                <div>Carpeta vacía</div>
+                <div>Carpeta vacÃ­a</div>
               </motion.div>
             )}
 
@@ -1447,7 +1211,7 @@ export default function FileOrgApp() {
                 <div style={{ width: 28 }} />{/* checkbox */}
                 <div style={{ width: 32 }} />{/* icon */}
                 {(['name','type','size','modified'] as const).map(field => {
-                  const labels: Record<string,string> = { name:'Nombre', type:'Tipo', size:'Tamaño', modified:'Modificado' };
+                  const labels: Record<string,string> = { name:'Nombre', type:'Tipo', size:'TamaÃ±o', modified:'Modificado' };
                   const active = sortBy === field;
                   return (
                     <div
@@ -1489,7 +1253,7 @@ export default function FileOrgApp() {
                 </motion.div>
               );
             })() : (
-              /* ── LIST MODE ── */
+              /* â”€â”€ LIST MODE â”€â”€ */
               <motion.div key="list-view" className="file-list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 {visualEntries.slice(0, visibleCount).map((entry) => {
                   const isSelected = selected.has(entry.path);
@@ -1540,14 +1304,14 @@ export default function FileOrgApp() {
           {/* Counter when not all entries are visible */}
             {visibleCount < totalEntries && (
               <div style={{ textAlign: 'center', padding: '12px 0 4px', fontSize: 11.5, color: 'var(--text-muted)' }}>
-                Mostrando {Math.min(visibleCount, totalEntries)} de {totalEntries} — seguí bajando para ver más
+                Mostrando {Math.min(visibleCount, totalEntries)} de {totalEntries} â€” seguÃ­ bajando para ver mÃ¡s
               </div>
             )}
             </>
           )}
         </div>
 
-        {/* ─── Scroll to Top Floating Button ─── */}
+        {/* â”€â”€â”€ Scroll to Top Floating Button â”€â”€â”€ */}
         <AnimatePresence>
           {showScrollTop && (
             <motion.button
@@ -1569,7 +1333,7 @@ export default function FileOrgApp() {
         )}
       </main>
 
-      {/* ─── PACK PROGRESS MODAL ─── */}
+      {/* â”€â”€â”€ PACK PROGRESS MODAL â”€â”€â”€ */}
       <AnimatePresence>
         {packState && (
           <motion.div
@@ -1616,7 +1380,7 @@ export default function FileOrgApp() {
                   const isVideo = ['mp4','mov','avi','mkv','webm','m4v'].includes(ext);
                   const isImage = ['jpg','jpeg','png','gif','webp','psd','ai','svg'].includes(ext);
                   const isAudio = ['mp3','wav','aac','ogg','flac'].includes(ext);
-                  const icon = isVideo ? '🎬' : isImage ? '🖼️' : isAudio ? '🎵' : '📄';
+                  const icon = isVideo ? 'ðŸŽ¬' : isImage ? 'ðŸ–¼ï¸' : isAudio ? 'ðŸŽµ' : 'ðŸ“„';
                   return (
                     <motion.div
                       key={f.name + i}
@@ -1638,7 +1402,7 @@ export default function FileOrgApp() {
         )}
       </AnimatePresence>
 
-      {/* ─── PACK SUCCESS MODAL ─── */}
+      {/* â”€â”€â”€ PACK SUCCESS MODAL â”€â”€â”€ */}
       <AnimatePresence>
         {packDone && (
           <motion.div
@@ -1655,7 +1419,7 @@ export default function FileOrgApp() {
               {/* Package box inside green circle, icons flying in */}
               <PackAnimation />
 
-              <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700 }}>¡Proyecto Empaquetado!</h2>
+              <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700 }}>Â¡Proyecto Empaquetado!</h2>
               <p style={{ margin: '0 0 20px', fontSize: 14, opacity: 0.6 }}>Todos los archivos fueron copiados exitosamente</p>
 
               {/* Stats row */}
@@ -1670,7 +1434,7 @@ export default function FileOrgApp() {
                 </div>
               </div>
 
-              {/* Destination path — with open folder button */}
+              {/* Destination path â€” with open folder button */}
               <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 12px', marginBottom: 22, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <FolderOpen size={15} color="var(--accent)" style={{ flexShrink: 0 }} />
                 <span style={{ flex: 1, fontSize: 12, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{packDone.destPath}</span>
@@ -1693,7 +1457,7 @@ export default function FileOrgApp() {
                 onClick={() => setPackDone(null)}
                 style={{ width: '100%', padding: '12px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
               >
-                ¡Genial!
+                Â¡Genial!
               </motion.button>
             </motion.div>
           </motion.div>
@@ -1743,7 +1507,7 @@ export default function FileOrgApp() {
                 });
                 const data = await res.json();
                 if (res.ok) {
-                  toast(data.alreadyRegistered ? '✓ Ya estaba en el Hub (movido al top)' : '✓ Proyecto agregado al Hub', 'success');
+                  toast(data.alreadyRegistered ? 'âœ“ Ya estaba en el Hub (movido al top)' : 'âœ“ Proyecto agregado al Hub', 'success');
                 } else {
                   toast(data.error || 'Error al registrar', 'error');
                 }
@@ -1761,7 +1525,7 @@ export default function FileOrgApp() {
                 const data = await res.json();
                 if (res.ok) {
                   const assetMsg = data.copiedAssets > 0 ? `, ${data.copiedAssets} asset(s) copiados` : '';
-                  toast(`✓ Movido a E:\\Motion${assetMsg}`, 'success');
+                  toast(`âœ“ Movido a E:\\Motion${assetMsg}`, 'success');
                   if (data.relinkScript) {
                     const api = (window as any).electronAPI;
                     api?.aeRunRelinkScript?.(data.relinkScript);

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate, IMAGE_EXTS, VIDEO_EXTS, DOC_EXTS, PREVIEWABLE } from '@/lib/file-types';
+import type { SortField } from './(main)/_components/FileToolbar';
 
 
 
@@ -739,7 +740,7 @@ export function ContextMenu({ x, y, entry, onClose, onRename, onDelete, onMkdir,
   onMkdir: () => void; onOpen: () => void; onPreview: () => void;
   onOpenLocation: () => void; onMoveTo: () => void; onUnzip: () => void;
   onMetadata: () => void;
-  sortBy: string; sortDesc: boolean; onSort: (field: string) => void;
+  sortBy: string; sortDesc: boolean; onSort: (field: SortField) => void;
   aeLinkedProjects?: string[];
   onOpenAEProject?: (path: string) => void;
   onPackProject?: (path: string) => void;

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useCallback, useRef, useDeferredValue, useMemo, useReducer } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
@@ -29,6 +29,8 @@ import PackAnimation from './_components/PackAnimation';
 
 
 import { TreeNode, SidebarSection } from './_components/SidebarTree';
+import FileToolbar, { type SortField } from './_components/FileToolbar';
+
 
 export default function FileOrgApp() {
 
@@ -119,7 +121,7 @@ export default function FileOrgApp() {
   const [pathInput, setPathInput] = useState('');
   const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null);
   const [visibleCount, setVisibleCount] = useState(100);
-  const [sortBy, setSortBy] = useState('name');
+  const [sortBy, setSortBy] = useState<SortField>('name');
   const [sortDesc, setSortDesc] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const searching = isSearching;
@@ -142,9 +144,9 @@ export default function FileOrgApp() {
   };
 
   // Toggle sort column: same field â†’ flip direction, new field â†’ asc
-  const handleSort = useCallback((field: string) => {
+  const handleSort = useCallback((field: SortField) => {
     if (sortBy === field) {
-      setSortDesc(prev => !prev);
+      setSortDesc(d => !d);
     } else {
       setSortBy(field);
       setSortDesc(false);
@@ -1139,54 +1141,30 @@ export default function FileOrgApp() {
           <AEProjectHub navigate={navigate} toast={toast} />
         ) : (
           <>
-            <div className="path-input-row">
-          <button className="btn btn-ghost btn-icon" onClick={goUp} disabled={!currentPath || currentPath.length <= 3}><ArrowUp size={16} /></button>
-          <button className="btn btn-ghost btn-icon" onClick={refresh}><RefreshCw size={14} className={isLoading ? 'spinning' : ''} /></button>
-          <input className="path-input" value={pathInput} onChange={e => setPathInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && navigate(pathInput)} />
-        </div>
-
-        {!showDuplicates && (
-          <div className="toolbar">
-          <div className="toolbar-group">
-            <button className="btn btn-default" onClick={() => setShowMkdir(true)}><FolderPlus size={14} /> Nueva Carpeta</button>
-            <button className="btn btn-ghost" onClick={() => setShowDuplicates(true)} title="Buscar Duplicados"><Copy size={16} /> Duplicados</button>
-            <button className="btn btn-ghost" onClick={() => {
-              const targets = selected.size > 0
-                ? visualEntries.filter(e => selected.has(e.path) && !e.isDir)
-                : visualEntries.filter(e => !e.isDir);
-              setAITagEntries(targets);
-            }} title="Etiquetar con IA" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Sparkles size={14} /> IA {selected.size > 0 ? `(${selected.size})` : ''}
-            </button>
-          </div>
-          <div className="toolbar-divider" />
-          {/* Sort controls */}
-          <div className="toolbar-group">
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', userSelect: 'none' }}>Ordenar:</span>
-            {(['name','type','size','created','modified'] as const).map(field => {
-              const labels: Record<string,string> = { name:'Nombre', type:'Tipo', size:'TamaÃ±o', created:'CreaciÃ³n', modified:'Modificado' };
-              const active = sortBy === field;
-              return (
-                <button
-                  key={field}
-                  className={`btn btn-ghost sort-btn ${active ? 'active' : ''}`}
-                  onClick={() => handleSort(field)}
-                  title={`Ordenar por ${labels[field]}`}
-                >
-                  {labels[field]}
-                  {active ? (sortDesc ? <SortDesc size={12}/> : <SortAsc size={12}/>) : null}
-                </button>
-              );
-            })}
-          </div>
-          <div className="toolbar-divider" />
-          <div className="toolbar-group">
-            <button className={`btn btn-ghost btn-icon ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}><Grid size={16}/></button>
-            <button className={`btn btn-ghost btn-icon ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}><List size={16}/></button>
-          </div>
-          </div>
-        )}
-
+        <FileToolbar
+          currentPath={currentPath}
+          pathInput={pathInput}
+          isLoading={isLoading}
+          viewMode={viewMode}
+          sortBy={sortBy}
+          sortDesc={sortDesc}
+          showDuplicates={showDuplicates}
+          selectedCount={selected.size}
+          onPathInputChange={setPathInput}
+          onNavigate={navigate}
+          onGoUp={goUp}
+          onRefresh={refresh}
+          onSort={handleSort}
+          onSetViewMode={setViewMode}
+          onNewFolder={() => setShowMkdir(true)}
+          onShowDuplicates={() => setShowDuplicates(true)}
+          onAITag={() => {
+            const targets = selected.size > 0
+              ? visualEntries.filter(e => selected.has(e.path) && !e.isDir)
+              : visualEntries.filter(e => !e.isDir);
+            setAITagEntries(targets);
+          }}
+        />
         <div className="file-content" ref={fileContentRef} onClick={clearSelection}>
           {showDuplicates ? (
             <DuplicateView 
@@ -1616,7 +1594,7 @@ export default function FileOrgApp() {
           <MetadataModal
             entry={showMetadataEntry}
             onClose={() => setShowMetadataEntry(null)}
-            onSave={(color, tags) => handleMetadataSave(showMetadataEntry, color, tags)}
+            onSave={(color: string, tags: string[]) => handleMetadataSave(showMetadataEntry, color, tags)}
           />
         )}
         {aiTagEntries && (

@@ -36,6 +36,8 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let watcher: ReturnType<typeof chokidar.watch> | null = null;
+// Saved before the minimize-squish animation so restore always has correct bounds
+let savedBoundsBeforeMinimize: Electron.Rectangle | null = null;
 
 // Queue of pending download popups (one at a time)
 const pendingPopups: { filePath: string }[] = [];
@@ -266,20 +268,26 @@ function createWindow() {
   mainWindow.on('restore', () => {
     const win = mainWindow;
     if (!win || win.isDestroyed()) return;
-    const { width, height } = win.getBounds();
-    const display = screen.getDisplayMatching(win.getBounds());
+
+    // Always use the bounds saved before the squish animation
+    // (win.getBounds() during restore may still be at the tiny animation size)
+    const target = savedBoundsBeforeMinimize || win.getBounds();
+    savedBoundsBeforeMinimize = null;
+    const { x: tx, y: ty, width, height } = target;
+
+    const display = screen.getDisplayMatching(target);
     const cx = display.workArea.x + display.workArea.width / 2;
     const cy = display.workArea.y + display.workArea.height / 2;
     const startScale = 0.82;
 
-    win.setBounds({
-      x: Math.round(cx - width * startScale / 2),
-      y: Math.round(cy - height / 2 + height * 0.1),
-      width: Math.round(width * startScale),
-      height: Math.round(height * startScale),
-    });
+    // Start: small, slightly below center of screen
+    const startW = Math.round(width * startScale);
+    const startH = Math.round(height * startScale);
+    const startX = Math.round(cx - startW / 2);
+    const startY = Math.round(cy - startH / 2 + height * 0.08);
+
+    win.setBounds({ x: startX, y: startY, width: startW, height: startH });
     win.setOpacity(0);
-    // Notify renderer CSS layer immediately
     setTimeout(() => { if (!win.isDestroyed()) win.webContents.send('window:animate:did-show'); }, 30);
 
     // Fade in (220ms)
@@ -287,21 +295,19 @@ function createWindow() {
       if (!win.isDestroyed()) win.setOpacity(Math.min(1, easeOutExpo(t)));
     });
 
-    // Spring scale to full (350ms)
+    // Spring to ORIGINAL size + position (350ms)
     tween(350, 28, (t) => {
       const ease = Math.min(easeOutBack(t), 1.03);
-      const w = Math.round(width * startScale + (width - width * startScale) * ease);
-      const h = Math.round(height * startScale + (height - height * startScale) * ease);
+      const w = Math.round(startW + (width  - startW) * ease);
+      const h = Math.round(startH + (height - startH) * ease);
+      const x = Math.round(startX + (tx    - startX) * ease);
+      const y = Math.round(startY + (ty    - startY) * ease);
       if (!win.isDestroyed()) {
-        win.setBounds({
-          x: Math.round(cx - w / 2),
-          y: Math.round(cy - h / 2),
-          width: Math.max(w, 100),
-          height: Math.max(h, 100),
-        });
+        win.setBounds({ x, y, width: Math.max(w, 100), height: Math.max(h, 100) });
       }
     }, () => {
-      if (!win.isDestroyed()) win.setBounds({ x: Math.round(cx - width / 2), y: Math.round(cy - height / 2), width, height });
+      // Snap to exact original bounds to eliminate any rounding drift
+      if (!win.isDestroyed()) win.setBounds(target);
     });
   });
 
@@ -389,6 +395,10 @@ ipcMain.on('window:minimize', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const win = mainWindow;
   const saved = win.getBounds();
+
+  // Save BEFORE the squish animation changes the bounds
+  savedBoundsBeforeMinimize = { ...saved };
+
   const display = screen.getDisplayMatching(saved);
 
   // Notify renderer CSS layer first

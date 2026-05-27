@@ -77,6 +77,36 @@ export default function CompanionBubble() {
   const handleImportAE  = useCallback(() => api?.companion?.importToAE?.(), [api]);
   const handleHide      = useCallback(() => api?.companion?.hide?.(), [api]);
 
+  const dragRef = useRef({ startX: 0, startY: 0, dragging: false });
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    dragRef.current = { startX: e.clientX, startY: e.clientY, dragging: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (e.buttons !== 1) return; 
+    const { startX, startY } = dragRef.current;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (!dragRef.current.dragging && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+      dragRef.current.dragging = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    
+    if (dragRef.current.dragging) {
+      api?.companion?.moveBy?.(e.movementX, e.movementY);
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!dragRef.current.dragging) {
+      setCollapsed(c => !c);
+    }
+    dragRef.current.dragging = false;
+  };
+
   return (
     <div className={styles.root}>
       <div className={`${styles.bubble} ${collapsed ? styles.bubbleCollapsed : styles.bubbleExpanded}`} ref={bubbleRef}>
@@ -84,12 +114,13 @@ export default function CompanionBubble() {
         {/* ── Drag handle ───────────────────────────────── */}
         <div
           className={collapsed ? styles.dragHandleCollapsed : styles.dragHandleExpanded}
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          title={collapsed ? 'MooMotion' : 'Colapsar menú'}
         >
           <div 
-            style={{ WebkitAppRegion: 'no-drag', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' } as React.CSSProperties}
-            onClick={() => setCollapsed(c => !c)}
-            title={collapsed ? 'MooMotion' : 'Colapsar menú'}
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' } as React.CSSProperties}
           >
             <span className={styles.cowIcon}>🐄</span>
           </div>

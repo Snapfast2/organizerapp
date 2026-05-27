@@ -1,4 +1,4 @@
-﻿import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, screen, Notification, globalShortcut } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, screen, Notification, globalShortcut } from 'electron';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -852,6 +852,14 @@ app.on('before-quit', () => {
 
 // â”€â”€â”€ Companion IPC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ipcMain.on('companion:hide', () => companionWindow?.hide());
+
+ipcMain.on('companion:move-by', (e, dx: number, dy: number) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (win && !win.isDestroyed()) {
+    const [x, y] = win.getPosition();
+    win.setPosition(x + dx, y + dy);
+  }
+});
 
 ipcMain.on('companion:set-height', (_e, height: number) => {
   if (!companionWindow || companionWindow.isDestroyed()) return;

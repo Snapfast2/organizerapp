@@ -1314,7 +1314,7 @@ function DonutChart({ segments, size = 220, strokeWidth = 32 }: { segments: any[
 
 
 // ─── Stats Panel ───────────────────────────────────────────
-export function StatsPanel({ path, onClose, renderGridCard }: { path: string; onClose: () => void; renderGridCard?: (entry: any, forceCover?: boolean) => React.ReactNode }) {
+export function StatsPanel({ path, onClose }: { path: string; onClose: () => void; }) {
   const [stats, setStats] = useState<DiskStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -1397,7 +1397,7 @@ export function StatsPanel({ path, onClose, renderGridCard }: { path: string; on
                 <DonutChart segments={segments} size={320} strokeWidth={44} />
               </motion.div>
               
-              {renderGridCard && stats.topFiles.length > 0 && (
+              {stats.topFiles.length > 0 && (
                 <motion.div variants={itemVariants} style={{ width: '100%' }}>
                   <div className="stats-section-title" style={{ textAlign: 'center', marginBottom: 24, borderTop: '1px solid var(--border-subtle)', paddingTop: 32 }}>
                     Top 10 Archivos Más Pesados
@@ -1408,21 +1408,44 @@ export function StatsPanel({ path, onClose, renderGridCard }: { path: string; on
                     gap: 16, 
                     padding: '12px 4px'
                   }}>
-                    {stats.topFiles.map((file, i) => (
-                      <div key={i} style={{ position: 'relative' }}>
-                        <div style={{
-                          position: 'absolute', top: -10, left: -10, width: 28, height: 28,
-                          background: i === 0 ? 'var(--accent)' : 'var(--bg-elevated)',
-                          color: i === 0 ? '#000' : 'var(--text-primary)',
-                          border: `1px solid ${i === 0 ? 'transparent' : 'var(--border-subtle)'}`,
-                          borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontWeight: 800, fontSize: 13, zIndex: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
-                        }}>
-                          {i + 1}
+                    {stats.topFiles.map((file, i) => {
+                      const isDoc = DOC_EXTS.has(file.ext);
+                      const isImage = IMAGE_EXTS.has(file.ext);
+                      const isVideo = VIDEO_EXTS.has(file.ext);
+                      return (
+                        <div key={i} style={{ position: 'relative' }}>
+                          <div style={{
+                            position: 'absolute', top: -10, left: -10, width: 28, height: 28,
+                            background: i === 0 ? 'var(--accent)' : 'var(--bg-elevated)',
+                            color: i === 0 ? '#000' : 'var(--text-primary)',
+                            border: `1px solid ${i === 0 ? 'transparent' : 'var(--border-subtle)'}`,
+                            borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontWeight: 800, fontSize: 13, zIndex: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                          }}>
+                            {i + 1}
+                          </div>
+                          
+                          <div className="file-card video-card" style={{ opacity: 1, scale: 1 }}>
+                            <div className="file-thumb-cover">
+                              {isVideo && <VideoThumb src={`/api/preview?path=${encodeURIComponent(file.path)}`} cover />}
+                              {isImage && <ImageCover src={`/api/image-thumb?path=${encodeURIComponent(file.path)}`} name={file.name} ext={file.ext} />}
+                              {isDoc && <DocCover src={file.path} name={file.name} ext={file.ext} />}
+                              {!isVideo && !isImage && !isDoc && (
+                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', borderRadius: '12px 12px 0 0' }}>
+                                  <FileThumbnail entry={file} size={72} />
+                                </div>
+                              )}
+                            </div>
+                            <div className="video-card-info">
+                              <div className="video-card-name" title={file.name}>{file.name}</div>
+                              <div className="video-card-meta">
+                                {formatSize(file.size)}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        {renderGridCard(file, true)}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </motion.div>
               )}

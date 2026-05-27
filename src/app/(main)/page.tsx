@@ -30,6 +30,8 @@ import PackAnimation from './_components/PackAnimation';
 
 import { TreeNode, SidebarSection } from './_components/SidebarTree';
 import FileToolbar, { type SortField } from './_components/FileToolbar';
+import FileList from './_components/FileList';
+
 
 
 export default function FileOrgApp() {
@@ -832,8 +834,8 @@ export default function FileOrgApp() {
     } catch {}
   };
 
-  const toggleSelect = (path: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleSelect = (path: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const newSel = new Set(selected);
     if (newSel.has(path)) newSel.delete(path);
     else newSel.add(path);
@@ -881,82 +883,6 @@ export default function FileOrgApp() {
 
 
 
-  const renderGridCard = (entry: FileEntry, forceCover: boolean = false) => {
-    const isSelected = selected.has(entry.path);
-    const isReturning = returningItems.includes(entry.path);
-    const isEditing = inlineRenameEntry?.path === entry.path;
-    const isDoc = DOC_EXTS.has(entry.ext);
-    const isImage = IMAGE_EXTS.has(entry.ext);
-    const isVideo = VIDEO_EXTS.has(entry.ext);
-    const useCoverLayout = forceCover || (!entry.isDir && (isImage || isVideo || isDoc));
-    const linkedProjects = aeLinks[entry.path] || [];
-    return (
-      <motion.div
-        layout
-        key={entry.path}
-        data-path={entry.path}
-        className={`file-card ${isSelected ? 'selected' : ''} ${focusedPath === entry.path ? 'focused' : ''} ${useCoverLayout ? 'video-card' : ''}`}
-        draggable={true}
-        onDragStart={(e: any) => handleDragStart(e, entry)}
-        onDragOver={(e: any) => handleDragOver(e, entry)}
-        onDrop={(e: any) => handleDrop(e, entry)}
-        onClick={e => { e.stopPropagation(); setFocusedPath(entry.path); handleClick(e, entry); }}
-        onContextMenu={e => onContextMenu(e, entry)}
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1, boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' }}
-        transition={{ duration: 0.15 }}
-      >
-        <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
-        {entry.color && (
-          <div className="file-color-dot" style={{ background: entry.color, position: 'absolute', top: 8, right: 8, width: 10, height: 10, borderRadius: '50%', zIndex: 10, boxShadow: '0 0 0 1.5px #050805' }} />
-        )}
-        {linkedProjects.length > 0 && (
-          <div style={{ position: 'absolute', top: 8, right: entry.color ? 24 : 8, zIndex: 10, background: '#3b0764', color: '#c4b5fd', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 5px rgba(0,0,0,0.4)' }} title="Usado en proyectos de After Effects">
-             <Clapperboard size={10} color="#c4b5fd" /> {linkedProjects.length}
-          </div>
-        )}
-        {useCoverLayout ? (
-          <>
-            <div className="file-thumb-cover">
-              {isVideo && <VideoThumb src={`/api/preview?path=${encodeURIComponent(entry.path)}`} cover />}
-              {isImage && <ImageCover src={`/api/image-thumb?path=${encodeURIComponent(entry.path)}`} name={entry.name} ext={entry.ext} />}
-              {isDoc && <DocCover src={entry.path} name={entry.name} ext={entry.ext} />}
-              {!isVideo && !isImage && !isDoc && (
-                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', borderRadius: '12px 12px 0 0' }}>
-                   <FileThumbnail entry={entry} size={72} />
-                 </div>
-              )}
-            </div>
-            <div className="video-card-info">
-              {isEditing ? (
-                <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
-              ) : (
-                <div className="video-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
-              )}
-              <div className="video-card-meta">
-                {formatSize(entry.size)}
-                {entry.tags && entry.tags.length > 0 && (
-                  <span style={{ color: 'var(--accent)', marginLeft: 6 }}>â€¢ {entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</span>
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <FileThumbnail entry={entry} size={56} />
-            {isEditing ? (
-              <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
-            ) : (
-              <div className="file-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
-            )}
-            {entry.tags && entry.tags.length > 0 && (
-              <div style={{ fontSize: 10, color: 'var(--accent)', textAlign: 'center', marginTop: 2 }}>{entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</div>
-            )}
-          </>
-        )}
-      </motion.div>
-    );
-  };
 
   return (
     <ClickSpark sparkColor="#4ade80" sparkSize={6} sparkRadius={20} sparkCount={4} duration={300} extraScale={0.6}>
@@ -1175,116 +1101,31 @@ export default function FileOrgApp() {
             />
           ) : (
             <>
-              <AnimatePresence mode="popLayout">
-            {listing?.entries.length === 0 && !searching && (
-              <motion.div key="empty-state" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="empty-state">
-                <FolderOpen size={48} color="var(--border)" />
-                <div>Carpeta vacÃ­a</div>
-              </motion.div>
-            )}
-
-            {/* List view column headers */}
-            {viewMode === 'list' && (
-              <motion.div key="list-header" className="file-list-header" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div style={{ width: 28 }} />{/* checkbox */}
-                <div style={{ width: 32 }} />{/* icon */}
-                {(['name','type','size','modified'] as const).map(field => {
-                  const labels: Record<string,string> = { name:'Nombre', type:'Tipo', size:'TamaÃ±o', modified:'Modificado' };
-                  const active = sortBy === field;
-                  return (
-                    <div
-                      key={field}
-                      className={`file-list-header-col ${field === 'name' ? 'grow' : ''} ${active ? 'active' : ''}`}
-                      onClick={() => handleSort(field)}
-                    >
-                      {labels[field]}
-                      {active
-                        ? (sortDesc ? <ArrowDown size={11}/> : <ArrowUp size={11}/>)
-                        : <ArrowUpDown size={11} style={{ opacity: 0.3 }}/>}
-                    </div>
-                  );
-                })}
-              </motion.div>
-            )}
-            {viewMode === 'grid' ? (() => {
-              const sliced = visualEntries.slice(0, visibleCount);
-              const dirs        = sliced.filter(e => e.isDir);
-              const coverFiles  = sliced.filter(e => !e.isDir && PREVIEWABLE.has(e.ext));
-              const otherFiles  = sliced.filter(e => !e.isDir && !PREVIEWABLE.has(e.ext));
-
-
-              return (
-                <motion.div key="grid-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  {dirs.length > 0 && <div className="file-grid">{dirs.map(e => renderGridCard(e))}</div>}
-                  {coverFiles.length > 0 && (
-                    <>
-                      {dirs.length > 0 && <div className="grid-section-divider" />}
-                      <div className="file-grid">{coverFiles.map(e => renderGridCard(e))}</div>
-                    </>
-                  )}
-                  {otherFiles.length > 0 && (
-                    <>
-                      {(dirs.length > 0 || coverFiles.length > 0) && <div className="grid-section-divider" />}
-                      <div className="file-grid">{otherFiles.map(e => renderGridCard(e))}</div>
-                    </>
-                  )}
-                </motion.div>
-              );
-            })() : (
-              /* â”€â”€ LIST MODE â”€â”€ */
-              <motion.div key="list-view" className="file-list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                {visualEntries.slice(0, visibleCount).map((entry) => {
-                  const isSelected = selected.has(entry.path);
-                  const isEditing = inlineRenameEntry?.path === entry.path;
-                  return (
-                    <motion.div
-                      layout
-                      key={entry.path}
-                      data-path={entry.path}
-                      className={`file-list-item ${isSelected ? 'selected' : ''} ${focusedPath === entry.path ? 'focused' : ''}`}
-                      draggable={true}
-                      onDragStart={(e: any) => handleDragStart(e, entry)}
-                      onDragOver={(e: any) => handleDragOver(e, entry)}
-                      onDrop={(e: any) => handleDrop(e, entry)}
-                      onClick={e => { e.stopPropagation(); setFocusedPath(entry.path); handleClick(e, entry); }}
-                      onContextMenu={e => onContextMenu(e, entry)}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      <FileCheckbox selected={isSelected} onToggle={() => toggleSelect(entry.path, { stopPropagation: () => {} } as any)} />
-                      <FileListIcon entry={entry} />
-                      {entry.color && (
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: entry.color, marginRight: 8, flexShrink: 0 }} />
-                      )}
-                      {isEditing ? (
-                        <div style={{ flex: 1 }}><InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} /></div>
-                      ) : (
-                        <div className="file-list-name" onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
-                      )}
-                      {entry.tags && entry.tags.length > 0 && (
-                        <div style={{ display: 'flex', gap: 4, marginRight: 16 }}>
-                          {entry.tags.map(t => <span key={t} className="badge">{t}</span>)}
-                        </div>
-                      )}
-                      <div className="file-list-ext">{entry.ext.toUpperCase() || 'Carpeta'}</div>
-                      <span className="file-list-size">{formatSize(entry.size)}</span>
-                      <span className="file-list-date">{formatDate(entry.modified)}</span>
-                    </motion.div>
-                  );
-                })}
-              </motion.div>
-            )}
-
-          </AnimatePresence>
-
-          {/* Infinite scroll sentinel */}
-          <div ref={sentinelRef} style={{ height: 1 }} />
-          {/* Counter when not all entries are visible */}
-            {visibleCount < totalEntries && (
-              <div style={{ textAlign: 'center', padding: '12px 0 4px', fontSize: 11.5, color: 'var(--text-muted)' }}>
-                Mostrando {Math.min(visibleCount, totalEntries)} de {totalEntries} â€” seguÃ­ bajando para ver mÃ¡s
-              </div>
-            )}
+              <FileList
+                entries={visualEntries.slice(0, visibleCount)}
+                totalEntries={totalEntries}
+                visibleCount={visibleCount}
+                viewMode={viewMode}
+                listing={listing}
+                searching={searching}
+                selected={selected}
+                focusedPath={focusedPath}
+                inlineRenameEntry={inlineRenameEntry}
+                returningItems={returningItems}
+                aeLinks={aeLinks}
+                sortBy={sortBy}
+                sortDesc={sortDesc}
+                onToggleSelect={toggleSelect}
+                onSetFocusedPath={setFocusedPath}
+                onClickEntry={handleClick}
+                onContextMenu={onContextMenu}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onSort={handleSort}
+                onInlineRename={handleInlineRename}
+                onSetInlineRenameEntry={setInlineRenameEntry}
+              />
             </>
           )}
         </div>
@@ -1541,7 +1382,7 @@ export default function FileOrgApp() {
       </AnimatePresence>
 
       {showOrganize && <OrganizeModal currentPath={currentPath} onClose={() => setShowOrganize(false)} toast={toast} />}
-      {showStats && <StatsPanel path={currentPath} onClose={() => setShowStats(false)} renderGridCard={renderGridCard} />}
+      {showStats && <StatsPanel path={currentPath} onClose={() => setShowStats(false)}  />}
 
       {/* Trash Modal */}
       <AnimatePresence>

@@ -706,28 +706,34 @@ app.whenReady().then(() => {
       fs.writeFileSync(tempJsx, script);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
 
-      // Save window state before exec — AE focus steal triggers restore event
+      // Save window state before exec — AE focus steal can cause Electron to resize
       const wasMaximized = mainWindow?.isMaximized() ?? false;
       const savedBounds  = mainWindow ? { ...mainWindow.getBounds() } : null;
       if (savedBounds) savedBoundsBeforeMinimize = savedBounds;
 
-      // Block the restore event animation while AE has focus
+      // Lock window size so Windows can't resize it when AE steals focus
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setResizable(false);
+        mainWindow.setMaximizable(false);
+      }
+
+      // Block restore event animation while AE has focus
       isImportingToAE = true;
 
       exec(`"${aePath}" -s "${evalScript}"`, (err) => {
-        // AE process finished — restore window immediately
-        isImportingToAE = false;
-        if (mainWindow && !mainWindow.isDestroyed() && savedBounds) {
-          if (mainWindow.isMaximized()) mainWindow.unmaximize();
-          mainWindow.setBounds(savedBounds);
-          if (wasMaximized) mainWindow.maximize();
-          // Safety net: restore again after 200ms in case AE returns focus late
-          setTimeout(() => {
-            if (mainWindow && !mainWindow.isDestroyed() && savedBounds) {
-              if (!wasMaximized) mainWindow.setBounds(savedBounds);
+        // AE has the script — restore after a delay so AE fully takes focus first
+        setTimeout(() => {
+          isImportingToAE = false;
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.setResizable(true);
+            mainWindow.setMaximizable(true);
+            if (wasMaximized) {
+              mainWindow.maximize();
+            } else if (savedBounds) {
+              mainWindow.setBounds(savedBounds);
             }
-          }, 200);
-        }
+          }
+        }, 500);
         if (err) {
           console.error('Error ejecutando AE:', err);
           new Notification({ title: 'Error en After Effects', body: 'Hubo un problema al enviar el archivo.' }).show();

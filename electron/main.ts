@@ -193,99 +193,122 @@ function createWindow() {
 
   mainWindow.loadURL(`http://localhost:${NEXT_PORT}`);
 
-  // ── Window animation helpers ─────────────────────────────────
-  const animateOpacity = (
-    win: BrowserWindow,
-    from: number,
-    to: number,
-    durationMs: number,
-    onDone?: () => void
-  ) => {
-    const steps = 30;
-    const interval = durationMs / steps;
-    const delta = (to - from) / steps;
-    let current = from;
+  // ── Easing functions ────────────────────────────────────────────
+  // Spring bounce — overshoots slightly then settles (launch, restore)
+  const easeOutBack = (t: number) => {
+    const c1 = 1.70158, c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  };
+  // Exponential acceleration (minimize — rush toward taskbar)
+  const easeInExpo = (t: number) => t === 0 ? 0 : Math.pow(2, 10 * t - 10);
+  // Exponential deceleration (opacity restore)
+  const easeOutExpo = (t: number) => t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+
+  // Generic tween helper
+  const tween = (durationMs: number, steps: number, onTick: (t: number) => void, onDone?: () => void) => {
     let tick = 0;
-    win.setOpacity(from);
-    const timer = setInterval(() => {
+    const iv = setInterval(() => {
       tick++;
-      current += delta;
-      if (!win.isDestroyed()) win.setOpacity(Math.min(1, Math.max(0, current)));
-      if (tick >= steps) {
-        clearInterval(timer);
-        if (!win.isDestroyed()) win.setOpacity(to);
-        onDone?.();
-      }
-    }, interval);
-    return timer;
+      const t = Math.min(tick / steps, 1);
+      onTick(t);
+      if (tick >= steps) { clearInterval(iv); onDone?.(); }
+    }, durationMs / steps);
+    return iv;
   };
 
-  // ── Launch: fade + subtle scale up ──────────────────────────
+  // ── Launch: spring scale + fade in ──────────────────────────────
   mainWindow.once('ready-to-show', () => {
     const win = mainWindow!;
     const { width, height } = win.getBounds();
-    const startW = Math.round(width * 0.97);
-    const startH = Math.round(height * 0.97);
     const display = screen.getDisplayMatching(win.getBounds());
     const cx = display.workArea.x + display.workArea.width / 2;
     const cy = display.workArea.y + display.workArea.height / 2;
+    const startScale = 0.88; // start at 88% — more dramatic than before
 
-    // Start slightly smaller & centered
     win.setBounds({
-      x: Math.round(cx - startW / 2),
-      y: Math.round(cy - startH / 2),
-      width: startW,
-      height: startH,
+      x: Math.round(cx - width * startScale / 2),
+      y: Math.round(cy - height * startScale / 2),
+      width: Math.round(width * startScale),
+      height: Math.round(height * startScale),
     });
+    win.setOpacity(0);
     win.show();
 
-    // Animate opacity 0 → 1 (300ms)
-    animateOpacity(win, 0, 1, 300);
+    // Opacity: 0 → 1 fast (200ms, easeOutExpo)
+    tween(200, 20, (t) => {
+      if (!win.isDestroyed()) win.setOpacity(Math.min(1, easeOutExpo(t)));
+    });
 
-    // Animate size to full (280ms) — scale feel
-    const totalSteps = 18;
-    const stepMs = 280 / totalSteps;
-    let step = 0;
-    const scaleTimer = setInterval(() => {
-      step++;
-      const t = step / totalSteps;
-      const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
-      const w = Math.round(startW + (width - startW) * ease);
-      const h = Math.round(startH + (height - startH) * ease);
+    // Scale: 88% → 100% with spring overshoot (380ms, easeOutBack)
+    tween(380, 30, (t) => {
+      const ease = Math.min(easeOutBack(t), 1.04); // cap overshoot at 104%
+      const w = Math.round(width * startScale + (width - width * startScale) * ease);
+      const h = Math.round(height * startScale + (height - height * startScale) * ease);
       if (!win.isDestroyed()) {
         win.setBounds({
           x: Math.round(cx - w / 2),
           y: Math.round(cy - h / 2),
-          width: w,
-          height: h,
+          width: Math.max(w, 100),
+          height: Math.max(h, 100),
         });
       }
-      if (step >= totalSteps) {
-        clearInterval(scaleTimer);
-        // Restore to original position if it was moved
-        if (!win.isDestroyed()) win.center();
-      }
-    }, stepMs);
+    }, () => {
+      if (!win.isDestroyed()) win.setBounds({ x: Math.round(cx - width / 2), y: Math.round(cy - height / 2), width, height });
+    });
 
     startWatcher();
   });
 
-  // ── Restore from minimized: fade in ─────────────────────────
+  // ── Restore from minimized: spring scale + fade in ───────────────
   mainWindow.on('restore', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setOpacity(0);
-      animateOpacity(mainWindow, 0, 1, 250);
-    }
+    const win = mainWindow;
+    if (!win || win.isDestroyed()) return;
+    const { width, height } = win.getBounds();
+    const display = screen.getDisplayMatching(win.getBounds());
+    const cx = display.workArea.x + display.workArea.width / 2;
+    const cy = display.workArea.y + display.workArea.height / 2;
+    const startScale = 0.82;
+
+    win.setBounds({
+      x: Math.round(cx - width * startScale / 2),
+      y: Math.round(cy - height / 2 + height * 0.1), // slightly lower = coming up from taskbar
+      width: Math.round(width * startScale),
+      height: Math.round(height * startScale),
+    });
+    win.setOpacity(0);
+
+    // Fade in (220ms)
+    tween(220, 20, (t) => {
+      if (!win.isDestroyed()) win.setOpacity(Math.min(1, easeOutExpo(t)));
+    });
+
+    // Spring scale to full (350ms)
+    tween(350, 28, (t) => {
+      const ease = Math.min(easeOutBack(t), 1.03);
+      const w = Math.round(width * startScale + (width - width * startScale) * ease);
+      const h = Math.round(height * startScale + (height - height * startScale) * ease);
+      if (!win.isDestroyed()) {
+        win.setBounds({
+          x: Math.round(cx - w / 2),
+          y: Math.round(cy - h / 2),
+          width: Math.max(w, 100),
+          height: Math.max(h, 100),
+        });
+      }
+    }, () => {
+      if (!win.isDestroyed()) win.setBounds({ x: Math.round(cx - width / 2), y: Math.round(cy - height / 2), width, height });
+    });
   });
 
-  // ── Close (to tray): fade out → hide ────────────────────────
+  // ── Close (to tray): fade out → hide ────────────────────────────
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
       const win = mainWindow!;
-      animateOpacity(win, 1, 0, 180, () => {
-        if (!win.isDestroyed()) win.hide();
-        if (!win.isDestroyed()) win.setOpacity(1); // reset for next show
+      tween(180, 18, (t) => {
+        if (!win.isDestroyed()) win.setOpacity(Math.max(0, 1 - easeInExpo(t)));
+      }, () => {
+        if (!win.isDestroyed()) { win.hide(); win.setOpacity(1); }
       });
     }
   });
@@ -314,24 +337,91 @@ function createTray() {
   tray.setContextMenu(contextMenu);
   tray.on('double-click', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setOpacity(0);
-      mainWindow.show();
-      mainWindow.focus();
-      // Re-import animateOpacity inline for tray restore
-      const steps = 20, dur = 220;
+      const win = mainWindow;
+      const { width, height } = win.getBounds();
+      const display = screen.getDisplayMatching(win.getBounds());
+      const cx = display.workArea.x + display.workArea.width / 2;
+      const cy = display.workArea.y + display.workArea.height / 2;
+      const easeOutExpo = (t: number) => t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+      const easeOutBack = (t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+
+      win.setOpacity(0);
+      win.show();
+      win.focus();
+
+      // Fade in
       let tick = 0;
       const iv = setInterval(() => {
-        tick++;
-        const op = tick / steps;
-        if (!mainWindow!.isDestroyed()) mainWindow!.setOpacity(Math.min(1, op));
-        if (tick >= steps) { clearInterval(iv); mainWindow!.setOpacity(1); }
-      }, dur / steps);
+        tick++; const t = Math.min(tick / 20, 1);
+        if (!win.isDestroyed()) win.setOpacity(Math.min(1, easeOutExpo(t)));
+        if (tick >= 20) clearInterval(iv);
+      }, 220 / 20);
+
+      // Spring scale from 82%
+      const startScale = 0.82;
+      win.setBounds({ x: Math.round(cx - width * startScale / 2), y: Math.round(cy - height / 2 + height * 0.1), width: Math.round(width * startScale), height: Math.round(height * startScale) });
+      let step = 0;
+      const sv = setInterval(() => {
+        step++; const t = Math.min(step / 28, 1);
+        const ease = Math.min(easeOutBack(t), 1.03);
+        const w = Math.round(width * startScale + (width - width * startScale) * ease);
+        const h = Math.round(height * startScale + (height - height * startScale) * ease);
+        if (!win.isDestroyed()) win.setBounds({ x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), width: Math.max(w, 100), height: Math.max(h, 100) });
+        if (step >= 28) { clearInterval(sv); if (!win.isDestroyed()) win.setBounds({ x: Math.round(cx - width / 2), y: Math.round(cy - height / 2), width, height }); }
+      }, 350 / 28);
     }
   });
 }
 
 // ─── IPC ──────────────────────────────────────────────────────
-ipcMain.on('window:minimize', () => mainWindow?.minimize());
+ipcMain.on('window:minimize', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const win = mainWindow;
+  const saved = win.getBounds();
+  const display = screen.getDisplayMatching(saved);
+
+  // Target: bottom-center of the work area (taskbar direction)
+  const targetCX = display.workArea.x + display.workArea.width / 2;
+  const targetY  = display.workArea.y + display.workArea.height;
+
+  const easeInExpo = (t: number) => t === 0 ? 0 : Math.pow(2, 10 * t - 10);
+  const steps = 22, duration = 280;
+  let tick = 0;
+
+  const iv = setInterval(() => {
+    tick++;
+    const t = Math.min(tick / steps, 1);
+    const ease = easeInExpo(t);
+
+    // Shrink width (squeeze horizontally) and collapse height
+    const w = Math.max(8, Math.round(saved.width  * (1 - ease * 0.88)));
+    const h = Math.max(4, Math.round(saved.height * (1 - ease * 0.96)));
+
+    // Move toward bottom-center (taskbar)
+    const x = Math.round(saved.x + saved.width / 2 - w / 2
+                + (targetCX - saved.x - saved.width / 2) * ease * 0.6);
+    const y = Math.round(saved.y + (targetY - saved.y) * ease * 0.85);
+
+    // Fade out simultaneously
+    if (!win.isDestroyed()) {
+      win.setBounds({ x, y, width: w, height: h });
+      win.setOpacity(Math.max(0, 1 - ease));
+    }
+
+    if (tick >= steps) {
+      clearInterval(iv);
+      win.minimize();
+      // Restore bounds immediately (window is hidden while minimized)
+      setTimeout(() => {
+        if (!win.isDestroyed()) {
+          win.setBounds(saved);
+          win.setOpacity(1);
+        }
+      }, 60);
+    }
+  }, duration / steps);
+});
+
 ipcMain.on('window:maximize', () => {
   mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow?.maximize();
 });

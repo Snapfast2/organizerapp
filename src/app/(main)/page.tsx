@@ -1248,7 +1248,7 @@ export default function FileOrgApp() {
               {isEditing ? (
                 <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
               ) : (
-                <div className="video-card-name" title={entry.name} onDoubleClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+                <div className="video-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
               )}
               <div className="video-card-meta">
                 {formatSize(entry.size)}
@@ -1264,7 +1264,7 @@ export default function FileOrgApp() {
             {isEditing ? (
               <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
             ) : (
-              <div className="file-card-name" title={entry.name} onDoubleClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+              <div className="file-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
             )}
             {entry.tags && entry.tags.length > 0 && (
               <div style={{ fontSize: 10, color: 'var(--accent)', textAlign: 'center', marginTop: 2 }}>{entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</div>
@@ -1600,7 +1600,7 @@ export default function FileOrgApp() {
                       {isEditing ? (
                         <div style={{ flex: 1 }}><InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} /></div>
                       ) : (
-                        <div className="file-list-name" onDoubleClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+                        <div className="file-list-name" onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
                       )}
                       {entry.tags && entry.tags.length > 0 && (
                         <div style={{ display: 'flex', gap: 4, marginRight: 16 }}>
@@ -1975,3 +1975,4 @@ export default function FileOrgApp() {
     </ClickSpark>
   );
 }
+

@@ -1,9 +1,15 @@
 {
   "recentProjects": [
     {
+      "path": "E:\\Motion\\End Game test\\End Game test.aep",
+      "name": "End Game test.aep",
+      "lastOpened": "2026-05-27T04:01:34.006Z",
+      "projectFolder": "E:\\Motion\\End Game test"
+    },
+    {
       "path": "E:\\Motion\\PaLosde30\\PaLosde30.aep",
       "name": "PaLosde30.aep",
-      "lastOpened": "2026-05-27T03:56:25.878Z",
+      "lastOpened": "2026-05-27T04:01:05.047Z",
       "projectFolder": "E:\\Motion\\PaLosde30"
     },
     {
@@ -11,13 +17,6 @@
       "name": "LuminalTest.aep",
       "lastOpened": "2026-05-27T03:52:57.200Z",
       "projectFolder": "E:\\Motion\\LuminalTest"
-    },
-    {
-      "path": "E:\\Motion\\End Game test\\End Game test.aep",
-      "name": "End Game test.aep",
-      "lastOpened": "2026-05-26T16:09:01.408Z",
-      "colorLabel": "red",
-      "projectFolder": "E:\\Motion\\End Game test"
     }
   ],
   "groups": [

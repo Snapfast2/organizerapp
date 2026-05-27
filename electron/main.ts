@@ -709,19 +709,9 @@ app.whenReady().then(() => {
       fs.writeFileSync(tempJsx, script);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
 
-      // Save window state before exec — AE focus steal can cause Electron to resize
-      const wasMaximized = mainWindow?.isMaximized() ?? false;
-      const savedBounds  = mainWindow?.getBounds();
-
-      exec(`"${aePath}" -s "${evalScript}"`, (err) => {
-        // Restore window state after AE gets/loses focus
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          if (wasMaximized) {
-            mainWindow.maximize();
-          } else if (savedBounds) {
-            mainWindow.setBounds(savedBounds);
-          }
-        }
+      // windowsHide:true prevents the spawned AfterFX.exe from stealing focus
+      // which was causing AE's window to unmaximize
+      exec(`"${aePath}" -s "${evalScript}"`, { windowsHide: true }, (err) => {
         if (err) {
           console.error('Error ejecutando AE:', err);
           new Notification({ title: 'Error en After Effects', body: 'Hubo un problema al enviar el archivo.' }).show();
@@ -759,7 +749,7 @@ app.whenReady().then(() => {
       const tempJsx = path.join(os.tmpdir(), 'ae_relink.jsx');
       fs.writeFileSync(tempJsx, relinkScript);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
-      exec(`"${aePath}" -s "${evalScript}"`);
+      exec(`"${aePath}" -s "${evalScript}"`, { windowsHide: true });
     } catch (err) {
       console.error('Error running relink script:', err);
     }

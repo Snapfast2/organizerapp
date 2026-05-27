@@ -38,6 +38,8 @@ let isQuitting = false;
 let watcher: ReturnType<typeof chokidar.watch> | null = null;
 // Saved before the minimize-squish animation so restore always has correct bounds
 let savedBoundsBeforeMinimize: Electron.Rectangle | null = null;
+// Blocks the restore event animation while AE is stealing/returning focus
+let isImportingToAE = false;
 
 // Queue of pending download popups (one at a time)
 const pendingPopups: { filePath: string }[] = [];
@@ -268,6 +270,14 @@ function createWindow() {
   mainWindow.on('restore', () => {
     const win = mainWindow;
     if (!win || win.isDestroyed()) return;
+
+    // Skip animation if AE is currently stealing/returning focus
+    // (the restore event fires when AE takes over, not when user clicks taskbar)
+    if (isImportingToAE) {
+      const saved = savedBoundsBeforeMinimize;
+      if (saved) win.setBounds(saved);
+      return;
+    }
 
     // Always use the bounds saved before the squish animation
     // (win.getBounds() during restore may still be at the tiny animation size)
@@ -696,21 +706,27 @@ app.whenReady().then(() => {
       fs.writeFileSync(tempJsx, script);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
 
-      // Save window state before exec — AE focus steal can cause Electron to resize
+      // Save window state before exec — AE focus steal triggers restore event
       const wasMaximized = mainWindow?.isMaximized() ?? false;
       const savedBounds  = mainWindow ? { ...mainWindow.getBounds() } : null;
+      if (savedBounds) savedBoundsBeforeMinimize = savedBounds;
+
+      // Block the restore event animation while AE has focus
+      isImportingToAE = true;
 
       exec(`"${aePath}" -s "${evalScript}"`, (err) => {
-        // Restore window state after AE focus steal
+        // AE process finished — restore window immediately
+        isImportingToAE = false;
         if (mainWindow && !mainWindow.isDestroyed() && savedBounds) {
-          // Unmaximize first so setBounds works reliably
           if (mainWindow.isMaximized()) mainWindow.unmaximize();
-          // Restore exact bounds silently (no animation — the window never left)
           mainWindow.setBounds(savedBounds);
-          // Re-maximize if it was maximized before
           if (wasMaximized) mainWindow.maximize();
-          // Keep savedBoundsBeforeMinimize in sync so restore event has correct data
-          savedBoundsBeforeMinimize = savedBounds;
+          // Safety net: restore again after 200ms in case AE returns focus late
+          setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed() && savedBounds) {
+              if (!wasMaximized) mainWindow.setBounds(savedBounds);
+            }
+          }, 200);
         }
         if (err) {
           console.error('Error ejecutando AE:', err);

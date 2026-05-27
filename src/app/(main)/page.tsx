@@ -17,7 +17,7 @@ import { getFileTypeInfo, formatSize, formatDate, IMAGE_EXTS, VIDEO_EXTS, DOC_EX
 import { 
   InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail,
   VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal,
-  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, DuplicateView,
+  BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, MetadataModal, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, DuplicateView,
   AITagModal, AIStatusBar
 } from '../components';
 import ClickSpark from '@/components/ui/click-spark';
@@ -1435,7 +1435,7 @@ export default function FileOrgApp() {
           <MetadataModal
             entry={showMetadataEntry}
             onClose={() => setShowMetadataEntry(null)}
-            onSave={(color: string, tags: string[]) => handleMetadataSave(showMetadataEntry, color, tags)}
+            onSave={(color: string | null, tags: string[]) => handleMetadataSave(showMetadataEntry, color || undefined, tags)}
           />
         )}
         {aiTagEntries && (

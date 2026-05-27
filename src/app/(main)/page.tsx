@@ -81,6 +81,7 @@ export default function FileOrgApp() {
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [lastSelectedPath, setLastSelectedPath] = useState<string | null>(null);
   const [focusedPath, setFocusedPath] = useState<string | null>(null);
   
   // Drives and Quick Access
@@ -258,10 +259,14 @@ export default function FileOrgApp() {
   useEffect(() => { setVisibleCount(100); }, [currentPath]);
 
   const handleClick = (e: React.MouseEvent, entry: FileEntry) => {
-    if (e.ctrlKey || e.metaKey) {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
       toggleSelect(entry.path, e);
       return;
     }
+    // Normal click without modifiers resets selection
+    setSelected(new Set());
+    setLastSelectedPath(entry.path);
+
     if (entry.isDir) {
       navigate(entry.path);
     } else {
@@ -837,9 +842,28 @@ export default function FileOrgApp() {
   const toggleSelect = (path: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     const newSel = new Set(selected);
-    if (newSel.has(path)) newSel.delete(path);
-    else newSel.add(path);
+
+    if (e?.shiftKey && lastSelectedPath) {
+      // Range selection
+      const allPaths = visualEntries.map(entry => entry.path);
+      const startIdx = allPaths.indexOf(lastSelectedPath);
+      const endIdx = allPaths.indexOf(path);
+      
+      if (startIdx !== -1 && endIdx !== -1) {
+        const min = Math.min(startIdx, endIdx);
+        const max = Math.max(startIdx, endIdx);
+        for (let i = min; i <= max; i++) {
+          newSel.add(allPaths[i]);
+        }
+      }
+    } else {
+      // Normal toggle
+      if (newSel.has(path)) newSel.delete(path);
+      else newSel.add(path);
+    }
+    
     setSelected(newSel);
+    setLastSelectedPath(path);
   };
 
   const startRename = (path: string, name: string, e: React.MouseEvent) => {
@@ -1435,7 +1459,7 @@ export default function FileOrgApp() {
           <MetadataModal
             entry={showMetadataEntry}
             onClose={() => setShowMetadataEntry(null)}
-            onSave={(color: string | null, tags: string[]) => handleMetadataSave(showMetadataEntry, color || undefined, tags)}
+            onSave={(color: string | null, tags: string[]) => handleMetadataSave(showMetadataEntry, color, tags)}
           />
         )}
         {aiTagEntries && (

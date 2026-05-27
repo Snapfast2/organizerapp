@@ -28,7 +28,7 @@ export interface FileListProps {
   sortBy: SortField;
   sortDesc: boolean;
 
-  onToggleSelect: (path: string) => void;
+  onToggleSelect: (path: string, e: React.MouseEvent) => void;
   onSetFocusedPath: (path: string | null) => void;
   onClickEntry: (e: React.MouseEvent, entry: FileEntry) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
@@ -83,7 +83,7 @@ export default function FileList({
         }}
         transition={{ duration: 0.15 }}
       >
-        <FileCheckbox selected={isSelected} onToggle={() => onToggleSelect(entry.path)} />
+        <FileCheckbox selected={isSelected} onToggle={(e) => onToggleSelect(entry.path, e)} />
         {entry.color && (
           <div className="file-color-dot" style={{ background: entry.color, position: 'absolute', top: 8, right: 8, width: 10, height: 10, borderRadius: '50%', zIndex: 10, boxShadow: '0 0 0 1.5px #050805' }} />
         )}
@@ -210,7 +210,7 @@ export default function FileList({
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
-                  <FileCheckbox selected={isSelected} onToggle={() => onToggleSelect(entry.path)} />
+                  <FileCheckbox selected={isSelected} onToggle={(e) => onToggleSelect(entry.path, e)} />
                   <FileListIcon entry={entry} />
                   {entry.color && (
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: entry.color, marginRight: 8, flexShrink: 0 }} />

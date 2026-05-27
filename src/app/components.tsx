@@ -148,11 +148,11 @@ export function InlineRenameInput({ entry, onConfirm, onCancel }: { entry: FileE
 
 
 // ─── File Checkbox ───────────────────────────────────────────
-export function FileCheckbox({ selected, onToggle }: { selected: boolean; onToggle: () => void }) {
+export function FileCheckbox({ selected, onToggle }: { selected: boolean; onToggle: (e: React.MouseEvent) => void }) {
   return (
     <div 
       className={`file-checkbox ${selected ? 'checked' : ''}`}
-      onClick={e => { e.stopPropagation(); onToggle(); }}
+      onClick={e => { e.stopPropagation(); onToggle(e); }}
       title={selected ? "Deseleccionar" : "Seleccionar"}
     >
       {selected && <Check size={16} color="#4ade80" strokeWidth={3} />}

@@ -4,10 +4,17 @@ export const metadata: Metadata = { title: 'MooMotion Companion' };
 
 export default function CompanionLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" style={{ background: 'transparent' }}>
-      <body style={{ margin: 0, padding: 0, background: 'transparent', overflow: 'hidden' }}>
-        {children}
-      </body>
-    </html>
+    <>
+      {/* Make html/body transparent for this route so the bubble floats cleanly */}
+      <style>{`
+        html, body {
+          background: transparent !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow: hidden !important;
+        }
+      `}</style>
+      {children}
+    </>
   );
 }

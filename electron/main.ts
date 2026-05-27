@@ -269,10 +269,22 @@ function createWindow() {
     const win = mainWindow;
     if (!win || win.isDestroyed()) return;
 
+    // If there are no savedBounds from a minimize, this restore was triggered
+    // by something external (e.g. AE stealing/returning focus via unmaximize).
+    // In that case just re-maximize silently — no animation needed.
+    if (!savedBoundsBeforeMinimize) {
+      // Small delay so Windows finishes its focus transition first
+      setTimeout(() => {
+        if (win && !win.isDestroyed() && !win.isMaximized()) {
+          win.maximize();
+        }
+      }, 50);
+      return;
+    }
 
     // Always use the bounds saved before the squish animation
     // (win.getBounds() during restore may still be at the tiny animation size)
-    const target = savedBoundsBeforeMinimize || win.getBounds();
+    const target = savedBoundsBeforeMinimize;
     savedBoundsBeforeMinimize = null;
     const { x: tx, y: ty, width, height } = target;
 

@@ -408,51 +408,52 @@ function toggleCompanion() {
   }
 }
 
+// ─── Show main window with spring animation (reusable) ─────────────────
+function showMainWindowAnimated() {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  const { width, height } = win.getBounds();
+  const display = screen.getDisplayMatching(win.getBounds());
+  const cx = display.workArea.x + display.workArea.width / 2;
+  const cy = display.workArea.y + display.workArea.height / 2;
+  const easeOutExpo = (t: number) => t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+  const easeOutBack = (t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+
+  win.setOpacity(0);
+  win.show();
+  win.focus();
+
+  // Tell renderer CSS layer to reset + spring in (clears any blur/dark overlay)
+  win.webContents.send('window:animate:did-show');
+
+  // Electron: fade in
+  let tick = 0;
+  const iv = setInterval(() => {
+    tick++; const t = Math.min(tick / 20, 1);
+    if (!win.isDestroyed()) win.setOpacity(Math.min(1, easeOutExpo(t)));
+    if (tick >= 20) clearInterval(iv);
+  }, 220 / 20);
+
+  // Electron: spring scale from 82%
+  const startScale = 0.82;
+  win.setBounds({ x: Math.round(cx - width * startScale / 2), y: Math.round(cy - height / 2 + height * 0.1), width: Math.round(width * startScale), height: Math.round(height * startScale) });
+  let step = 0;
+  const sv = setInterval(() => {
+    step++; const t = Math.min(step / 28, 1);
+    const ease = Math.min(easeOutBack(t), 1.03);
+    const w = Math.round(width * startScale + (width - width * startScale) * ease);
+    const h = Math.round(height * startScale + (height - height * startScale) * ease);
+    if (!win.isDestroyed()) win.setBounds({ x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), width: Math.max(w, 100), height: Math.max(h, 100) });
+    if (step >= 28) { clearInterval(sv); if (!win.isDestroyed()) win.setBounds({ x: Math.round(cx - width / 2), y: Math.round(cy - height / 2), width, height }); }
+  }, 350 / 28);
+}
+
 // ─── Tray ─────────────────────────────────────────────────────
 function createTray() {
   const iconPath = path.join(__dirname, '../public/icon.png');
   const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
   tray = new Tray(trayIcon);
-  tray.setToolTip('FileOrganizer');
-
-  const showMainWindowAnimated = () => {
-    const win = mainWindow;
-    if (!win || win.isDestroyed()) return;
-    const { width, height } = win.getBounds();
-    const display = screen.getDisplayMatching(win.getBounds());
-    const cx = display.workArea.x + display.workArea.width / 2;
-    const cy = display.workArea.y + display.workArea.height / 2;
-    const easeOutExpo = (t: number) => t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
-    const easeOutBack = (t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
-
-    win.setOpacity(0);
-    win.show();
-    win.focus();
-
-    // Tell renderer CSS layer to reset + spring in
-    win.webContents.send('window:animate:did-show');
-
-    // Electron: fade in
-    let tick = 0;
-    const iv = setInterval(() => {
-      tick++; const t = Math.min(tick / 20, 1);
-      if (!win.isDestroyed()) win.setOpacity(Math.min(1, easeOutExpo(t)));
-      if (tick >= 20) clearInterval(iv);
-    }, 220 / 20);
-
-    // Electron: spring scale from 82%
-    const startScale = 0.82;
-    win.setBounds({ x: Math.round(cx - width * startScale / 2), y: Math.round(cy - height / 2 + height * 0.1), width: Math.round(width * startScale), height: Math.round(height * startScale) });
-    let step = 0;
-    const sv = setInterval(() => {
-      step++; const t = Math.min(step / 28, 1);
-      const ease = Math.min(easeOutBack(t), 1.03);
-      const w = Math.round(width * startScale + (width - width * startScale) * ease);
-      const h = Math.round(height * startScale + (height - height * startScale) * ease);
-      if (!win.isDestroyed()) win.setBounds({ x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), width: Math.max(w, 100), height: Math.max(h, 100) });
-      if (step >= 28) { clearInterval(sv); if (!win.isDestroyed()) win.setBounds({ x: Math.round(cx - width / 2), y: Math.round(cy - height / 2), width, height }); }
-    }, 350 / 28);
-  };
+  tray.setToolTip('MooMotion');
 
   const contextMenu = Menu.buildFromTemplate([
     { label: '🐄 MooMotion Companion', click: () => toggleCompanion() },
@@ -838,8 +839,7 @@ app.on('before-quit', () => {
 ipcMain.on('companion:hide', () => companionWindow?.hide());
 
 ipcMain.on('companion:open-main', () => {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.show(); mainWindow.focus();
+  showMainWindowAnimated();
 });
 
 ipcMain.handle('companion:is-ae-running', async () => {

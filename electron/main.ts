@@ -853,11 +853,11 @@ app.on('before-quit', () => {
 // â”€â”€â”€ Companion IPC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ipcMain.on('companion:hide', () => companionWindow?.hide());
 
-ipcMain.on('companion:move-by', (e, dx: number, dy: number) => {
+ipcMain.on('companion:start-drag', (e) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   if (win && !win.isDestroyed()) {
-    const [x, y] = win.getPosition();
-    win.setPosition(x + dx, y + dy);
+    // @ts-ignore - startWindowDrag is missing from some Electron TS defs but exists at runtime
+    win.startWindowDrag();
   }
 });
 

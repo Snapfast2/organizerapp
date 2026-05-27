@@ -93,26 +93,14 @@ export default function CompanionBubble() {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (e.buttons !== 1) return; 
-    const { startX, startY, lastX, lastY } = dragRef.current;
+    const { startX, startY } = dragRef.current;
     
     if (!dragRef.current.dragging) {
       const dx = e.screenX - startX;
       const dy = e.screenY - startY;
       if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
         dragRef.current.dragging = true;
-      }
-    }
-    
-    if (dragRef.current.dragging) {
-      const currentDx = e.screenX - lastX;
-      const currentDy = e.screenY - lastY;
-      
-      // Update last position BEFORE sending IPC to avoid lag feedback loops
-      dragRef.current.lastX = e.screenX;
-      dragRef.current.lastY = e.screenY;
-      
-      if (currentDx !== 0 || currentDy !== 0) {
-        api?.companion?.moveBy?.(currentDx, currentDy);
+        api?.companion?.startDrag?.();
       }
     }
   };

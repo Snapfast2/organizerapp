@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
 import path from 'path';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export async function GET() {
   const home = os.homedir();
@@ -18,15 +18,19 @@ export async function GET() {
   ];
 
   try {
-    const { stdout } = await execAsync('wmic logicaldisk get name');
+    // Use PowerShell Get-PSDrive — works on all Windows versions including 11 24H2+
+    // wmic was deprecated and removed in Windows 11 24H2
+    const { stdout } = await execFileAsync('powershell', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      'Get-PSDrive -PSProvider FileSystem | Select-Object -ExpandProperty Root'
+    ]);
     const drives = stdout
       .split('\n')
       .map(line => line.trim())
-      .filter(line => line && line !== 'Name')
-      .map(drive => drive + '\\');
-    
-    return NextResponse.json({ drives, quickAccess });
-  } catch (error) {
+      .filter(line => line && /^[A-Z]:\\/i.test(line));
+
+    return NextResponse.json({ drives: drives.length ? drives : ['C:\\'], quickAccess });
+  } catch {
     return NextResponse.json({ drives: ['C:\\', 'D:\\'], quickAccess });
   }
 }

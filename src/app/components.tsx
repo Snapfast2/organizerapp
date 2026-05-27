@@ -170,13 +170,13 @@ export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const counter = useRef(0);
 
-  const show = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+  const toast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = ++counter.current;
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
   }, []);
 
-  return { toasts, show };
+  return { toasts, toast };
 }
 
 // ─── Category Icon ─────────────────────────────────────────

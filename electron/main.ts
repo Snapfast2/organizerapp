@@ -142,10 +142,11 @@ async function showNextPopup() {
     setTimeout(showNextPopup, 300);
   });
 
-  // Auto-dismiss after 15 seconds
+  // Auto-dismiss after 15 seconds — capture local ref so we always close THIS popup
+  const thisPopup = activePopup;
   setTimeout(() => {
-    if (activePopup && !activePopup.isDestroyed()) {
-      activePopup.close();
+    if (thisPopup && !thisPopup.isDestroyed()) {
+      thisPopup.close();
     }
   }, 15000);
 }
@@ -865,13 +866,13 @@ ipcMain.handle('companion:is-ae-running', async () => {
 ipcMain.handle('companion:get-active-project', async () => {
   try {
     const db = JSON.parse(fs.readFileSync(AE_PROJECTS_DB_PATH, 'utf-8'));
-    const entries = Object.entries(db) as [string, any][];
-    if (!entries.length) return null;
-    // Most recently accessed
-    const latest = entries.sort((a, b) =>
-      new Date(b[1].lastOpened ?? 0).getTime() - new Date(a[1].lastOpened ?? 0).getTime()
+    // DB format: { recentProjects: [{ path, lastOpened, ... }] }
+    const projects: { path: string; lastOpened?: string }[] = db.recentProjects || [];
+    if (!projects.length) return null;
+    const latest = [...projects].sort((a, b) =>
+      new Date(b.lastOpened ?? 0).getTime() - new Date(a.lastOpened ?? 0).getTime()
     )[0];
-    return path.basename(latest[0]);
+    return path.basename(latest.path);
   } catch { return null; }
 });
 

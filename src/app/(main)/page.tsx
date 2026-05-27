@@ -15,8 +15,8 @@ import {
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
 import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
 import { 
-  InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail, FileListItem, FileGridItem,
-  VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal, BulkActionToolbar,
+  InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail,
+  VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal,
   BulkMoveModal, BulkDeleteModal, OrganizeModal, StatsPanel, useToast, MoveToModal, TrashModal, AnimatedTrashIcon, DuplicateView,
   AITagModal, AIStatusBar
 } from '../components';
@@ -428,8 +428,6 @@ export default function FileOrgApp() {
   const [editValue, setEditValue] = useState<string>('');
 
   // Preview state
-  const [previewPath, setPreviewPath] = useState<string | null>(null);
-  const closePreview = () => setPreviewEntry(null);
 
   // Video Hover state
   const [hoveredVideo, setHoveredVideo] = useState<string | null>(null);
@@ -444,13 +442,8 @@ export default function FileOrgApp() {
   const [isScanningAE, setIsScanningAE] = useState(false);
   const closeContextMenu = () => setContextMenu(null);
   
-  // Toasts
-  const [toasts, setToasts] = useState<{ id: string, message: string, type: 'success' | 'error' | 'info' }[]>([]);
-  const toast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    const id = Math.random().toString(36).substring(7);
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
-  }, []);
+  // Toasts — using the shared useToast hook from components.tsx
+  const { toasts, toast } = useToast();
 
   // Undo System
   type UndoAction = {
@@ -573,7 +566,8 @@ export default function FileOrgApp() {
     );
     obs.observe(sentinel);
     return () => obs.disconnect();
-  }, [totalEntries]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionally empty — callback uses only stable setState, sentinel ref checked above
 
   // Reset visible count when navigating to a new folder
   useEffect(() => { setVisibleCount(100); }, [currentPath]);
@@ -644,7 +638,6 @@ export default function FileOrgApp() {
   }, []);
   
   const [inlineRenameEntry, setInlineRenameEntry] = useState<FileEntry | null>(null);
-  const [bulkAction, setBulkAction] = useState<'group' | 'zip' | 'rename' | 'move' | 'copy' | 'delete' | null>(null);
 
   const handleMoveTo = async (destPath: string) => {
     if (!showMoveTo || !destPath) return;
@@ -1254,7 +1247,7 @@ export default function FileOrgApp() {
               {isEditing ? (
                 <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
               ) : (
-                <div className="video-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+                <div className="video-card-name" title={entry.name} onDoubleClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
               )}
               <div className="video-card-meta">
                 {formatSize(entry.size)}
@@ -1270,7 +1263,7 @@ export default function FileOrgApp() {
             {isEditing ? (
               <InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} />
             ) : (
-              <div className="file-card-name" title={entry.name} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+              <div className="file-card-name" title={entry.name} onDoubleClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
             )}
             {entry.tags && entry.tags.length > 0 && (
               <div style={{ fontSize: 10, color: 'var(--accent)', textAlign: 'center', marginTop: 2 }}>{entry.tags[0]} {entry.tags.length > 1 ? `+${entry.tags.length - 1}` : ''}</div>
@@ -1606,7 +1599,7 @@ export default function FileOrgApp() {
                       {isEditing ? (
                         <div style={{ flex: 1 }}><InlineRenameInput entry={entry} onConfirm={handleInlineRename} onCancel={() => setInlineRenameEntry(null)} /></div>
                       ) : (
-                        <div className="file-list-name" onDoubleClick={() => handleOpen(entry.path)} onClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
+                        <div className="file-list-name" onDoubleClick={e => { e.stopPropagation(); setInlineRenameEntry(entry); }}>{entry.name}</div>
                       )}
                       {entry.tags && entry.tags.length > 0 && (
                         <div style={{ display: 'flex', gap: 4, marginRight: 16 }}>

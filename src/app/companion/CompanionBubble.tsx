@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import styles from './companion.module.css';
 
 interface RecentFile {
@@ -39,8 +39,16 @@ export default function CompanionBubble() {
   const [showRecents, setShowRecents] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [isAERunning, setIsAERunning] = useState(false);
+  const bubbleRef = useRef<HTMLDivElement>(null);
 
   const api = typeof window !== 'undefined' ? (window as any).electronAPI : null;
+
+  // Resize window to fit bubble content exactly
+  const syncHeight = useCallback(() => {
+    if (!bubbleRef.current || !api?.companion?.setHeight) return;
+    const h = bubbleRef.current.getBoundingClientRect().height;
+    api.companion.setHeight(Math.ceil(h) + 2); // +2px for border
+  }, [api]);
 
   // Load active project + recents
   useEffect(() => {
@@ -59,13 +67,18 @@ export default function CompanionBubble() {
     return () => clearInterval(iv);
   }, [api]);
 
+  // Sync window height after any layout change
+  useEffect(() => { syncHeight(); }, [collapsed, showRecents, syncHeight]);
+  // Also sync once on first render
+  useEffect(() => { setTimeout(syncHeight, 100); }, [syncHeight]);
+
   const handleOpenMain = useCallback(() => api?.companion?.openMain?.(), [api]);
   const handleImportAE  = useCallback(() => api?.companion?.importToAE?.(), [api]);
   const handleHide      = useCallback(() => api?.companion?.hide?.(), [api]);
 
   return (
     <div className={styles.root}>
-      <div className={styles.bubble}>
+      <div className={styles.bubble} ref={bubbleRef}>
 
         {/* ── Drag handle ───────────────────────────────── */}
         <div

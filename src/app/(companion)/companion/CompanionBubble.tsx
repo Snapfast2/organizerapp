@@ -86,8 +86,14 @@ export default function CompanionBubble() {
           className={styles.dragHandle}
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
-          <span className={styles.cowIcon}>🐄</span>
-          <span className={styles.appName}>MooMotion</span>
+          <div 
+            style={{ WebkitAppRegion: 'no-drag', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' } as React.CSSProperties}
+            onClick={() => setCollapsed(c => !c)}
+            title={collapsed ? 'Expandir' : 'Colapsar'}
+          >
+            <span className={styles.cowIcon}>🐄</span>
+          </div>
+          
           <div
             className={styles.controls}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}

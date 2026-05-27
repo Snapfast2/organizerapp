@@ -853,11 +853,19 @@ app.on('before-quit', () => {
 // â”€â”€â”€ Companion IPC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ipcMain.on('companion:hide', () => companionWindow?.hide());
 
-ipcMain.on('companion:move-by', (e, dx: number, dy: number) => {
+let dragInitialPos = [0, 0];
+
+ipcMain.on('companion:drag-start', (e) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   if (win && !win.isDestroyed()) {
-    const [x, y] = win.getPosition();
-    win.setPosition(x + dx, y + dy);
+    dragInitialPos = win.getPosition();
+  }
+});
+
+ipcMain.on('companion:drag-move', (e, totalDx: number, totalDy: number) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (win && !win.isDestroyed()) {
+    win.setPosition(Math.round(dragInitialPos[0] + totalDx), Math.round(dragInitialPos[1] + totalDy));
   }
 });
 

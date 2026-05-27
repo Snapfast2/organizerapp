@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     isAERunning:      () => ipcRenderer.invoke('companion:is-ae-running'),
     getActiveProject: () => ipcRenderer.invoke('companion:get-active-project'),
     getRecents:       () => ipcRenderer.invoke('companion:get-recents'),
-    moveBy:           (dx: number, dy: number) => ipcRenderer.send('companion:move-by', dx, dy),
+    startDrag:        () => ipcRenderer.send('companion:drag-start'),
+    dragMove:         (totalDx: number, totalDy: number) => ipcRenderer.send('companion:drag-move', totalDx, totalDy),
   },
 });

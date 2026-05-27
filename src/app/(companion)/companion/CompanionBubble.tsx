@@ -77,15 +77,13 @@ export default function CompanionBubble() {
   const handleImportAE  = useCallback(() => api?.companion?.importToAE?.(), [api]);
   const handleHide      = useCallback(() => api?.companion?.hide?.(), [api]);
 
-  const dragRef = useRef({ startX: 0, startY: 0, lastX: 0, lastY: 0, dragging: false });
+  const dragRef = useRef({ startX: 0, startY: 0, dragging: false });
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     dragRef.current = { 
       startX: e.screenX, 
       startY: e.screenY, 
-      lastX: e.screenX, 
-      lastY: e.screenY, 
       dragging: false 
     };
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -93,27 +91,20 @@ export default function CompanionBubble() {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (e.buttons !== 1) return; 
-    const { startX, startY, lastX, lastY } = dragRef.current;
+    const { startX, startY } = dragRef.current;
     
+    const totalDx = e.screenX - startX;
+    const totalDy = e.screenY - startY;
+
     if (!dragRef.current.dragging) {
-      const dx = e.screenX - startX;
-      const dy = e.screenY - startY;
-      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      if (Math.abs(totalDx) > 4 || Math.abs(totalDy) > 4) {
         dragRef.current.dragging = true;
+        api?.companion?.startDrag?.(); // Store initial window position
       }
     }
     
     if (dragRef.current.dragging) {
-      const currentDx = e.screenX - lastX;
-      const currentDy = e.screenY - lastY;
-      
-      // Update last position BEFORE sending IPC to avoid lag feedback loops
-      dragRef.current.lastX = e.screenX;
-      dragRef.current.lastY = e.screenY;
-      
-      if (currentDx !== 0 || currentDy !== 0) {
-        api?.companion?.moveBy?.(currentDx, currentDy);
-      }
+      api?.companion?.dragMove?.(totalDx, totalDy);
     }
   };
 

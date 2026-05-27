@@ -30,4 +30,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Project folder management
   openProjectFolder: (folderPath: string) => ipcRenderer.send('open-project-folder', folderPath),
   aeRunRelinkScript: (script: string) => ipcRenderer.send('ae-run-relink-script', script),
+
+  // ── MooMotion Companion ────────────────────────────────────────
+  companion: {
+    hide:             () => ipcRenderer.send('companion:hide'),
+    openMain:         () => ipcRenderer.send('companion:open-main'),
+    importToAE:       () => ipcRenderer.send('companion:import-to-ae'),
+    isAERunning:      () => ipcRenderer.invoke('companion:is-ae-running'),
+    getActiveProject: () => ipcRenderer.invoke('companion:get-active-project'),
+    getRecents:       () => ipcRenderer.invoke('companion:get-recents'),
+  },
 });

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, screen, Notification } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, screen, Notification, globalShortcut } from 'electron';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -33,6 +33,7 @@ const isDev = process.env.NODE_ENV === 'development';
 const NEXT_PORT = 3000;
 
 let mainWindow: BrowserWindow | null = null;
+let companionWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let watcher: ReturnType<typeof chokidar.watch> | null = null;
@@ -42,6 +43,9 @@ let savedBoundsBeforeMinimize: Electron.Rectangle | null = null;
 // Queue of pending download popups (one at a time)
 const pendingPopups: { filePath: string }[] = [];
 let activePopup: BrowserWindow | null = null;
+
+// Path to persist companion position between sessions
+const companionPosPath = path.join(app.getPath('userData'), 'companion-pos.json');
 
 // ─── Quick access destinations (editable later) ────────────────
 const downloadsPath = path.join(require('os').homedir(), 'Downloads');
@@ -349,6 +353,61 @@ function createWindow() {
   });
 }
 
+// ─── Companion window ────────────────────────────────────────
+function createCompanion() {
+  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
+
+  // Restore saved position or default to bottom-right
+  let cx = sw - 290, cy = sh - 420;
+  try {
+    const saved = JSON.parse(fs.readFileSync(companionPosPath, 'utf-8'));
+    cx = saved.x ?? cx; cy = saved.y ?? cy;
+  } catch { /* use defaults */ }
+
+  companionWindow = new BrowserWindow({
+    width: 270,
+    height: 400,
+    x: cx,
+    y: cy,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  companionWindow.loadURL(`http://localhost:${NEXT_PORT}/companion`);
+
+  // Save position when moved
+  companionWindow.on('moved', () => {
+    if (!companionWindow || companionWindow.isDestroyed()) return;
+    const [x, y] = companionWindow.getPosition();
+    try { fs.writeFileSync(companionPosPath, JSON.stringify({ x, y })); } catch { /* ignore */ }
+  });
+
+  companionWindow.on('closed', () => { companionWindow = null; });
+}
+
+function toggleCompanion() {
+  if (!companionWindow || companionWindow.isDestroyed()) {
+    createCompanion();
+    companionWindow?.once('ready-to-show', () => companionWindow?.showInactive());
+    return;
+  }
+  if (companionWindow.isVisible()) {
+    companionWindow.hide();
+  } else {
+    companionWindow.showInactive();
+  }
+}
+
 // ─── Tray ─────────────────────────────────────────────────────
 function createTray() {
   const iconPath = path.join(__dirname, '../public/icon.png');
@@ -396,12 +455,14 @@ function createTray() {
   };
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'Abrir FileOrganizer', click: () => showMainWindowAnimated() },
+    { label: '🐄 MooMotion Companion', click: () => toggleCompanion() },
+    { label: 'Abrir MooMotion',       click: () => showMainWindowAnimated() },
     { type: 'separator' },
     { label: 'Salir', click: () => { isQuitting = true; app.quit(); } },
   ]);
 
   tray.setContextMenu(contextMenu);
+  tray.on('click',        () => toggleCompanion());
   tray.on('double-click', () => showMainWindowAnimated());
 }
 
@@ -760,10 +821,59 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // ── Companion: create hidden on startup, register hotkey ──────────
+  createCompanion();
+  globalShortcut.register('CommandOrControl+Shift+M', () => toggleCompanion());
 });
 
 app.on('window-all-closed', () => { /* stay in tray */ });
 app.on('before-quit', () => {
   isQuitting = true;
+  globalShortcut.unregisterAll();
   stopWatcher();
+});
+
+// ─── Companion IPC ────────────────────────────────────────────
+ipcMain.on('companion:hide', () => companionWindow?.hide());
+
+ipcMain.on('companion:open-main', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.show(); mainWindow.focus();
+});
+
+ipcMain.handle('companion:is-ae-running', async () => {
+  try {
+    const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq AfterFX.exe"');
+    return stdout.includes('AfterFX.exe');
+  } catch { return false; }
+});
+
+ipcMain.handle('companion:get-active-project', async () => {
+  try {
+    const db = JSON.parse(fs.readFileSync(AE_PROJECTS_DB_PATH, 'utf-8'));
+    const entries = Object.entries(db) as [string, any][];
+    if (!entries.length) return null;
+    // Most recently accessed
+    const latest = entries.sort((a, b) =>
+      new Date(b[1].lastOpened ?? 0).getTime() - new Date(a[1].lastOpened ?? 0).getTime()
+    )[0];
+    return path.basename(latest[0]);
+  } catch { return null; }
+});
+
+ipcMain.handle('companion:get-recents', async () => {
+  try {
+    const recentsPath = path.join(app.getPath('userData'), 'moo-recents.json');
+    return JSON.parse(fs.readFileSync(recentsPath, 'utf-8'));
+  } catch { return []; }
+});
+
+ipcMain.on('companion:import-to-ae', () => {
+  // Open the main window and trigger an import
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.send('trigger:import-ae');
+  }
 });

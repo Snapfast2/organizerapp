@@ -1,0 +1,303 @@
+/* ─── Root: fills the transparent window ─────────────────────────── */
+.root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ─── Bubble container ────────────────────────────────────────────── */
+.bubble {
+  width: 260px;
+  background: rgba(8, 18, 10, 0.88);
+  border: 1px solid rgba(74, 222, 128, 0.22);
+  border-radius: 18px;
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(74, 222, 128, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  overflow: hidden;
+  color: #f0fdf4;
+  user-select: none;
+}
+
+/* ─── Drag handle ─────────────────────────────────────────────────── */
+.dragHandle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px 11px 12px;
+  border-bottom: 1px solid rgba(74, 222, 128, 0.1);
+  background: rgba(74, 222, 128, 0.05);
+  cursor: grab;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.cowIcon {
+  font-size: 17px;
+  line-height: 1;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.5));
+}
+
+.appName {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #86efac;
+  flex: 1;
+}
+
+.controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.ctrl {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  background: rgba(74, 222, 128, 0.08);
+  color: #86efac;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+
+.ctrl:hover {
+  background: rgba(74, 222, 128, 0.2);
+  border-color: rgba(74, 222, 128, 0.4);
+}
+
+.ctrlClose {
+  font-size: 14px;
+  color: #fca5a5;
+  border-color: rgba(252, 165, 165, 0.2);
+  background: rgba(252, 165, 165, 0.06);
+}
+
+.ctrlClose:hover {
+  background: rgba(252, 165, 165, 0.18);
+  border-color: rgba(252, 165, 165, 0.4);
+}
+
+/* ─── Body ────────────────────────────────────────────────────────── */
+.body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Active project pill */
+.projectPill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  background: rgba(74, 222, 128, 0.07);
+  border: 1px solid rgba(74, 222, 128, 0.14);
+  border-radius: 8px;
+}
+
+.projectDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+  transition: background 0.3s;
+}
+
+.projectName {
+  font-size: 11px;
+  color: #86efac;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+/* ─── Action buttons ──────────────────────────────────────────────── */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(74, 222, 128, 0.12);
+  background: rgba(74, 222, 128, 0.06);
+  color: #d1fae5;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.actionBtn:hover {
+  background: rgba(74, 222, 128, 0.14);
+  border-color: rgba(74, 222, 128, 0.28);
+  transform: translateX(2px);
+}
+
+.actionBtn:active {
+  transform: translateX(1px) scale(0.99);
+}
+
+.actionBtnAccent {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+.actionBtnAccent:hover {
+  background: rgba(74, 222, 128, 0.22);
+  border-color: rgba(74, 222, 128, 0.5);
+  box-shadow: 0 0 16px rgba(74, 222, 128, 0.12);
+}
+
+.actionIcon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.actionText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.actionLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: #d1fae5;
+  line-height: 1.2;
+}
+
+.actionSub {
+  font-size: 10px;
+  color: #4ade80;
+  opacity: 0.7;
+}
+
+/* Section toggle (Recientes) */
+.sectionToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(74, 222, 128, 0.1);
+  background: transparent;
+  color: #86efac;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sectionToggle:hover {
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.chevron {
+  font-size: 8px;
+  opacity: 0.6;
+}
+
+/* Recent files list */
+.recentList {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 4px 4px 8px;
+}
+
+.recentItem {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: none;
+  background: rgba(255,255,255,0.03);
+  color: #a7f3d0;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+  width: 100%;
+}
+
+.recentItem:hover {
+  background: rgba(74, 222, 128, 0.1);
+}
+
+.recentIcon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.recentName {
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.emptyNote {
+  font-size: 10px;
+  color: #4b5563;
+  padding: 4px 8px;
+  font-style: italic;
+}
+
+/* ─── Footer ──────────────────────────────────────────────────────── */
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+  padding: 6px 0 2px;
+  border-top: 1px solid rgba(74, 222, 128, 0.08);
+}
+
+.kbd {
+  font-size: 9px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  background: rgba(74, 222, 128, 0.06);
+  color: #4ade80;
+  font-family: monospace;
+  letter-spacing: 0;
+}
+
+.footerText {
+  font-size: 9px;
+  color: #374151;
+  margin-left: 2px;
+}

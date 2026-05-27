@@ -385,6 +385,11 @@ function createCompanion() {
 
   companionWindow.loadURL(`http://localhost:${NEXT_PORT}/companion`);
 
+  // 'screen-saver' is the highest z-order level on Windows —
+  // puts the companion above AE, browsers, fullscreen apps, everything
+  companionWindow.setAlwaysOnTop(true, 'screen-saver');
+  companionWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
   // Save position when moved
   companionWindow.on('moved', () => {
     if (!companionWindow || companionWindow.isDestroyed()) return;

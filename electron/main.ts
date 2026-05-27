@@ -127,7 +127,9 @@ async function showNextPopup() {
 
   // Slide in from the right
   activePopup.once('ready-to-show', () => {
-    activePopup?.show();
+    // showInactive() = appears without stealing focus from After Effects
+    // (show() was causing AE to unmaximize when the popup appeared)
+    activePopup?.showInactive();
   });
 
   activePopup.on('closed', () => {

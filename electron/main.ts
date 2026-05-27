@@ -706,34 +706,43 @@ app.whenReady().then(() => {
       fs.writeFileSync(tempJsx, script);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
 
-      // Save window state before exec — AE focus steal can cause Electron to resize
+      // Save window state before exec
       const wasMaximized = mainWindow?.isMaximized() ?? false;
       const savedBounds  = mainWindow ? { ...mainWindow.getBounds() } : null;
       if (savedBounds) savedBoundsBeforeMinimize = savedBounds;
-
-      // Lock window size so Windows can't resize it when AE steals focus
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setResizable(false);
-        mainWindow.setMaximizable(false);
-      }
-
-      // Block restore event animation while AE has focus
       isImportingToAE = true;
 
+      // ⚠️ Do NOT call setResizable(false) / setMaximizable(false) on a
+      //    maximized window — Windows sends SC_RESTORE which unmaximizes it.
+      // For non-maximized windows, locking is safe:
+      if (!wasMaximized && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setResizable(false);
+      }
+
+      // If AE causes an unmaximize event, re-maximize immediately
+      const handleUnmaximize = () => {
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed() && isImportingToAE) {
+            mainWindow.maximize();
+          }
+        }, 30);
+      };
+      if (wasMaximized) mainWindow?.on('unmaximize', handleUnmaximize);
+
       exec(`"${aePath}" -s "${evalScript}"`, (err) => {
-        // AE has the script — restore after a delay so AE fully takes focus first
+        // Restore window after AE takes focus (600ms gives AE time to settle)
         setTimeout(() => {
           isImportingToAE = false;
+          mainWindow?.off('unmaximize', handleUnmaximize);
           if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.setResizable(true);
-            mainWindow.setMaximizable(true);
+            if (!wasMaximized) mainWindow.setResizable(true);
             if (wasMaximized) {
               mainWindow.maximize();
             } else if (savedBounds) {
               mainWindow.setBounds(savedBounds);
             }
           }
-        }, 500);
+        }, 600);
         if (err) {
           console.error('Error ejecutando AE:', err);
           new Notification({ title: 'Error en After Effects', body: 'Hubo un problema al enviar el archivo.' }).show();

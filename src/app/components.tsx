@@ -12,13 +12,9 @@ import {
   BookmarkPlus, FolderInput
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
-import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
+import { getFileTypeInfo, formatSize, formatDate, IMAGE_EXTS, VIDEO_EXTS, DOC_EXTS, PREVIEWABLE } from '@/lib/file-types';
 
-// ─── Constants ────────────────────────────────────────────
-const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','bmp','svg','ico','tiff','tif','heic']);
-const VIDEO_EXTS = new Set(['mp4','webm','mov','avi','mkv','wmv','flv','m4v']);
-const DOC_EXTS = new Set(['pdf', 'psd', 'psb']);
-const PREVIEWABLE = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...DOC_EXTS]);
+
 
 // ─── Global thumbnail cache ────────────────────────────────
 const thumbCache = new Map<string, string>();

@@ -127,6 +127,18 @@ export function getFileTypeInfo(ext: string): FileTypeInfo {
   );
 }
 
+// ─── Extension sets — single source of truth ──────────────────────────────────
+// Import these instead of defining them locally in each component.
+export const IMAGE_EXTS = new Set([
+  'jpg','jpeg','png','gif','webp','svg','ico','bmp','heic','tiff','tif','raw'
+]);
+export const VIDEO_EXTS = new Set([
+  'mp4','webm','ogg','mov','avi','mkv','wmv','flv','m4v'
+]);
+// PSB = Photoshop Big Document (same viewer as PSD)
+export const DOC_EXTS = new Set(['pdf','psd','psb']);
+export const PREVIEWABLE = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...DOC_EXTS]);
+
 export function formatSize(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;

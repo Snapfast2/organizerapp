@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, screen, Notification, globalShortcut } from 'electron';
+﻿import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, screen, Notification, globalShortcut } from 'electron';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -47,16 +47,16 @@ let activePopup: BrowserWindow | null = null;
 // Path to persist companion position between sessions
 const companionPosPath = path.join(app.getPath('userData'), 'companion-pos.json');
 
-// ─── Quick access destinations (editable later) ────────────────
+// â”€â”€â”€ Quick access destinations (editable later) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const downloadsPath = path.join(require('os').homedir(), 'Downloads');
 const QUICK_DESTINATIONS = [
   { label: 'Escritorio',   path: path.join(require('os').homedir(), 'Desktop') },
   { label: 'Documentos',   path: path.join(require('os').homedir(), 'Documents') },
-  { label: 'Imágenes',     path: path.join(require('os').homedir(), 'Pictures') },
+  { label: 'ImÃ¡genes',     path: path.join(require('os').homedir(), 'Pictures') },
   { label: 'Videos',       path: path.join(require('os').homedir(), 'Videos') },
 ];
 
-// ─── Helpers ───────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -68,10 +68,10 @@ function getFileSize(filePath: string): string {
   try {
     const stat = fs.statSync(filePath);
     return formatBytes(stat.size);
-  } catch { return '—'; }
+  } catch { return 'â€”'; }
 }
 
-// ─── Popup window ─────────────────────────────────────────────
+// â”€â”€â”€ Popup window â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function showNextPopup() {
   if (activePopup) return;
   if (pendingPopups.length === 0) return;
@@ -142,7 +142,7 @@ async function showNextPopup() {
     setTimeout(showNextPopup, 300);
   });
 
-  // Auto-dismiss after 15 seconds — capture local ref so we always close THIS popup
+  // Auto-dismiss after 15 seconds â€” capture local ref so we always close THIS popup
   const thisPopup = activePopup;
   setTimeout(() => {
     if (thisPopup && !thisPopup.isDestroyed()) {
@@ -151,7 +151,7 @@ async function showNextPopup() {
   }, 15000);
 }
 
-// ─── Download watcher ─────────────────────────────────────────
+// â”€â”€â”€ Download watcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function startWatcher() {
   if (watcher) return;
 
@@ -180,7 +180,7 @@ function stopWatcher() {
   watcher = null;
 }
 
-// ─── Main window ──────────────────────────────────────────────
+// â”€â”€â”€ Main window â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -202,13 +202,13 @@ function createWindow() {
 
   mainWindow.loadURL(`http://localhost:${NEXT_PORT}`);
 
-  // ── Easing functions ────────────────────────────────────────────
-  // Spring bounce — overshoots slightly then settles (launch, restore)
+  // â”€â”€ Easing functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Spring bounce â€” overshoots slightly then settles (launch, restore)
   const easeOutBack = (t: number) => {
     const c1 = 1.70158, c3 = c1 + 1;
     return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
   };
-  // Exponential acceleration (minimize — rush toward taskbar)
+  // Exponential acceleration (minimize â€” rush toward taskbar)
   const easeInExpo = (t: number) => t === 0 ? 0 : Math.pow(2, 10 * t - 10);
   // Exponential deceleration (opacity restore)
   const easeOutExpo = (t: number) => t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
@@ -225,14 +225,14 @@ function createWindow() {
     return iv;
   };
 
-  // ── Launch: spring scale + fade in ──────────────────────────────
+  // â”€â”€ Launch: spring scale + fade in â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   mainWindow.once('ready-to-show', () => {
     const win = mainWindow!;
     const { width, height } = win.getBounds();
     const display = screen.getDisplayMatching(win.getBounds());
     const cx = display.workArea.x + display.workArea.width / 2;
     const cy = display.workArea.y + display.workArea.height / 2;
-    const startScale = 0.88; // start at 88% — more dramatic than before
+    const startScale = 0.88; // start at 88% â€” more dramatic than before
 
     win.setBounds({
       x: Math.round(cx - width * startScale / 2),
@@ -246,12 +246,12 @@ function createWindow() {
     // Notify renderer to play Framer Motion CSS layer in sync
     win.webContents.send('window:animate:will-show');
 
-    // Opacity: 0 → 1 fast (200ms, easeOutExpo)
+    // Opacity: 0 â†’ 1 fast (200ms, easeOutExpo)
     tween(200, 20, (t) => {
       if (!win.isDestroyed()) win.setOpacity(Math.min(1, easeOutExpo(t)));
     });
 
-    // Scale: 88% → 100% with spring overshoot (380ms, easeOutBack)
+    // Scale: 88% â†’ 100% with spring overshoot (380ms, easeOutBack)
     tween(380, 30, (t) => {
       const ease = Math.min(easeOutBack(t), 1.04); // cap overshoot at 104%
       const w = Math.round(width * startScale + (width - width * startScale) * ease);
@@ -271,14 +271,14 @@ function createWindow() {
     startWatcher();
   });
 
-  // ── Restore from minimized: spring scale + fade in ───────────────
+  // â”€â”€ Restore from minimized: spring scale + fade in â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   mainWindow.on('restore', () => {
     const win = mainWindow;
     if (!win || win.isDestroyed()) return;
 
     // If there are no savedBounds from a minimize, this restore was triggered
     // by something external (e.g. AE stealing/returning focus via unmaximize).
-    // In that case just re-maximize silently — no animation needed.
+    // In that case just re-maximize silently â€” no animation needed.
     if (!savedBoundsBeforeMinimize) {
       // Small delay so Windows finishes its focus transition first
       setTimeout(() => {
@@ -331,7 +331,7 @@ function createWindow() {
     });
   });
 
-  // ── Close (to tray): fade out → hide ────────────────────────────
+  // â”€â”€ Close (to tray): fade out â†’ hide â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
@@ -358,7 +358,7 @@ function createWindow() {
   });
 }
 
-// ─── Companion window ────────────────────────────────────────
+// â”€â”€â”€ Companion window â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function createCompanion() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
 
@@ -376,7 +376,7 @@ function createCompanion() {
     y: cy,
     frame: false,
     transparent: true,
-    backgroundColor: '#00000000',  // fully transparent ARGB — required on Windows
+    backgroundColor: '#00000000',  // fully transparent ARGB â€” required on Windows
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
@@ -391,7 +391,7 @@ function createCompanion() {
 
   companionWindow.loadURL(`http://localhost:${NEXT_PORT}/companion`);
 
-  // 'screen-saver' is the highest z-order level on Windows —
+  // 'screen-saver' is the highest z-order level on Windows â€”
   // puts the companion above AE, browsers, fullscreen apps, everything
   companionWindow.setAlwaysOnTop(true, 'screen-saver');
   companionWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -419,7 +419,7 @@ function toggleCompanion() {
   }
 }
 
-// ─── Show main window with spring animation (reusable) ─────────────────
+// â”€â”€â”€ Show main window with spring animation (reusable) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showMainWindowAnimated() {
   const win = mainWindow;
   if (!win || win.isDestroyed()) return;
@@ -459,7 +459,7 @@ function showMainWindowAnimated() {
   }, 350 / 28);
 }
 
-// ─── Tray ─────────────────────────────────────────────────────
+// â”€â”€â”€ Tray â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function createTray() {
   const iconPath = path.join(__dirname, '../public/icon.png');
   const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
@@ -467,7 +467,7 @@ function createTray() {
   tray.setToolTip('MooMotion');
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: '🐄 MooMotion Companion', click: () => toggleCompanion() },
+    { label: 'ðŸ„ MooMotion Companion', click: () => toggleCompanion() },
     { label: 'Abrir MooMotion',       click: () => showMainWindowAnimated() },
     { type: 'separator' },
     { label: 'Salir', click: () => { isQuitting = true; app.quit(); } },
@@ -478,7 +478,7 @@ function createTray() {
   tray.on('double-click', () => showMainWindowAnimated());
 }
 
-// ─── IPC ──────────────────────────────────────────────────────
+// â”€â”€â”€ IPC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ipcMain.on('window:minimize', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const win = mainWindow;
@@ -563,13 +563,11 @@ ipcMain.on('popup:ignore', () => {
   activePopup?.close();
 });
 
-// ─── App lifecycle ────────────────────────────────────────────
+// â”€â”€â”€ App lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
 
-app.whenReady().then(() => {
-  createWindow();
-  createTray();
 
+// --- IPC Handlers (module-level, registered once) ---
   // Handle AE Import
   ipcMain.handle('is-ae-open', async () => {
     try {
@@ -591,7 +589,7 @@ app.whenReady().then(() => {
       
       const aePath = match[1].trim();
 
-      // ── STEP 1 & 2: Find projectFolder — DB first (instant), AE query only if needed ──
+      // â”€â”€ STEP 1 & 2: Find projectFolder â€” DB first (instant), AE query only if needed â”€â”€
       let projectFolder: string | null = null;
       let activeAepPath = '';
 
@@ -604,7 +602,7 @@ app.whenReady().then(() => {
           );
           if (exact?.projectFolder && fs.existsSync(exact.projectFolder)) return exact.projectFolder;
         }
-        // B: infer from folder structure (E:\Motion\Proj\Proj.aep → E:\Motion\Proj)
+        // B: infer from folder structure (E:\Motion\Proj\Proj.aep â†’ E:\Motion\Proj)
         const withFolder = projects.map((p: any) => {
           if (p.projectFolder && fs.existsSync(p.projectFolder)) return p;
           const aepBase = path.basename(p.path, '.aep');
@@ -624,14 +622,14 @@ app.whenReady().then(() => {
         return sorted[0].projectFolder;
       };
 
-      // ── Fast path: read DB immediately (no AE query needed in 95% of cases) ──
+      // â”€â”€ Fast path: read DB immediately (no AE query needed in 95% of cases) â”€â”€
       try {
         const dbData = JSON.parse(fs.readFileSync(AE_PROJECTS_DB_PATH, 'utf-8'));
         const projects: any[] = dbData.recentProjects || [];
         projectFolder = resolveProjectFolder(projects);
 
         if (projectFolder) {
-          console.log(`[SmartCollect] Fast path → ${projectFolder}`);
+          console.log(`[SmartCollect] Fast path â†’ ${projectFolder}`);
 
           // Persist inferred projectFolder if it was missing
           const needsPatch = projects.some(p => !p.projectFolder &&
@@ -653,9 +651,9 @@ app.whenReady().then(() => {
         console.error('[SmartCollect] DB read failed:', dbErr);
       }
 
-      // ── Slow path: only query AE if DB lookup found nothing (rare edge case) ──
+      // â”€â”€ Slow path: only query AE if DB lookup found nothing (rare edge case) â”€â”€
       if (!projectFolder) {
-        console.log('[SmartCollect] DB miss — querying AE for active project...');
+        console.log('[SmartCollect] DB miss â€” querying AE for active project...');
         const tempResultPath = path.join(os.tmpdir(), 'ae_active_project_result.txt');
         try {
           if (fs.existsSync(tempResultPath)) fs.unlinkSync(tempResultPath);
@@ -674,7 +672,7 @@ app.whenReady().then(() => {
           fs.writeFileSync(tempJsx, scriptLines);
           exec(`"${aePath}" -r "${tempJsx}"`);
 
-          // Short poll — max 1.5 seconds (we already know DB failed so we're in edge case)
+          // Short poll â€” max 1.5 seconds (we already know DB failed so we're in edge case)
           for (let i = 0; i < 8; i++) {
             await new Promise(r => setTimeout(r, 200));
             if (fs.existsSync(tempResultPath)) {
@@ -688,12 +686,12 @@ app.whenReady().then(() => {
           if (activeAepPath) {
             const dbData = JSON.parse(fs.readFileSync(AE_PROJECTS_DB_PATH, 'utf-8'));
             projectFolder = resolveProjectFolder(dbData.recentProjects || []);
-            if (projectFolder) console.log(`[SmartCollect] AE query path → ${projectFolder}`);
+            if (projectFolder) console.log(`[SmartCollect] AE query path â†’ ${projectFolder}`);
           }
         } catch { /* ignore */ }
       }
 
-      // ── STEP 3: Copy asset to project folder if we have one ─────
+      // â”€â”€ STEP 3: Copy asset to project folder if we have one â”€â”€â”€â”€â”€
       let importPath = filePath; // Default: import from original location
       let copiedToProject = false;
 
@@ -721,7 +719,7 @@ app.whenReady().then(() => {
         } catch { /* if copy fails, fall back to original path */ }
       }
 
-      // ── STEP 4: Import into AE from importPath ──────────────────
+      // â”€â”€ STEP 4: Import into AE from importPath â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
       const ext = path.extname(importPath).toLowerCase().replace('.', '');
       let folderPath = ['Other'];
@@ -769,7 +767,7 @@ app.whenReady().then(() => {
               importedItem.parentFolder = currentParent;
               // Scroll project panel to show the imported item:
               // Use AE's native Deselect All (no loop, no folder opening)
-              // then select only our item — AE scrolls to show it
+              // then select only our item â€” AE scrolls to show it
               try { app.executeCommand(app.findMenuCommandId("Deselect All")); } catch(de) {}
               importedItem.selected = true;
             }
@@ -794,9 +792,9 @@ app.whenReady().then(() => {
           let notice: string;
           if (copiedToProject && projectFolder) {
             const projName = path.basename(projectFolder);
-            notice = `${path.basename(filePath)} → ${projName}/Assets/ ✓`;
+            notice = `${path.basename(filePath)} â†’ ${projName}/Assets/ âœ“`;
           } else {
-            notice = `${path.basename(filePath)} importado (sin organizar — proyecto no en Hub).`;
+            notice = `${path.basename(filePath)} importado (sin organizar â€” proyecto no en Hub).`;
           }
           new Notification({ title: 'Enviado a After Effects', body: notice }).show();
         }
@@ -830,14 +828,20 @@ app.whenReady().then(() => {
     }
   });
 
+
+app.whenReady().then(() => {
+  createWindow();
+  createTray();
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
-  // ── Companion: create hidden on startup, register hotkey ──────────
+  // -- Companion: create hidden on startup, register hotkey --
   createCompanion();
   globalShortcut.register('CommandOrControl+Shift+M', () => toggleCompanion());
 });
+
 
 app.on('window-all-closed', () => { /* stay in tray */ });
 app.on('before-quit', () => {
@@ -846,7 +850,7 @@ app.on('before-quit', () => {
   stopWatcher();
 });
 
-// ─── Companion IPC ────────────────────────────────────────────
+// â”€â”€â”€ Companion IPC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ipcMain.on('companion:hide', () => companionWindow?.hide());
 
 ipcMain.on('companion:set-height', (_e, height: number) => {

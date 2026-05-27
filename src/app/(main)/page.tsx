@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useDeferredValue, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useDeferredValue, useMemo, useReducer } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import {
   Folder, File, Image as ImageIcon, Film, Music, FileText, Archive, Code, HardDrive,
@@ -13,7 +13,7 @@ import {
   MoreVertical, ChevronsUp, ArrowUpDown, SortAsc, SortDesc, Undo, Clapperboard, Globe, FolderSearch
 } from 'lucide-react';
 import { FileEntry, DirectoryListing, DiskStats, OrganizePreview } from '@/lib/types';
-import { getFileTypeInfo, formatSize, formatDate } from '@/lib/file-types';
+import { getFileTypeInfo, formatSize, formatDate, IMAGE_EXTS, VIDEO_EXTS, DOC_EXTS, PREVIEWABLE } from '@/lib/file-types';
 import { 
   InlineRenameInput, FileCheckbox, VideoThumb, ImageCover, DocCover, FileThumbnail,
   VideoPlayer, PreviewModal, ContextMenu, RenameModal, DeleteModal, MkdirModal,
@@ -23,10 +23,7 @@ import {
 import ClickSpark from '@/components/ui/click-spark';
 import AEProjectHub from '../ae-hub';
 
-const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'heic', 'tiff', 'tif']);
-const VIDEO_EXTS = new Set(['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'wmv', 'flv', 'm4v']);
-const DOC_EXTS = new Set(['pdf', 'psd']);
-const PREVIEWABLE = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...DOC_EXTS]);
+
 
 // ─── Pack Success Animation ───────────────────────────────────────────────────
 const FLY_ICONS = [Film, Archive, Music, FileText, Code, ImageIcon] as const;
@@ -380,37 +377,45 @@ function SidebarSection({ title, children, defaultOpen = true }: SidebarSectionP
 
 export default function FileOrgApp() {
 
-  const [currentPath, setCurrentPath] = useState<string>('hub');
-  // Navigation history — back/forward like a browser
-  const [navHistory, setNavHistory] = useState<string[]>(['hub']);
-  const [navIndex, setNavIndex] = useState(0);
+  // Navigation history — single useReducer so NAVIGATE/GO_BACK/GO_FORWARD always see fresh state
+  type NavState = { history: string[]; index: number; current: string };
+  type NavAction =
+    | { type: 'NAVIGATE'; path: string }
+    | { type: 'GO_BACK' }
+    | { type: 'GO_FORWARD' };
 
-  const navigate = useCallback((path: string) => {
-    setCurrentPath(path);
-    setNavHistory(prev => {
-      const trimmed = prev.slice(0, navIndex + 1);
-      return [...trimmed, path];
-    });
-    setNavIndex(prev => prev + 1);
-  }, [navIndex]);
-
-  const goBack = useCallback(() => {
-    if (navIndex > 0) {
-      const prev = navHistory[navIndex - 1];
-      setNavIndex(i => i - 1);
-      setCurrentPath(prev);
+  const navReducer = (state: NavState, action: NavAction): NavState => {
+    switch (action.type) {
+      case 'NAVIGATE': {
+        const newHistory = [...state.history.slice(0, state.index + 1), action.path];
+        return { history: newHistory, index: newHistory.length - 1, current: action.path };
+      }
+      case 'GO_BACK': {
+        if (state.index <= 0) return state;
+        const newIndex = state.index - 1;
+        return { ...state, index: newIndex, current: state.history[newIndex] };
+      }
+      case 'GO_FORWARD': {
+        if (state.index >= state.history.length - 1) return state;
+        const newIndex = state.index + 1;
+        return { ...state, index: newIndex, current: state.history[newIndex] };
+      }
+      default: return state;
     }
-  }, [navIndex, navHistory]);
+  };
 
-  const goForward = useCallback(() => {
-    if (navIndex < navHistory.length - 1) {
-      const next = navHistory[navIndex + 1];
-      setNavIndex(i => i + 1);
-      setCurrentPath(next);
-    }
-  }, [navIndex, navHistory]);
+  const [navState, dispatchNav] = useReducer(navReducer, {
+    history: ['hub'], index: 0, current: 'hub'
+  });
+  const currentPath = navState.current;
+  const navHistory = navState.history;
+  const navIndex = navState.index;
 
-  const canGoBack = navIndex > 0;
+  const navigate = useCallback((path: string) => dispatchNav({ type: 'NAVIGATE', path }), []);
+  const goBack    = useCallback(() => dispatchNav({ type: 'GO_BACK' }), []);
+  const goForward = useCallback(() => dispatchNav({ type: 'GO_FORWARD' }), []);
+
+  const canGoBack    = navIndex > 0;
   const canGoForward = navIndex < navHistory.length - 1;
 
   const [listing, setListing] = useState<DirectoryListing | null>(null);

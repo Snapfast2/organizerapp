@@ -11,8 +11,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   popupMove:   (filePath: string, destDir: string) => ipcRenderer.send('popup:move', { filePath, destDir }),
   popupIgnore: () => ipcRenderer.send('popup:ignore'),
 
-  // Listen for fs refresh from main
-  onFsRefresh: (cb: () => void) => ipcRenderer.on('fs:refresh', cb),
+  // Listen for fs refresh from main — returns cleanup fn to call on unmount
+  onFsRefresh: (cb: () => void) => {
+    const handler = (_event: Electron.IpcRendererEvent) => cb();
+    ipcRenderer.on('fs:refresh', handler);
+    return () => ipcRenderer.removeListener('fs:refresh', handler);
+  },
 
   // Window animation sync — lets React play CSS animations in sync with Electron
   onWindowAnimate: (event: string, cb: () => void) => {

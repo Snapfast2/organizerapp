@@ -384,23 +384,25 @@ export function DocCover({ src, name, ext }: { src: string; name: string; ext: s
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
+    let cancelled = false;
+
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
           setVisible(true);
           obs.disconnect();
-          
+
           acquireThumbSlot().then(() => {
+            if (cancelled) { releaseThumbSlot(); return; }
             const thumbUrl = `/api/thumb-doc?path=${encodeURIComponent(src)}`;
             const img = new window.Image();
             img.src = thumbUrl;
             img.onload = () => {
-              setThumb(thumbUrl);
-              setLoaded(true);
+              if (!cancelled) { setThumb(thumbUrl); setLoaded(true); }
               releaseThumbSlot();
             };
             img.onerror = () => {
-              setError(true);
+              if (!cancelled) setError(true);
               releaseThumbSlot();
             };
           });
@@ -409,7 +411,7 @@ export function DocCover({ src, name, ext }: { src: string; name: string; ext: s
       { rootMargin: '120px' },
     );
     obs.observe(el);
-    return () => obs.disconnect();
+    return () => { cancelled = true; obs.disconnect(); };
   }, [src]);
 
   return (
@@ -1161,9 +1163,13 @@ export function OrganizeModal({ currentPath, onClose, toast }: {
   const [executed, setExecuted] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
-    fetch('/api/organize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourcePath: currentPath, preview: true }) })
-      .then(r => r.json()).then(d => { setPreview(d); setLoading(false); });
+    fetch('/api/organize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourcePath: currentPath, preview: true }), signal: controller.signal })
+      .then(r => r.json())
+      .then(d => { setPreview(d); setLoading(false); })
+      .catch(e => { if (e.name !== 'AbortError') setLoading(false); });
+    return () => controller.abort();
   }, [currentPath]);
 
   const execute = async () => {
@@ -1316,8 +1322,13 @@ export function StatsPanel({ path, onClose, renderGridCard }: { path: string; on
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
-    fetch(`/api/stats?path=${encodeURIComponent(path)}`).then(r => r.json()).then(d => { setStats(d); setLoading(false); });
+    fetch(`/api/stats?path=${encodeURIComponent(path)}`, { signal: controller.signal })
+      .then(r => r.json())
+      .then(d => { setStats(d); setLoading(false); })
+      .catch(e => { if (e.name !== 'AbortError') setLoading(false); });
+    return () => controller.abort();
   }, [path]);
 
   // Vibrant premium palette (Tailwind 500s) for better distinction
@@ -1931,7 +1942,12 @@ export function AIStatusBar({ onClick }: { onClick: () => void }) {
   const [status, setStatus] = useState<{ available: boolean; modelAvailable?: boolean; error?: string } | null>(null);
 
   useEffect(() => {
-    fetch('/api/ai/status').then(r => r.json()).then(setStatus).catch(() => setStatus({ available: false }));
+    const controller = new AbortController();
+    fetch('/api/ai/status', { signal: controller.signal })
+      .then(r => r.json())
+      .then(setStatus)
+      .catch(e => { if (e.name !== 'AbortError') setStatus({ available: false }); });
+    return () => controller.abort();
   }, []);
 
   if (!status) return null;

@@ -491,8 +491,17 @@ export default function FileOrgApp() {
     }
   }, [sortBy]);
 
+  // Ref to the active pack polling interval — cleared on unmount or when pack finishes
+  const packIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (packIntervalRef.current) clearInterval(packIntervalRef.current);
+    };
+  }, []);
+
   const handlePackProject = async (aepPath: string) => {
     setPackState({ path: aepPath, copied: 0, total: 0, message: 'Iniciando...', files: [] });
+    let mounted = true;
     try {
       // 1. Start the job
       const startRes = await fetch('/api/ae-collect', {
@@ -503,47 +512,59 @@ export default function FileOrgApp() {
       const { jobId, error: startError } = await startRes.json();
       if (startError) throw new Error(startError);
 
-      // 2. Poll every 300ms
+      // 2. Poll every 300ms — interval stored in ref so it can be cleared on unmount
       await new Promise<void>((resolve, reject) => {
-        const interval = setInterval(async () => {
+        packIntervalRef.current = setInterval(async () => {
+          if (!mounted) {
+            if (packIntervalRef.current) clearInterval(packIntervalRef.current);
+            return;
+          }
           try {
             const pollRes = await fetch(`/api/ae-collect?jobId=${jobId}`);
             const data = await pollRes.json();
 
             if (data.error) {
-              clearInterval(interval);
+              clearInterval(packIntervalRef.current!);
               reject(new Error(data.error));
               return;
             }
 
-            setPackState({
-              path: aepPath,
-              message: data.message,
-              copied: data.copied,
-              total: data.total,
-              files: data.files || [],
-            });
+            if (mounted) {
+              setPackState({
+                path: aepPath,
+                message: data.message,
+                copied: data.copied,
+                total: data.total,
+                files: data.files || [],
+              });
+            }
 
             if (data.state === 'done') {
-              clearInterval(interval);
+              clearInterval(packIntervalRef.current!);
               const finalFiles = data.files || [];
-              setPackState(null);
-              refresh();
-              setPackDone({ totalFiles: data.copied, totalBytes: data.totalBytes ?? 0, destPath: data.destPath, files: finalFiles });
+              if (mounted) {
+                setPackState(null);
+                refresh();
+                setPackDone({ totalFiles: data.copied, totalBytes: data.totalBytes ?? 0, destPath: data.destPath, files: finalFiles });
+              }
               resolve();
             } else if (data.state === 'error') {
-              clearInterval(interval);
+              clearInterval(packIntervalRef.current!);
               reject(new Error(data.error));
             }
           } catch (e: any) {
-            clearInterval(interval);
+            clearInterval(packIntervalRef.current!);
             reject(e);
           }
         }, 300);
       });
     } catch (err: any) {
-      alert('Fallo al empaquetar: ' + err.message);
-      setPackState(null);
+      if (mounted) {
+        alert('Fallo al empaquetar: ' + err.message);
+        setPackState(null);
+      }
+    } finally {
+      mounted = false;
     }
   };
 

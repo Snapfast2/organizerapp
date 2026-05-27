@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { exec } from 'child_process';
 import util from 'util';
 
@@ -76,7 +77,11 @@ function getProjectsDb(): HubDb {
 }
 
 function saveProjectsDb(db: HubDb) {
-  fs.writeFileSync(AE_PROJECTS_DB_PATH, JSON.stringify(db, null, 2));
+  const content = JSON.stringify(db, null, 2);
+  // Write to temp file first, then atomically rename to avoid corruption from concurrent writes
+  const tmpPath = path.join(os.tmpdir(), `ae-projects-${Date.now()}.tmp.json`);
+  fs.writeFileSync(tmpPath, content, 'utf-8');
+  fs.renameSync(tmpPath, AE_PROJECTS_DB_PATH);
 }
 
 function getLinksDb(): Record<string, string[]> {

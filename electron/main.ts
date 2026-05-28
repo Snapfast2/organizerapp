@@ -963,6 +963,13 @@ ipcMain.handle('companion:get-real-ae-project', async () => {
   if (isQueryingRealProject) return lastRealProject; // return cached if busy
   isQueryingRealProject = true;
   try {
+    // Ensure AE is running AND not in the "N/A" startup state
+    const { stdout: tl } = await execAsync('tasklist /V /FO CSV /FI "IMAGENAME eq AfterFX.exe"');
+    if (!tl.includes('AfterFX.exe') || tl.includes('"N/A"')) {
+      lastRealProject = '';
+      return '';
+    }
+
     const { stdout: regOut } = await execAsync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe" /ve');
     const match = regOut.match(/REG_SZ\s+(.+)$/im);
     if (!match) throw new Error('AE not found');

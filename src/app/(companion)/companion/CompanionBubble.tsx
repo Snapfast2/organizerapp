@@ -142,19 +142,24 @@ export default function CompanionBubble() {
         const proj = await api?.companion?.getActiveProject?.();
         if (proj) setActiveProject(proj);
         
-        const realProj = await api?.companion?.getRealAeProject?.();
-        if (realProj !== undefined) {
-          setRealActiveProject(realProj || null);
-          if (realProj) {
-            const inHub = await api?.companion?.isProjectInHub?.(realProj);
-            setIsUntracked(!inHub);
-          } else {
-            setIsUntracked(false);
-          }
-        }
-
         const isRunning = await api?.companion?.isAERunning?.();
         setIsAERunning(!!isRunning);
+        
+        if (isRunning) {
+          const realProj = await api?.companion?.getRealAeProject?.();
+          if (realProj !== undefined) {
+            setRealActiveProject(realProj || null);
+            if (realProj) {
+              const inHub = await api?.companion?.isProjectInHub?.(realProj);
+              setIsUntracked(!inHub);
+            } else {
+              setIsUntracked(false);
+            }
+          }
+        } else {
+          setRealActiveProject(null);
+          setIsUntracked(false);
+        }
         
         const r = await api?.companion?.getRecents?.();
         if (r) setRecents(r);

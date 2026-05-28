@@ -5,17 +5,16 @@ import '../globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'MooMotion Companion',
+  title: 'MooMotion Popup',
 };
 
-// Pure layout without AnimationShell and with strict transparent CSS
-export default function CompanionLayout({ children }: { children: React.ReactNode }) {
+export default function PopupLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className={inter.variable}>
       <head>
-        <style precedence="default" href="companion-base-style">{`
+        <style precedence="default" href="popup-base-style">{`
           /* Pure transparent base */
-          :root, html, body, #__next, [data-reactroot] {
+          :root, html, body {
             background: transparent !important;
             background-color: transparent !important;
             margin: 0 !important;
@@ -35,7 +34,7 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
           }
         `}</style>
       </head>
-      <body>
+      <body style={{ background: 'transparent' }}>
         {children}
       </body>
     </html>

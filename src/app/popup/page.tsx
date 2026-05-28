@@ -380,7 +380,7 @@ function PopupContent() {
       </BorderGlow>
       </div>
 
-      <style>{`
+      <style precedence="default" href="popup-page-animations">{`
         @keyframes shrink { 0% { width: '100%'; } 100% { width: '0%'; } }
         
         @keyframes ae-flash-green { 
@@ -411,7 +411,7 @@ function PopupContent() {
 export default function PopupPage() {
   return (
     <Suspense>
-      <style>{`
+      <style precedence="default" href="popup-page-overrides">{`
         html, body {
           background: transparent !important;
           background-color: transparent !important;

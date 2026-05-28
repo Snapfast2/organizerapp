@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     importToAE:       () => ipcRenderer.send('companion:import-to-ae'),
     isAERunning:      () => ipcRenderer.invoke('companion:is-ae-running'),
     getActiveProject: () => ipcRenderer.invoke('companion:get-active-project'),
+    getRealAeProject: () => ipcRenderer.invoke('companion:get-real-ae-project'),
+    isProjectInHub: (path: string) => ipcRenderer.invoke('companion:is-project-in-hub', path),
     getRecents:       () => ipcRenderer.invoke('companion:get-recents'),
     startDrag:        () => ipcRenderer.send('companion:drag-start'),
     dragMove:         (totalDx: number, totalDy: number) => ipcRenderer.send('companion:drag-move', totalDx, totalDy),

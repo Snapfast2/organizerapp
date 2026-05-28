@@ -927,6 +927,19 @@ ipcMain.handle('companion:get-active-project', async () => {
   } catch { return null; }
 });
 
+ipcMain.handle('companion:is-project-in-hub', async (_event, projPath: string) => {
+  if (!projPath) return false;
+  try {
+    const db = JSON.parse(fs.readFileSync(AE_PROJECTS_DB_PATH, 'utf-8'));
+    const projects: any[] = db.recentProjects || [];
+    const normalized = path.normalize(projPath).toLowerCase();
+    // It's in the hub if it's in the DB OR if it's inside E:\Motion
+    const inDb = projects.some(p => path.normalize(p.path).toLowerCase() === normalized);
+    const inFolder = normalized.startsWith('e:\\motion');
+    return inDb || inFolder;
+  } catch { return false; }
+});
+
 ipcMain.handle('companion:get-recents', async () => {
   try {
     const recentsPath = path.join(app.getPath('userData'), 'moo-recents.json');
@@ -941,4 +954,57 @@ ipcMain.on('companion:import-to-ae', () => {
     mainWindow.focus();
     mainWindow.webContents.send('trigger:import-ae');
   }
+});
+
+let isQueryingRealProject = false;
+let lastRealProject = '';
+
+ipcMain.handle('companion:get-real-ae-project', async () => {
+  if (isQueryingRealProject) return lastRealProject; // return cached if busy
+  isQueryingRealProject = true;
+  try {
+    const { stdout: regOut } = await execAsync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe" /ve');
+    const match = regOut.match(/REG_SZ\s+(.+)$/im);
+    if (!match) throw new Error('AE not found');
+    const aePath = match[1].trim();
+
+    const tempResultPath = path.join(os.tmpdir(), 'ae_active_project_result.txt');
+    if (fs.existsSync(tempResultPath)) fs.unlinkSync(tempResultPath);
+    const safeTemp = tempResultPath.replace(/\\/g, '/');
+
+    const scriptLines = [
+      'try {',
+      `  var result = (app.project && app.project.file) ? app.project.file.fsName : "";`,
+      `  var f = new File("${safeTemp}");`,
+      '  f.open("w"); f.write(result); f.close();',
+      '} catch(err) {',
+      `  var f = new File("${safeTemp}");`,
+      '  f.open("w"); f.write(""); f.close();',
+      '}',
+    ].join('\n');
+    const tempJsx = path.join(os.tmpdir(), 'ae_get_proj_companion.jsx');
+    fs.writeFileSync(tempJsx, scriptLines);
+    
+    // We execute async and wait a bit for the file
+    exec(`"${aePath}" -r "${tempJsx}"`, { windowsHide: true });
+    
+    // Short poll
+    let found = false;
+    for (let i = 0; i < 6; i++) {
+      await new Promise(r => setTimeout(r, 200));
+      if (fs.existsSync(tempResultPath)) {
+        const raw = fs.readFileSync(tempResultPath, 'utf-8').trim();
+        lastRealProject = raw ? path.normalize(raw) : '';
+        found = true;
+        break;
+      }
+    }
+    if (!found) lastRealProject = ''; // Timeout
+  } catch (err) {
+    // console.error(err);
+    lastRealProject = '';
+  } finally {
+    isQueryingRealProject = false;
+  }
+  return lastRealProject;
 });

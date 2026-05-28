@@ -123,6 +123,9 @@ function FileIcon({ name }: { name: string }) {
 /* ═══════════════════════════════════════════════════════════════════ */
 export default function CompanionBubble() {
   const [activeProject, setActiveProject] = useState<string | null>(null);
+  const [realActiveProject, setRealActiveProject] = useState<string | null>(null);
+  const [isUntracked, setIsUntracked] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
   const [recents, setRecents] = useState<RecentFile[]>([]);
   const [showRecents, setShowRecents] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
@@ -138,8 +141,21 @@ export default function CompanionBubble() {
       try {
         const proj = await api?.companion?.getActiveProject?.();
         if (proj) setActiveProject(proj);
+        
+        const realProj = await api?.companion?.getRealAeProject?.();
+        if (realProj !== undefined) {
+          setRealActiveProject(realProj || null);
+          if (realProj) {
+            const inHub = await api?.companion?.isProjectInHub?.(realProj);
+            setIsUntracked(!inHub);
+          } else {
+            setIsUntracked(false);
+          }
+        }
+
         const isRunning = await api?.companion?.isAERunning?.();
         setIsAERunning(!!isRunning);
+        
         const r = await api?.companion?.getRecents?.();
         if (r) setRecents(r);
 
@@ -317,6 +333,38 @@ export default function CompanionBubble() {
     isDraggingRef.current = false;
   };
 
+  const handleSaveToHub = async () => {
+    if (!realActiveProject || isMigrating) return;
+    setIsMigrating(true);
+    try {
+      const res = await fetch('http://localhost:3000/api/ae-hub', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'migrate-project', 
+          filePath: realActiveProject,
+          targetDirectory: 'E:\\Motion' // We move it to the Hub
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.path) {
+        // Now open the newly created project in AE
+        const scriptCode = `
+          app.open(new File("${data.path.replace(/\\/g, '/')}"));
+        `;
+        api?.companion?.executeScript?.(scriptCode);
+        setRealActiveProject(data.path);
+        setIsUntracked(false);
+      } else {
+        console.error('Error migrando:', data.error);
+      }
+    } catch (e) {
+      console.error('Error de red al migrar', e);
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
   return (
     <div className={styles.root}>
       <div
@@ -354,6 +402,35 @@ export default function CompanionBubble() {
                 {activeProject ?? (isAERunning ? 'AE abierto' : 'AE cerrado')}
               </span>
             </div>
+
+            {/* Untracked Project */}
+            {isUntracked && realActiveProject && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: 6, padding: 10, marginTop: 8,
+                display: 'flex', flexDirection: 'column', gap: 6
+              }}>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: '#ef4444' }}>
+                  Proyecto Externo Detectado
+                </div>
+                <div style={{ fontSize: 10, color: '#888', wordBreak: 'break-all' }}>
+                  {realActiveProject}
+                </div>
+                <button 
+                  onClick={handleSaveToHub}
+                  disabled={isMigrating}
+                  style={{
+                    background: '#ef4444', color: 'white', border: 'none',
+                    borderRadius: 4, padding: '4px 8px', fontSize: 10,
+                    cursor: isMigrating ? 'not-allowed' : 'pointer',
+                    marginTop: 4, fontWeight: 600
+                  }}
+                >
+                  {isMigrating ? 'Moviendo...' : '📥 Guardar en el Hub'}
+                </button>
+              </div>
+            )}
 
             {/* Section: Actions */}
             <div className={styles.sectionLabel}>Actions</div>

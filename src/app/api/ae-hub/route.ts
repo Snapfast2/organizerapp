@@ -225,37 +225,18 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'No se encontró la instalación de After Effects' }, { status: 404 });
         }
 
-        // Write JSX to a temp file and launch AE with it via execFile (no shell interpolation)
-        const fullPathForward = fullPath.replace(/\\/g, '/');
-        const scriptContent = `try { app.newProject(); app.project.save(new File("${fullPathForward}")); } catch(e) {}`;
-        const tempJsx = path.join(os.tmpdir(), `ae_create_${Date.now()}.jsx`);
-        fs.writeFileSync(tempJsx, scriptContent);
-        // evalFile path also uses forward slashes (AE ExtendScript requirement)
-        const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
-
-        // Check if AE is currently running
-        let isAERunning = false;
+        // Copy the blank template instead of generating via script
+        const templatePath = path.join(process.cwd(), 'public', 'blank.aep');
         try {
-          const { stdout } = await execFileAsync('tasklist', ['/FI', 'IMAGENAME eq AfterFX.exe']);
-          if (stdout.includes('AfterFX.exe')) {
-            isAERunning = true;
-          }
-        } catch (e) {
-          // ignore
+          fs.copyFileSync(templatePath, fullPath);
+        } catch (e: any) {
+          return NextResponse.json({ error: `No se pudo crear el archivo AEP: ${e.message}` }, { status: 500 });
         }
 
-        if (!isAERunning) {
-          // If AE is not running, launching it with -s will cause it to close automatically after the script.
-          // To prevent this, we launch it normally first, wait a moment, and then send the script.
-          execFile('cmd', ['/c', 'start', '""', aePath]);
-          // Wait 2 seconds to ensure the process is registered before sending the script
-          await new Promise(r => setTimeout(r, 2000));
-        }
-
-        // Now send the script. If AE was already running, it just executes.
-        // If we just launched it, this sends the script to the loading instance and it stays open.
-        execFile(aePath, ['-s', evalScript], (err) => {
-          if (err) console.error('Error al abrir AE:', err);
+        // Open the newly created .aep file directly. 
+        // If AE is closed, it launches and stays open. If AE is open, it just opens the file.
+        execFile('cmd', ['/c', 'start', '""', fullPath], (err) => {
+          if (err) console.error('Error al abrir proyecto en AE:', err);
         });
 
         db.recentProjects = db.recentProjects.filter(p => path.normalize(p.path) !== path.normalize(fullPath));

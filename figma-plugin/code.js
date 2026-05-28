@@ -8,7 +8,25 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-figma.showUI(__html__, { width: 320, height: 500 });
+figma.showUI(__html__, { width: 240, height: 280 });
+// ─── Selection tracking ────────────────────────────────────────────────────────
+/** Sends current selection state to the UI so the precomp button can react. */
+function sendSelectionInfo() {
+    const sel = figma.currentPage.selection;
+    // Only count container nodes (groups, frames, instances) as precomp candidates.
+    const candidates = sel.filter(n => n.type === 'GROUP' || n.type === 'FRAME' ||
+        n.type === 'COMPONENT' || n.type === 'INSTANCE');
+    const marked = candidates.filter(n => n.name.startsWith('*'));
+    figma.ui.postMessage({
+        type: 'selection-info',
+        total: candidates.length,
+        marked: marked.length,
+    });
+}
+// Fire on every selection change so the UI button stays in sync.
+figma.on('selectionchange', sendSelectionInfo);
+// Also send the initial state as soon as the plugin opens.
+sendSelectionInfo();
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function isMaskLayer(node) {
     return 'isMask' in node && node.isMask === true;
@@ -282,6 +300,34 @@ function exportGroup(group_1) {
 }
 // ─── Message handler ──────────────────────────────────────────────────────────
 figma.ui.onmessage = (msg) => __awaiter(void 0, void 0, void 0, function* () {
+    // ── Mark / unmark selected groups as precomp ─────────────────────────────
+    if (msg.type === 'mark-precomp') {
+        const candidates = figma.currentPage.selection.filter(n => n.type === 'GROUP' || n.type === 'FRAME' ||
+            n.type === 'COMPONENT' || n.type === 'INSTANCE');
+        if (candidates.length === 0) {
+            figma.notify('⚠️ Select at least one group or frame.');
+            return;
+        }
+        // If ALL are already marked → remove * (toggle off).
+        // Otherwise → add * to any that don't have it (toggle on).
+        const allMarked = candidates.every(n => n.name.startsWith('*'));
+        for (const node of candidates) {
+            if (allMarked) {
+                // Remove the leading *.
+                node.name = node.name.replace(/^\*+/, '');
+            }
+            else if (!node.name.startsWith('*')) {
+                node.name = '*' + node.name;
+            }
+        }
+        // Refresh the UI button state after renaming.
+        sendSelectionInfo();
+        figma.notify(allMarked
+            ? `★ Removed precomp mark from ${candidates.length} layer(s)`
+            : `★ Marked ${candidates.length} layer(s) as precomp`);
+        return;
+    }
+    // ── Export selection to Companion ────────────────────────────────────────
     if (msg.type !== 'export-selection')
         return;
     const selection = figma.currentPage.selection;

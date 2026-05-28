@@ -15,8 +15,9 @@
       --bg:           #1a1a1a;
       --surface:      #222;
       --text:         #e5e5e5;
-      --text-muted:   #888;
+      --muted:        #888;
       --red:          #f87171;
+      --amber:        #fbbf24;
       --border:       rgba(255,255,255,0.08);
     }
 
@@ -29,107 +30,87 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── Layout ── */
-    .panel { padding: 12px; display: flex; flex-direction: column; gap: 1px; }
+    .panel { padding: 10px 12px; display: flex; flex-direction: column; gap: 0; }
 
     /* ── Header ── */
     .header {
       display: flex;
       align-items: center;
       gap: 7px;
-      padding: 0 0 10px;
+      padding-bottom: 10px;
       border-bottom: 1px solid var(--border);
-      margin-bottom: 2px;
     }
     .logo {
-      width: 24px; height: 24px;
-      background: rgba(74,222,128,0.12);
+      width: 22px; height: 22px;
+      background: rgba(74,222,128,0.1);
       border: 1px solid var(--green-border);
-      border-radius: 6px;
+      border-radius: 5px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 13px;
-      flex-shrink: 0;
+      font-size: 12px; flex-shrink: 0;
     }
-    .app-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
-    .version  { font-size: 10px; color: var(--text-muted); }
+    .app-name { font-size: 12px; font-weight: 600; flex: 1; }
+    .version  { font-size: 10px; color: var(--muted); }
 
-    /* ── Section label ── */
+    /* ── Section ── */
     .section-label {
-      font-size: 10px;
-      font-weight: 500;
-      color: var(--text-muted);
-      padding: 10px 0 4px;
-      letter-spacing: 0.04em;
+      font-size: 9.5px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.06em;
       text-transform: uppercase;
+      padding: 10px 0 5px;
     }
 
-    /* ── Action row (main export button) ── */
+    /* ── Action row ── */
     .action-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px;
       border-radius: 6px;
       border: 1px solid var(--border);
       background: var(--surface);
       cursor: pointer;
-      transition: background 0.12s, border-color 0.12s;
-      width: 100%;
-      text-align: left;
+      transition: background 0.1s, border-color 0.1s;
+      width: 100%; text-align: left;
+      margin-bottom: 2px;
     }
-    .action-row:hover:not(:disabled) {
-      background: rgba(255,255,255,0.06);
-      border-color: rgba(255,255,255,0.14);
-    }
-    .action-row:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-    .action-icon { font-size: 14px; flex-shrink: 0; }
-    .action-text { font-size: 12px; color: var(--green-dim); font-weight: 500; }
+    .action-row:hover:not(:disabled) { background: #2a2a2a; border-color: rgba(255,255,255,0.13); }
+    .action-row:disabled { opacity: 0.4; cursor: not-allowed; }
+    .action-icon { font-size: 13px; flex-shrink: 0; }
+    .action-text { font-size: 11.5px; font-weight: 500; color: var(--green-dim); }
 
-    /* ── Option rows ── */
-    .option-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    /* ── Precomp mark button ── */
+    .mark-btn {
+      display: flex; align-items: center; gap: 8px;
       padding: 7px 10px;
       border-radius: 6px;
-      border: 1px solid transparent;
+      border: 1px solid var(--border);
+      background: var(--surface);
       cursor: pointer;
-      transition: background 0.12s;
-      width: 100%;
-      text-align: left;
-      background: transparent;
+      transition: background 0.1s, border-color 0.1s;
+      width: 100%; text-align: left;
     }
-    .option-row:hover { background: rgba(255,255,255,0.04); }
-
-    .checkbox {
-      width: 14px; height: 14px;
-      border: 1.5px solid rgba(255,255,255,0.25);
-      border-radius: 3px;
-      flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      transition: border-color 0.12s, background 0.12s;
-      font-size: 9px;
-      color: #000;
+    .mark-btn:hover:not(:disabled) { background: #2a2a2a; border-color: rgba(255,255,255,0.13); }
+    .mark-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .mark-btn.active {
+      border-color: rgba(251,191,36,0.3);
+      background: rgba(251,191,36,0.07);
     }
-    .checkbox.on {
-      background: var(--green);
-      border-color: var(--green);
+    .mark-btn.active:hover:not(:disabled) {
+      background: rgba(251,191,36,0.12);
+      border-color: rgba(251,191,36,0.45);
     }
+    .mark-icon { font-size: 12px; flex-shrink: 0; }
+    .mark-text { flex: 1; }
+    .mark-label { font-size: 11.5px; font-weight: 500; color: var(--text); }
+    .mark-sub   { font-size: 10px; color: var(--muted); margin-top: 1px; }
+    .mark-sub.has-mark { color: var(--amber); }
 
-    .option-text { font-size: 11.5px; color: var(--text-muted); }
-    .option-text b { color: var(--text); font-weight: 500; }
-
-    /* Quality toggle (pill) */
+    /* ── Quality ── */
     .quality-wrap {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      display: flex; align-items: center; gap: 8px;
       padding: 7px 10px;
     }
-    .quality-label { font-size: 11.5px; color: var(--text-muted); flex: 1; }
+    .quality-label { font-size: 11.5px; color: var(--muted); flex: 1; }
     .pill {
       display: flex;
       background: rgba(255,255,255,0.05);
@@ -139,55 +120,37 @@
     }
     .pill-btn {
       padding: 3px 9px;
-      border: none;
-      background: transparent;
-      color: var(--text-muted);
-      font-family: inherit;
-      font-size: 10.5px;
-      font-weight: 600;
+      border: none; background: transparent;
+      color: var(--muted);
+      font-family: inherit; font-size: 10.5px; font-weight: 600;
       cursor: pointer;
-      transition: background 0.12s, color 0.12s;
+      transition: background 0.1s, color 0.1s;
     }
-    .pill-btn.active {
-      background: var(--green-glow);
-      color: var(--green-dim);
-    }
+    .pill-btn.active { background: var(--green-glow); color: var(--green-dim); }
     .pill-sep { width: 1px; background: var(--border); }
 
     /* ── Progress ── */
-    .progress-wrap { display: none; padding: 0 10px 4px; }
+    .progress-wrap { display: none; padding: 4px 0; }
     .progress-wrap.visible { display: block; }
     .progress-track {
-      height: 2px;
-      background: rgba(255,255,255,0.07);
-      border-radius: 1px;
-      overflow: hidden;
-      margin-top: 4px;
+      height: 2px; background: rgba(255,255,255,0.07);
+      border-radius: 1px; overflow: hidden;
     }
     .progress-fill {
-      height: 100%;
-      width: 0%;
+      height: 100%; width: 0%;
       background: var(--green);
       border-radius: 1px;
       transition: width 0.2s ease;
     }
-    .progress-label {
-      font-size: 10px;
-      color: var(--text-muted);
-      margin-top: 3px;
-    }
+    .progress-lbl { font-size: 10px; color: var(--muted); margin-top: 3px; }
 
     /* ── Footer ── */
     .footer {
       padding: 8px 0 0;
       border-top: 1px solid var(--border);
-      margin-top: 6px;
+      margin-top: 8px;
     }
-    .status-msg {
-      font-size: 10.5px;
-      color: var(--text-muted);
-      text-align: center;
-    }
+    .status-msg { font-size: 10.5px; color: var(--muted); text-align: center; }
     .status-msg.ok  { color: var(--green); }
     .status-msg.err { color: var(--red); }
   </style>
@@ -212,12 +175,21 @@
     <!-- Progress -->
     <div class="progress-wrap" id="progress-wrap">
       <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
-      <div class="progress-label" id="progress-label">Exporting…</div>
+      <div class="progress-lbl" id="progress-lbl">Exporting…</div>
     </div>
+
+    <!-- Precomp -->
+    <div class="section-label">Precomp</div>
+    <button class="mark-btn" id="mark-btn" disabled>
+      <span class="mark-icon" id="mark-icon">★</span>
+      <span class="mark-text">
+        <div class="mark-label" id="mark-label">Mark as Precomp</div>
+        <div class="mark-sub" id="mark-sub">Select a group first</div>
+      </span>
+    </button>
 
     <!-- Options -->
     <div class="section-label">Options</div>
-
     <div class="quality-wrap">
       <span class="quality-label">Export scale</span>
       <div class="pill">
@@ -235,11 +207,15 @@
   </div>
 
   <script>
-    const btn          = document.getElementById('export-btn');
+    const exportBtn    = document.getElementById('export-btn');
+    const markBtn      = document.getElementById('mark-btn');
+    const markIcon     = document.getElementById('mark-icon');
+    const markLabel    = document.getElementById('mark-label');
+    const markSub      = document.getElementById('mark-sub');
     const statusEl     = document.getElementById('status');
     const progressWrap = document.getElementById('progress-wrap');
     const progressFill = document.getElementById('progress-fill');
-    const progressLabel= document.getElementById('progress-label');
+    const progressLbl  = document.getElementById('progress-lbl');
     const opt1x        = document.getElementById('opt-1x');
     const opt2x        = document.getElementById('opt-2x');
 
@@ -253,21 +229,60 @@
       opt2x.classList.toggle('active', s === 2);
     }
 
+    // ── Selection info from plugin ─────────────────────────────────────────────
+    // Updates the precomp button label + state based on what's selected in Figma.
+    function updateMarkBtn(total, marked) {
+      if (total === 0) {
+        markBtn.disabled = true;
+        markBtn.classList.remove('active');
+        markIcon.textContent = '★';
+        markLabel.textContent = 'Mark as Precomp';
+        markSub.textContent   = 'Select a group first';
+        markSub.className     = 'mark-sub';
+        return;
+      }
+
+      markBtn.disabled = false;
+      const allMarked = marked === total;
+
+      if (allMarked) {
+        // All selected are already marked → offer to unmark.
+        markBtn.classList.add('active');
+        markIcon.textContent  = '★';
+        markLabel.textContent = 'Remove Precomp mark';
+        markSub.textContent   = `${marked} of ${total} marked — click to remove`;
+        markSub.className     = 'mark-sub has-mark';
+      } else if (marked > 0) {
+        // Mixed state — some marked, some not.
+        markBtn.classList.remove('active');
+        markIcon.textContent  = '★';
+        markLabel.textContent = 'Mark as Precomp';
+        markSub.textContent   = `${marked} of ${total} already marked`;
+        markSub.className     = 'mark-sub has-mark';
+      } else {
+        // None marked.
+        markBtn.classList.remove('active');
+        markIcon.textContent  = '★';
+        markLabel.textContent = 'Mark as Precomp';
+        markSub.textContent   = `${total} group${total > 1 ? 's' : ''} selected`;
+        markSub.className     = 'mark-sub';
+      }
+    }
+
     // ── UI helpers ─────────────────────────────────────────────────────────────
     function setStatus(msg, cls) {
       statusEl.textContent = msg;
-      statusEl.className = 'status-msg ' + (cls || '');
+      statusEl.className   = 'status-msg ' + (cls || '');
     }
 
     function setBusy(busy) {
-      btn.disabled = busy;
-      if (!busy) { progressWrap.classList.remove('visible'); }
+      exportBtn.disabled = busy;
+      if (!busy) progressWrap.classList.remove('visible');
     }
 
     function setError(msg) {
       setStatus('❌ ' + msg, 'err');
-      btn.disabled = false;
-      progressWrap.classList.remove('visible');
+      setBusy(false);
     }
 
     function repaint() {
@@ -277,11 +292,11 @@
     function setProgress(done, total, label) {
       const pct = total > 0 ? Math.round((done / total) * 100) : 0;
       progressFill.style.width = pct + '%';
-      progressLabel.textContent = label || '';
+      if (label) progressLbl.textContent = label;
     }
 
-    // ── Export ─────────────────────────────────────────────────────────────────
-    btn.onclick = () => {
+    // ── Buttons ────────────────────────────────────────────────────────────────
+    exportBtn.onclick = () => {
       setBusy(true);
       progressWrap.classList.add('visible');
       setProgress(0, 1, 'Starting…');
@@ -289,11 +304,13 @@
       parent.postMessage({ pluginMessage: { type: 'export-selection', scale: exportScale } }, '*');
     };
 
+    markBtn.onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'mark-precomp' } }, '*');
+    };
+
     // ── Streaming queue ────────────────────────────────────────────────────────
     let queue = Promise.resolve();
-    let totalGroups = 0;
-    let sentGroups  = 0;
-    let exportedGroups = 0;
+    let totalGroups = 0, sentGroups = 0, exportedGroups = 0;
 
     function enqueue(fn) {
       queue = queue.then(fn).catch(e => setError(e.message));
@@ -309,10 +326,16 @@
       return res.json();
     }
 
-    // ── Messages ───────────────────────────────────────────────────────────────
+    // ── Plugin messages ────────────────────────────────────────────────────────
     onmessage = (event) => {
       const msg = event.data.pluginMessage;
       if (!msg) return;
+
+      // Live selection state from plugin.
+      if (msg.type === 'selection-info') {
+        updateMarkBtn(msg.total, msg.marked);
+        return;
+      }
 
       if (msg.type === 'export-start') {
         totalGroups = msg.total || 1;
@@ -348,7 +371,7 @@
           await post({ action: 'finalize' });
           setStatus('✅ Ready in Companion!', 'ok');
           progressWrap.classList.remove('visible');
-          btn.disabled = false;
+          exportBtn.disabled = false;
         });
         return;
       }

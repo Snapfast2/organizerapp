@@ -3,7 +3,26 @@ import fs from 'fs/promises';
 import path from 'path';
 
 const PAYLOAD_FILE    = path.join(process.cwd(), 'figma-payload.json');
-const TEMP_ASSETS_DIR = path.join(process.cwd(), '.ae-projects', 'figma-assets');
+const FALLBACK_ASSETS = path.join(process.cwd(), '.ae-projects', 'figma-assets');
+const PROJECTS_FILE   = path.join(process.cwd(), 'ae-projects.json');
+
+/** Resolve the assets directory: project folder > fallback */
+async function getAssetsDir(): Promise<string> {
+  try {
+    const raw = await fs.readFile(PROJECTS_FILE, 'utf-8');
+    const data = JSON.parse(raw);
+    const projects = data.recentProjects || [];
+    if (projects.length > 0) {
+      const active = projects[0]; // most recently opened
+      const projectDir = active.projectFolder || path.dirname(active.path);
+      const assetsDir = path.join(projectDir, 'Figma Assets');
+      await fs.mkdir(assetsDir, { recursive: true });
+      return assetsDir;
+    }
+  } catch { /* ignore — use fallback */ }
+  await fs.mkdir(FALLBACK_ASSETS, { recursive: true });
+  return FALLBACK_ASSETS;
+}
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -27,6 +46,7 @@ let session: {
 
 // ── Save a single group's layer PNGs to disk; return the group with imagePaths ─
 async function saveGroupImages(group: any): Promise<any> {
+  const assetsDir = await getAssetsDir();
   const safeName = (group.name || 'group').replace(/[^a-z0-9]/gi, '_');
 
   // Save flat layers.
@@ -35,7 +55,7 @@ async function saveGroupImages(group: any): Promise<any> {
     const layer = layers[i];
     if (layer.pngBase64) {
       const layerName = (layer.name || 'layer').replace(/[^a-z0-9]/gi, '_');
-      const filePath  = path.join(TEMP_ASSETS_DIR, `${safeName}_${layerName}_${i}.png`);
+      const filePath  = path.join(assetsDir, `${safeName}_${layerName}_${i}.png`);
       await fs.writeFile(filePath, Buffer.from(layer.pngBase64, 'base64'));
       layer.imagePath = filePath.replace(/\\/g, '/');
       delete layer.pngBase64;
@@ -52,7 +72,7 @@ async function saveGroupImages(group: any): Promise<any> {
       const sl = subLayers[si];
       if (sl.pngBase64) {
         const slName   = (sl.name || 'layer').replace(/[^a-z0-9]/gi, '_');
-        const filePath = path.join(TEMP_ASSETS_DIR, `pc_${pcSafe}_${slName}_${si}.png`);
+        const filePath = path.join(assetsDir, `pc_${pcSafe}_${slName}_${si}.png`);
         await fs.writeFile(filePath, Buffer.from(sl.pngBase64, 'base64'));
         sl.imagePath = filePath.replace(/\\/g, '/');
         delete sl.pngBase64;
@@ -67,7 +87,6 @@ async function saveGroupImages(group: any): Promise<any> {
 export async function POST(req: Request) {
   try {
     const data = await req.json();
-    await fs.mkdir(TEMP_ASSETS_DIR, { recursive: true });
 
     // ── Streaming protocol ──────────────────────────────────────────────────
     if (data.action === 'start') {

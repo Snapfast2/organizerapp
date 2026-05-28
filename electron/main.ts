@@ -960,56 +960,56 @@ let isQueryingRealProject = false;
 let lastRealProject = '';
 
 ipcMain.handle('companion:get-real-ae-project', async () => {
-  if (isQueryingRealProject) return lastRealProject; // return cached if busy
+  if (isQueryingRealProject) return lastRealProject;
   isQueryingRealProject = true;
   try {
-    // Ensure AE is running AND not in the "N/A" startup state
+    // 1) Verify AE is running to avoid false positives from old prefs
     const { stdout: tl } = await execAsync('tasklist /V /FO CSV /FI "IMAGENAME eq AfterFX.exe"');
     if (!tl.includes('AfterFX.exe') || tl.includes('"N/A"')) {
       lastRealProject = '';
       return '';
     }
 
-    const { stdout: regOut } = await execAsync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe" /ve');
-    const match = regOut.match(/REG_SZ\s+(.+)$/im);
-    if (!match) throw new Error('AE not found');
-    const aePath = match[1].trim();
+    // 2) Parse the latest AE Prefs.txt for MRU #0
+    const aeAppData = path.join(process.env.APPDATA || '', 'Adobe', 'After Effects');
+    if (!fs.existsSync(aeAppData)) throw new Error('AE AppData not found');
 
-    const tempResultPath = path.join(os.tmpdir(), 'ae_active_project_result.txt');
-    if (fs.existsSync(tempResultPath)) fs.unlinkSync(tempResultPath);
-    const safeTemp = tempResultPath.replace(/\\/g, '/');
+    const dirs = fs.readdirSync(aeAppData).filter(d => !isNaN(parseFloat(d))).sort((a, b) => parseFloat(b) - parseFloat(a));
+    let parsedPath = '';
 
-    const scriptLines = [
-      'try {',
-      '  var sec = app.preferences.getPrefAsLong("Main Pref Section v2", "Pref_SCRIPTING_FILE_NETWORK_SECURITY");',
-      '  if (sec !== 1) alert("MooMotion necesita que actives: Edit > Preferences > Scripting & Expressions > Allow Scripts to Write Files and Access Network. Por favor actívalo para que funcione.");',
-      `  var result = (app.project && app.project.file) ? app.project.file.fsName : "";`,
-      `  var f = new File("${safeTemp}");`,
-      '  f.open("w"); f.write(result); f.close();',
-      '} catch(err) {',
-      '  alert("Error en MooMotion: " + err.toString());',
-      '}',
-    ].join('\n');
-    const tempJsx = path.join(os.tmpdir(), 'ae_get_proj_companion.jsx');
-    fs.writeFileSync(tempJsx, scriptLines);
-    
-    // We execute async and wait a bit for the file
-    exec(`"${aePath}" -r "${tempJsx}"`, { windowsHide: true });
-    
-    // Short poll
-    let found = false;
-    for (let i = 0; i < 20; i++) {
-      await new Promise(r => setTimeout(r, 200));
-      if (fs.existsSync(tempResultPath)) {
-        const raw = fs.readFileSync(tempResultPath, 'utf-8').trim();
-        lastRealProject = raw ? path.normalize(raw) : '';
-        found = true;
-        break;
+    for (const dir of dirs) {
+      const prefsPath = path.join(aeAppData, dir, `Adobe After Effects ${dir} Prefs.txt`);
+      if (!fs.existsSync(prefsPath)) continue;
+
+      const content = fs.readFileSync(prefsPath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes('MRU Project Path ID # 0, File Path')) {
+          let raw = lines[i].split('=')[1].trim();
+          if (raw.endsWith('\\')) {
+            raw = raw.replace(/^"/, '').replace(/"\\$/, '');
+            parsedPath += raw;
+            let j = i + 1;
+            while (j < lines.length && lines[j].trim().startsWith('"')) {
+              let nextRaw = lines[j].trim();
+              let isEnd = !nextRaw.endsWith('\\');
+              nextRaw = nextRaw.replace(/^"/, '').replace(/"\\$/, '').replace(/"$/, '');
+              parsedPath += nextRaw;
+              if (isEnd) break;
+              j++;
+            }
+          } else {
+            parsedPath = raw.replace(/^"|"$/g, '');
+          }
+          break; // Found MRU 0
+        }
       }
+      if (parsedPath) break; // Found it in the latest valid prefs
     }
-    if (!found) lastRealProject = ''; // Timeout
+
+    lastRealProject = parsedPath ? path.normalize(parsedPath) : '';
   } catch (err) {
-    // console.error(err);
+    console.error('Error parsing AE Prefs:', err);
     lastRealProject = '';
   } finally {
     isQueryingRealProject = false;

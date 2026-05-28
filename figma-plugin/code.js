@@ -272,23 +272,30 @@ figma.ui.onmessage = (msg) => __awaiter(void 0, void 0, void 0, function* () {
         figma.ui.postMessage({ type: 'export-error', message: 'No selection' });
         return;
     }
-    figma.ui.postMessage({ type: 'export-progress', message: 'Exporting layers…' });
-    try {
-        const exports = [];
-        for (const node of selection) {
-            const result = yield exportGroup(node);
-            if (result)
-                exports.push(result);
-        }
+    // ── Streaming export: one group at a time ────────────────────────────────
+    // Each group is sent to the UI (and immediately to the server) as soon as
+    // it finishes exporting. This keeps plugin memory bounded to ~1 group at a
+    // time instead of accumulating every PNG before sending.
+    figma.ui.postMessage({
+        type: 'export-start',
+        total: selection.length,
+        documentName: figma.root.name,
+    });
+    for (const node of selection) {
         figma.ui.postMessage({
-            type: 'send-to-server',
-            payload: exports,
-            documentName: figma.root.name,
+            type: 'export-progress',
+            message: `Exporting "${node.name}"…`,
         });
+        try {
+            const result = yield exportGroup(node);
+            if (result) {
+                figma.ui.postMessage({ type: 'export-group', group: result });
+            }
+        }
+        catch (err) {
+            console.error('Failed to export', node.name, err);
+            figma.notify('❌ Error exporting ' + node.name + ': ' + err);
+        }
     }
-    catch (err) {
-        console.error(err);
-        figma.notify('❌ Export error: ' + err);
-        figma.ui.postMessage({ type: 'export-error', message: String(err) });
-    }
+    figma.ui.postMessage({ type: 'export-done' });
 });

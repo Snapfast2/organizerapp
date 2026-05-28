@@ -33,31 +33,121 @@
     }
     #status.ok  { color: #4ade80; }
     #status.err { color: #f87171; }
+    #progress-bar-wrap {
+      display: none;
+      margin-top: 10px;
+      background: #333;
+      border-radius: 4px;
+      height: 4px;
+      overflow: hidden;
+    }
+    #progress-bar {
+      height: 100%;
+      background: #18A0FB;
+      width: 0%;
+      transition: width 0.2s;
+    }
   </style>
 </head>
 <body>
   <button id="export-btn">Export to Companion →</button>
   <div id="status">Select a group, then click Export.</div>
+  <div id="progress-bar-wrap">
+    <div id="progress-bar"></div>
+  </div>
 
   <script>
-    const btn    = document.getElementById('export-btn');
-    const status = document.getElementById('status');
+    const btn         = document.getElementById('export-btn');
+    const statusEl    = document.getElementById('status');
+    const progressWrap = document.getElementById('progress-bar-wrap');
+    const progressBar  = document.getElementById('progress-bar');
+
+    const SERVER = 'http://localhost:3000/api/ae-figma';
 
     function setStatus(msg, cls) {
-      status.textContent = msg;
-      status.className = cls || '';
+      statusEl.textContent = msg;
+      statusEl.className = cls || '';
+    }
+
+    function setProgress(done, total) {
+      if (total <= 0) return;
+      const pct = Math.round((done / total) * 100);
+      progressBar.style.width = pct + '%';
     }
 
     btn.onclick = () => {
       btn.disabled = true;
+      progressWrap.style.display = 'block';
+      progressBar.style.width = '0%';
       setStatus('Exporting layers…');
       parent.postMessage({ pluginMessage: { type: 'export-selection' } }, '*');
     };
 
-    onmessage = async (event) => {
+    // ── Streaming queue — send groups to server sequentially ──────────────────
+    // Each group arrives as a separate postMessage from the plugin.
+    // We enqueue server POSTs so they run one at a time (no race conditions).
+    let serverQueue = Promise.resolve();
+    let totalGroups = 0;
+    let sentGroups  = 0;
+
+    function enqueue(fn) {
+      serverQueue = serverQueue.then(fn).catch((e) => {
+        setStatus('❌ ' + e.message, 'err');
+        btn.disabled = false;
+      });
+    }
+
+    async function postToServer(body) {
+      const res = await fetch(SERVER, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Server error ' + res.status);
+      return res.json();
+    }
+
+    onmessage = (event) => {
       const msg = event.data.pluginMessage;
       if (!msg) return;
 
+      // ── Export started ────────────────────────────────────────────────────
+      if (msg.type === 'export-start') {
+        totalGroups = msg.total || 1;
+        sentGroups  = 0;
+        enqueue(() => postToServer({
+          action: 'start',
+          total: totalGroups,
+          documentName: msg.documentName || 'Figma',
+        }));
+        return;
+      }
+
+      // ── One group exported by the plugin → send to server immediately ─────
+      if (msg.type === 'export-group') {
+        enqueue(async () => {
+          sentGroups++;
+          setStatus(`Sending group ${sentGroups} of ${totalGroups}…`);
+          setProgress(sentGroups - 0.5, totalGroups);
+          await postToServer({ action: 'group', group: msg.group });
+          setProgress(sentGroups, totalGroups);
+        });
+        return;
+      }
+
+      // ── All groups exported → finalize ────────────────────────────────────
+      if (msg.type === 'export-done') {
+        enqueue(async () => {
+          setStatus('Finalizing…');
+          await postToServer({ action: 'finalize' });
+          setStatus('✅ Sent! Check the Companion.', 'ok');
+          progressWrap.style.display = 'none';
+          btn.disabled = false;
+        });
+        return;
+      }
+
+      // ── Error / progress (legacy / fallback) ──────────────────────────────
       if (msg.type === 'export-progress') {
         setStatus(msg.message || 'Working…');
         return;
@@ -65,32 +155,9 @@
 
       if (msg.type === 'export-error') {
         setStatus('❌ ' + (msg.message || 'Unknown error'), 'err');
+        progressWrap.style.display = 'none';
         btn.disabled = false;
         return;
-      }
-
-      if (msg.type === 'send-to-server') {
-        setStatus('Sending to Companion…');
-        try {
-          const body = {
-            timestamp: Date.now(),
-            documentName: msg.documentName || 'Figma',
-            groups: msg.payload,   // Array<GroupExport>
-          };
-          const res = await fetch('http://localhost:3000/api/ae-figma', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          });
-          if (res.ok) {
-            setStatus('✅ Sent! Check the Companion.', 'ok');
-          } else {
-            setStatus('❌ Server error ' + res.status, 'err');
-          }
-        } catch (e) {
-          setStatus('❌ Network error – is Companion running?', 'err');
-        }
-        btn.disabled = false;
       }
     };
   </script>

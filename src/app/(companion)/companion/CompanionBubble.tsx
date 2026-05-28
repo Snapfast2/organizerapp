@@ -136,7 +136,7 @@ export default function CompanionBubble() {
             return target.items.addFolder(name);
         };
 
-        var figmaFolder = getFolder("🎨 Figma Imports");
+        var figmaFolder = getFolder("Figma Imports");
         var docName = (data.documentName && data.documentName.trim() !== "") ? data.documentName : "Import";
         var docFolder = getFolder(docName, figmaFolder);
         var compsFolder = getFolder("Comps", docFolder);

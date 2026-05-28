@@ -139,11 +139,33 @@ export default function CompanionBubble() {
   useEffect(() => {
     const load = async () => {
       try {
-        const proj = await api?.companion?.getActiveProject?.();
-        if (proj) setActiveProject(proj);
-        
         const isRunning = await api?.companion?.isAERunning?.();
         setIsAERunning(!!isRunning);
+        
+        let realProj = null;
+        if (isRunning) {
+          realProj = await api?.companion?.getRealAeProject?.();
+          if (realProj) {
+            setRealActiveProject(realProj);
+            const inHub = await api?.companion?.isProjectInHub?.(realProj);
+            setIsUntracked(!inHub);
+            
+            // Extract file name
+            const parts = realProj.replace(/\\/g, '/').split('/');
+            setActiveProject(parts[parts.length - 1]);
+          } else {
+            setIsUntracked(false);
+          }
+        } else {
+          setIsUntracked(false);
+          setRealActiveProject(null);
+        }
+
+        // If AE not running or no real project detected, fallback to Hub's last project
+        if (!realProj) {
+          const proj = await api?.companion?.getActiveProject?.();
+          if (proj) setActiveProject(proj);
+        }
         
         const r = await api?.companion?.getRecents?.();
         if (r) setRecents(r);
@@ -404,7 +426,7 @@ export default function CompanionBubble() {
             </div>
 
             {/* Manual Hub Import Action */}
-            {isAERunning && (
+            {isUntracked && (
               <div style={{
                 background: 'rgba(255, 255, 255, 0.04)',
                 border: '1px solid rgba(255, 255, 255, 0.1)',

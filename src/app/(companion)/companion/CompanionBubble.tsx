@@ -221,11 +221,13 @@ export default function CompanionBubble() {
     startX: 0, startY: 0, dragging: false,
   });
 
-  const [isDragging, setIsDragging] = useState(false);
+  const isDraggingRef = useRef(false);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     dragRef.current = { startX: e.clientX, startY: e.clientY, dragging: false };
     e.currentTarget.setPointerCapture(e.pointerId);
+    // Immediately lock click-through OFF when pointer is captured
+    api?.companion?.setClickThrough?.(false);
     api?.companion?.startDrag?.();
   };
 
@@ -237,9 +239,7 @@ export default function CompanionBubble() {
     if (!dragRef.current.dragging) {
       if (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5) {
         dragRef.current.dragging = true;
-        setIsDragging(true);
-        // Lock click-through OFF during drag so the window stays interactive
-        api?.companion?.setClickThrough?.(false);
+        isDraggingRef.current = true;
       } else return;
     }
     
@@ -254,7 +254,7 @@ export default function CompanionBubble() {
     }
     e.currentTarget.releasePointerCapture(e.pointerId);
     dragRef.current.dragging = false;
-    setIsDragging(false);
+    isDraggingRef.current = false;
   };
 
   return (
@@ -262,8 +262,8 @@ export default function CompanionBubble() {
       <div
         className={`${styles.bubble} ${collapsed ? styles.bubbleCollapsed : styles.bubbleExpanded}`}
         ref={bubbleRef}
-        onMouseEnter={() => { if (!isDragging) api?.companion?.setClickThrough?.(false); }}
-        onMouseLeave={() => { if (!isDragging) api?.companion?.setClickThrough?.(true); }}
+        onMouseEnter={() => { if (!isDraggingRef.current) api?.companion?.setClickThrough?.(false); }}
+        onMouseLeave={() => { if (!isDraggingRef.current) api?.companion?.setClickThrough?.(true); }}
       >
 
         {/* ── Header (drag handle) ─────────────────────── */}

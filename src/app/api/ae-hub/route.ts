@@ -263,6 +263,12 @@ export async function POST(request: NextRequest) {
         }
 
         const aepName = path.basename(normAepPath);
+
+        // Detect if the .aep is already in its own named folder
+        const aepBase = path.basename(normAepPath, '.aep');
+        const parentDir = path.dirname(normAepPath);
+        const projectFolder = path.basename(parentDir) === aepBase ? parentDir : undefined;
+
         // Check if it's already in the Hub
         const already = db.recentProjects.find(
           p => path.normalize(p.path).toLowerCase() === normAepPath.toLowerCase()
@@ -272,15 +278,10 @@ export async function POST(request: NextRequest) {
           db.recentProjects = db.recentProjects.filter(
             p => path.normalize(p.path).toLowerCase() !== normAepPath.toLowerCase()
           );
-          db.recentProjects.unshift({ ...already, lastOpened: new Date().toISOString() });
+          db.recentProjects.unshift({ ...already, lastOpened: new Date().toISOString(), projectFolder: already.projectFolder || projectFolder });
           saveProjectsDb(db);
           return NextResponse.json({ success: true, alreadyRegistered: true, path: normAepPath });
         }
-
-        // Detect if the .aep is already in its own named folder
-        const aepBase = path.basename(normAepPath, '.aep');
-        const parentDir = path.dirname(normAepPath);
-        const projectFolder = path.basename(parentDir) === aepBase ? parentDir : undefined;
 
         db.recentProjects.unshift({
           path: normAepPath,
@@ -314,6 +315,10 @@ export async function POST(request: NextRequest) {
 
         const projectFolder = path.join(destRoot, aepBaseName);
         const newAepPath = path.join(projectFolder, `${aepBaseName}.aep`);
+
+        if (normAepPath.toLowerCase() === newAepPath.toLowerCase()) {
+          return NextResponse.json({ error: 'El proyecto ya se encuentra organizado en este destino' }, { status: 400 });
+        }
 
         // Create the folder structure
         try {

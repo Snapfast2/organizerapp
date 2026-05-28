@@ -126,8 +126,24 @@ export default function CompanionBubble() {
             "LINEAR_DODGE": BlendingMode.ADD
         };
 
-        var groups = data.groups || [];
+        var getFolder = function(name, parentFolder) {
+            var target = parentFolder || app.project.rootFolder;
+            for (var i = 1; i <= target.numItems; i++) {
+                if (target.item(i) instanceof FolderItem && target.item(i).name === name) {
+                    return target.item(i);
+                }
+            }
+            return target.items.addFolder(name);
+        };
 
+        var figmaFolder = getFolder("🎨 Figma Imports");
+        var docName = (data.documentName && data.documentName.trim() !== "") ? data.documentName : "Import";
+        var docFolder = getFolder(docName, figmaFolder);
+        var compsFolder = getFolder("Comps", docFolder);
+        var precompsFolder = getFolder("Precomps", docFolder);
+        var assetsFolder = getFolder("Assets", docFolder);
+
+        var groups = data.groups || [];
         for (var g = 0; g < groups.length; g++) {
             var grp = groups[g];
             var gw  = Math.max(Math.round(grp.groupWidth  || 100), 4);
@@ -138,6 +154,7 @@ export default function CompanionBubble() {
                 grp.name || ("Group " + g),
                 gw, gh, 1, 10, 30
             );
+            precomp.parentFolder = compsFolder;
 
             // ── Step 1: create sub-comps for any *-prefixed precomp groups ───
             var precompMap = {};
@@ -151,6 +168,7 @@ export default function CompanionBubble() {
                     ps.name || ("Precomp " + pi),
                     psw, psh, 1, 10, 30
                 );
+                subComp.parentFolder = precompsFolder;
                 precompMap[ps.name] = subComp;
 
                 var subLayers = ps.layers || [];
@@ -163,6 +181,7 @@ export default function CompanionBubble() {
 
                     var sFootage = app.project.importFile(sio);
                     sFootage.name = sl.name || ("Layer " + si);
+                    sFootage.parentFolder = assetsFolder;
 
                     var sLayer = subComp.layers.add(sFootage);
                     sLayer.name = sl.name || ("Layer " + si);
@@ -223,6 +242,7 @@ export default function CompanionBubble() {
 
                 var footage = app.project.importFile(io);
                 footage.name = l.name || ("Layer " + i);
+                footage.parentFolder = assetsFolder;
 
                 var aeLayer = precomp.layers.add(footage);
                 aeLayer.name = l.name || ("Layer " + i);

@@ -884,11 +884,10 @@ ipcMain.on('companion:drag-move', (e, totalDx: number, totalDy: number) => {
   }
 });
 
-ipcMain.on('companion:set-height', (_e, height: number) => {
+ipcMain.on('companion:set-size', (_e, width: number, height: number) => {
   if (!companionWindow || companionWindow.isDestroyed()) return;
   const [x, y] = companionWindow.getPosition();
-  const w = companionWindow.getBounds().width;
-  companionWindow.setBounds({ x, y, width: w, height: Math.round(height) }, true);
+  companionWindow.setBounds({ x, y, width: Math.round(width), height: Math.round(height) }, true);
 });
 
 ipcMain.on('companion:open-main', () => {

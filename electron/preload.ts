@@ -38,7 +38,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── MooMotion Companion ────────────────────────────────────────
   companion: {
     hide:             () => ipcRenderer.send('companion:hide'),
-    setHeight:        (h: number) => ipcRenderer.send('companion:set-height', h),
+    setSize:          (w: number, h: number) => ipcRenderer.send('companion:set-size', w, h),
     openMain:         () => ipcRenderer.send('companion:open-main'),
     importToAE:       () => ipcRenderer.send('companion:import-to-ae'),
     isAERunning:      () => ipcRenderer.invoke('companion:is-ae-running'),

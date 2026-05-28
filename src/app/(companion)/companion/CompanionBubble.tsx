@@ -46,10 +46,10 @@ export default function CompanionBubble() {
 
   // Resize window to fit bubble content exactly (+ padding for shadow)
   const syncHeight = useCallback(() => {
-    if (!bubbleRef.current || !api?.companion?.setHeight) return;
-    const h = bubbleRef.current.getBoundingClientRect().height;
-    // Window height must include the 24px top and 24px bottom padding from .root
-    api.companion.setHeight(Math.ceil(h) + 48); 
+    if (!bubbleRef.current || !api?.companion?.setSize) return;
+    const rect = bubbleRef.current.getBoundingClientRect();
+    // Window width and height must include the 24px padding on each side from .root (48px total)
+    api.companion.setSize(Math.ceil(rect.width) + 48, Math.ceil(rect.height) + 48); 
   }, [api]);
 
   // Load active project + recents

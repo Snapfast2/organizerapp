@@ -45,9 +45,8 @@ export default function CompanionBubble() {
   const api = typeof window !== 'undefined' ? (window as any).electronAPI : null;
 
   // Resize window to fit bubble content exactly (+ padding for shadow)
-  const syncHeight = useCallback(() => {
-    if (!bubbleRef.current || !api?.companion?.setSize) return;
-    const rect = bubbleRef.current.getBoundingClientRect();
+  const syncSize = useCallback((rect: DOMRectReadOnly) => {
+    if (!api?.companion?.setSize) return;
     // Window width and height must include the 24px padding on each side from .root (48px total)
     api.companion.setSize(Math.ceil(rect.width) + 48, Math.ceil(rect.height) + 48); 
   }, [api]);
@@ -85,10 +84,17 @@ export default function CompanionBubble() {
     return () => clearInterval(iv);
   }, [api]);
 
-  // Sync window height after any layout change
-  useEffect(() => { syncHeight(); }, [collapsed, showRecents, syncHeight]);
-  // Also sync once on first render
-  useEffect(() => { setTimeout(syncHeight, 100); }, [syncHeight]);
+  // Use ResizeObserver to sync window size frame-by-frame during CSS animations
+  useEffect(() => {
+    if (!bubbleRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        syncSize(entry.contentRect);
+      }
+    });
+    observer.observe(bubbleRef.current);
+    return () => observer.disconnect();
+  }, [syncSize]);
 
   const handleOpenMain = useCallback(() => api?.companion?.openMain?.(), [api]);
   const handleImportAE  = useCallback(() => api?.companion?.importToAE?.(), [api]);

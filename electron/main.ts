@@ -3,7 +3,7 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 import chokidar from 'chokidar';
-import { exec, execSync } from 'child_process';
+import { exec, execSync, spawn } from 'child_process';
 import util from 'util';
 
 const execAsync = util.promisify(exec);
@@ -674,7 +674,12 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
           ].join('\n');
           const tempJsx = path.join(os.tmpdir(), 'ae_get_proj.jsx');
           fs.writeFileSync(tempJsx, scriptLines);
-          exec(`"${aePath}" -r "${tempJsx}"`);
+          const child = spawn(aePath, ['-r', tempJsx], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true
+          });
+          child.unref();
 
           // Short poll â€” max 1.5 seconds (we already know DB failed so we're in edge case)
           for (let i = 0; i < 8; i++) {
@@ -788,11 +793,18 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
 
       // windowsHide:true prevents the spawned AfterFX.exe from stealing focus
       // which was causing AE's window to unmaximize
-      exec(`"${aePath}" -s "${evalScript}"`, { windowsHide: true }, (err) => {
-        if (err) {
-          console.error('Error ejecutando AE:', err);
-          new Notification({ title: 'Error en After Effects', body: 'Hubo un problema al enviar el archivo.' }).show();
-        } else {
+      // Spawning detached to survive companion app restarts
+      const child = spawn(aePath, ['-s', evalScript], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      });
+      child.on('error', (err) => {
+        console.error('Error ejecutando AE:', err);
+        new Notification({ title: 'Error en After Effects', body: 'Hubo un problema al enviar el archivo.' }).show();
+      });
+      child.on('close', (code) => {
+        if (code === 0) {
           let notice: string;
           if (copiedToProject && projectFolder) {
             const projName = path.basename(projectFolder);
@@ -803,6 +815,7 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
           new Notification({ title: 'Enviado a After Effects', body: notice }).show();
         }
       });
+      child.unref();
     } catch (err) {
       console.error('Error importando a AE:', err);
       new Notification({ title: 'Error', body: 'No se pudo conectar con After Effects.' }).show();
@@ -826,7 +839,12 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
       const tempJsx = path.join(os.tmpdir(), 'ae_relink.jsx');
       fs.writeFileSync(tempJsx, relinkScript);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
-      exec(`"${aePath}" -s "${evalScript}"`, { windowsHide: true });
+      const child = spawn(aePath, ['-s', evalScript], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      });
+      child.unref();
     } catch (err) {
       console.error('Error running relink script:', err);
     }
@@ -841,7 +859,12 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
       const tempJsx = path.join(os.tmpdir(), 'ae_figma_bridge.jsx');
       fs.writeFileSync(tempJsx, scriptCode);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
-      exec(`"${aePath}" -s "${evalScript}"`, { windowsHide: true });
+      const child = spawn(aePath, ['-s', evalScript], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      });
+      child.unref();
     } catch (err) {
       console.error('Error running companion script:', err);
     }

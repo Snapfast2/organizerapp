@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import util from 'util';
 
 const execFileAsync = util.promisify(execFile);
@@ -235,9 +235,17 @@ export async function POST(request: NextRequest) {
 
         // Open the newly created .aep file directly. 
         // If AE is closed, it launches and stays open. If AE is open, it just opens the file.
-        execFile('cmd', ['/c', 'start', '""', fullPath], (err) => {
-          if (err) console.error('Error al abrir proyecto en AE:', err);
-        });
+        // Spawning detached to survive Electron app restarts or crashes.
+        try {
+          const child = spawn('cmd.exe', ['/c', 'start', '""', fullPath], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true
+          });
+          child.unref();
+        } catch (err) {
+          console.error('Error al abrir proyecto en AE:', err);
+        }
 
         db.recentProjects = db.recentProjects.filter(p => path.normalize(p.path) !== path.normalize(fullPath));
         db.recentProjects.unshift({

@@ -20,30 +20,84 @@ function getGeomBox(node) {
         return null;
     return { x: box.x, y: box.y, w: box.width, h: box.height };
 }
+/** Returns render bounds, falling back to geometry. */
+function getRenderBox(node) {
+    const r = node.absoluteRenderBounds;
+    if (r && r.width > 0 && r.height > 0)
+        return { x: r.x, y: r.y, w: r.width, h: r.height };
+    return getGeomBox(node);
+}
+/** True if the node has any visible blur or drop-shadow effect. */
+function hasOverflowEffect(node) {
+    const effects = node.effects;
+    if (!Array.isArray(effects))
+        return false;
+    return effects.some((e) => e.visible !== false &&
+        (e.type === 'LAYER_BLUR' || e.type === 'BACKGROUND_BLUR' ||
+            e.type === 'DROP_SHADOW' || e.type === 'INNER_SHADOW'));
+}
 /**
- * Export a node as a 2x PNG using its OWN geometry bounds (useAbsoluteBounds).
+ * Exports a node as a 2x PNG and returns the PNG bytes + the bounding box
+ * that corresponds to those pixels (for correct positioning in AE).
  *
- * WHY useAbsoluteBounds:
- *   absoluteRenderBounds is clipped to the parent frame's boundary if the
- *   parent has clipsContent=true (standard for mobile UI frames). Without this
- *   flag, assets that extend beyond the frame get silently cropped in the PNG.
- *   useAbsoluteBounds bypasses the parent clip and captures the full asset.
+ * Strategy:
+ *  - Normal nodes  → useAbsoluteBounds:true  (geometry bounds, no parent clip)
+ *  - Blur/shadow   → temporarily disable clipsContent on all ancestor frames,
+ *                    export at full render bounds (captures the glow/blur
+ *                    overflow), then restore clipsContent.
  *
- * The downside: blur/glow effects that overflow the geometry are not captured.
- * This is acceptable — content integrity > glow overflow in animation work.
+ * This handles both:
+ *   1. Assets that overflow the parent frame (fixed by useAbsoluteBounds)
+ *   2. Blur/glow effects that extend beyond geometry (fixed by clip-disable)
  */
-function exportPNG(node) {
+function exportNodeFull(node) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        const geom = getGeomBox(node);
+        if (!geom)
+            return null;
+        if (!hasOverflowEffect(node)) {
+            // No blur/shadow — export at geometry bounds, safe from parent clipping.
+            try {
+                const bytes = yield node.exportAsync({
+                    format: 'PNG',
+                    constraint: { type: 'SCALE', value: 2 },
+                    useAbsoluteBounds: true,
+                });
+                return { bytes, box: geom };
+            }
+            catch (e) {
+                console.error('Export failed for', node.name, e);
+                return null;
+            }
+        }
+        const clipped = [];
+        let cur = node.parent;
+        while (cur) {
+            if ('clipsContent' in cur && cur.clipsContent === true) {
+                clipped.push(cur);
+                cur.clipsContent = false;
+            }
+            cur = cur.parent;
+        }
         try {
-            return yield node.exportAsync({
+            // absoluteRenderBounds now reflects the full unclipped render area.
+            const renderBox = (_a = getRenderBox(node)) !== null && _a !== void 0 ? _a : geom;
+            const bytes = yield node.exportAsync({
                 format: 'PNG',
                 constraint: { type: 'SCALE', value: 2 },
-                useAbsoluteBounds: true,
+                // No useAbsoluteBounds → Figma exports at render bounds (full blur).
             });
+            return { bytes, box: renderBox };
         }
         catch (e) {
             console.error('Export failed for', node.name, e);
             return null;
+        }
+        finally {
+            // Always restore clipsContent — even if export threw.
+            for (const p of clipped)
+                p.clipsContent = true;
         }
     });
 }
@@ -104,16 +158,16 @@ function collectLayers(nodes, originX, originY, parentOpacity, out, labelColor, 
             if (isContainer) {
                 if (isPureVector(node)) {
                     // ── Flatten decorative shape groups → 1 PNG ──────────────────────────
-                    const bytes = yield exportPNG(node);
-                    if (!bytes)
+                    const result = yield exportNodeFull(node);
+                    if (!result)
                         continue;
                     out.push({
                         name: node.name,
-                        pngBase64: figma.base64Encode(bytes),
-                        relX: geom.x - originX,
-                        relY: geom.y - originY,
-                        width: geom.w,
-                        height: geom.h,
+                        pngBase64: figma.base64Encode(result.bytes),
+                        relX: result.box.x - originX,
+                        relY: result.box.y - originY,
+                        width: result.box.w,
+                        height: result.box.h,
                         opacity: totalOpacity,
                         blendMode,
                         labelColor,
@@ -131,16 +185,16 @@ function collectLayers(nodes, originX, originY, parentOpacity, out, labelColor, 
                 continue;
             }
             // ── Leaf node → export as image ───────────────────────────────────────────
-            const bytes = yield exportPNG(node);
-            if (!bytes)
+            const result = yield exportNodeFull(node);
+            if (!result)
                 continue;
             out.push({
                 name: node.name,
-                pngBase64: figma.base64Encode(bytes),
-                relX: geom.x - originX,
-                relY: geom.y - originY,
-                width: geom.w,
-                height: geom.h,
+                pngBase64: figma.base64Encode(result.bytes),
+                relX: result.box.x - originX,
+                relY: result.box.y - originY,
+                width: result.box.w,
+                height: result.box.h,
                 opacity: totalOpacity,
                 blendMode,
                 labelColor,

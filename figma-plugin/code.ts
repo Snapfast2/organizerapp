@@ -13,28 +13,88 @@ function getGeomBox(node: SceneNode): { x: number; y: number; w: number; h: numb
   return { x: box.x, y: box.y, w: box.width, h: box.height };
 }
 
+type Box = { x: number; y: number; w: number; h: number };
+
+/** Returns render bounds, falling back to geometry. */
+function getRenderBox(node: SceneNode): Box | null {
+  const r = (node as any).absoluteRenderBounds as
+    | { x: number; y: number; width: number; height: number } | null | undefined;
+  if (r && r.width > 0 && r.height > 0) return { x: r.x, y: r.y, w: r.width, h: r.height };
+  return getGeomBox(node);
+}
+
+/** True if the node has any visible blur or drop-shadow effect. */
+function hasOverflowEffect(node: SceneNode): boolean {
+  const effects = (node as any).effects as any[] | undefined;
+  if (!Array.isArray(effects)) return false;
+  return effects.some((e) =>
+    e.visible !== false &&
+    (e.type === 'LAYER_BLUR' || e.type === 'BACKGROUND_BLUR' ||
+     e.type === 'DROP_SHADOW' || e.type === 'INNER_SHADOW')
+  );
+}
+
 /**
- * Export a node as a 2x PNG using its OWN geometry bounds (useAbsoluteBounds).
+ * Exports a node as a 2x PNG and returns the PNG bytes + the bounding box
+ * that corresponds to those pixels (for correct positioning in AE).
  *
- * WHY useAbsoluteBounds:
- *   absoluteRenderBounds is clipped to the parent frame's boundary if the
- *   parent has clipsContent=true (standard for mobile UI frames). Without this
- *   flag, assets that extend beyond the frame get silently cropped in the PNG.
- *   useAbsoluteBounds bypasses the parent clip and captures the full asset.
+ * Strategy:
+ *  - Normal nodes  → useAbsoluteBounds:true  (geometry bounds, no parent clip)
+ *  - Blur/shadow   → temporarily disable clipsContent on all ancestor frames,
+ *                    export at full render bounds (captures the glow/blur
+ *                    overflow), then restore clipsContent.
  *
- * The downside: blur/glow effects that overflow the geometry are not captured.
- * This is acceptable — content integrity > glow overflow in animation work.
+ * This handles both:
+ *   1. Assets that overflow the parent frame (fixed by useAbsoluteBounds)
+ *   2. Blur/glow effects that extend beyond geometry (fixed by clip-disable)
  */
-async function exportPNG(node: SceneNode): Promise<Uint8Array | null> {
+async function exportNodeFull(node: SceneNode): Promise<{ bytes: Uint8Array; box: Box } | null> {
+  const geom = getGeomBox(node);
+  if (!geom) return null;
+
+  if (!hasOverflowEffect(node)) {
+    // No blur/shadow — export at geometry bounds, safe from parent clipping.
+    try {
+      const bytes = await node.exportAsync({
+        format: 'PNG',
+        constraint: { type: 'SCALE', value: 2 },
+        useAbsoluteBounds: true,
+      });
+      return { bytes, box: geom };
+    } catch (e) {
+      console.error('Export failed for', node.name, e);
+      return null;
+    }
+  }
+
+  // Has blur/shadow: disable clipsContent on all ancestor frames so that
+  // absoluteRenderBounds (and the export) are not clipped by the parent frame.
+  type ClipParent = FrameNode | ComponentNode | InstanceNode;
+  const clipped: ClipParent[] = [];
+  let cur: BaseNode | null = node.parent;
+  while (cur) {
+    if ('clipsContent' in cur && (cur as any).clipsContent === true) {
+      clipped.push(cur as ClipParent);
+      (cur as any).clipsContent = false;
+    }
+    cur = cur.parent;
+  }
+
   try {
-    return await node.exportAsync({
+    // absoluteRenderBounds now reflects the full unclipped render area.
+    const renderBox = getRenderBox(node) ?? geom;
+    const bytes = await node.exportAsync({
       format: 'PNG',
       constraint: { type: 'SCALE', value: 2 },
-      useAbsoluteBounds: true,
+      // No useAbsoluteBounds → Figma exports at render bounds (full blur).
     });
+    return { bytes, box: renderBox };
   } catch (e) {
     console.error('Export failed for', node.name, e);
     return null;
+  } finally {
+    // Always restore clipsContent — even if export threw.
+    for (const p of clipped) (p as any).clipsContent = true;
   }
 }
 
@@ -126,15 +186,15 @@ async function collectLayers(
     if (isContainer) {
       if (isPureVector(node)) {
         // ── Flatten decorative shape groups → 1 PNG ──────────────────────────
-        const bytes = await exportPNG(node);
-        if (!bytes) continue;
+        const result = await exportNodeFull(node);
+        if (!result) continue;
         out.push({
           name: node.name,
-          pngBase64: figma.base64Encode(bytes),
-          relX:   geom.x - originX,
-          relY:   geom.y - originY,
-          width:  geom.w,
-          height: geom.h,
+          pngBase64: figma.base64Encode(result.bytes),
+          relX:   result.box.x - originX,
+          relY:   result.box.y - originY,
+          width:  result.box.w,
+          height: result.box.h,
           opacity: totalOpacity,
           blendMode,
           labelColor,
@@ -159,15 +219,15 @@ async function collectLayers(
     }
 
     // ── Leaf node → export as image ───────────────────────────────────────────
-    const bytes = await exportPNG(node);
-    if (!bytes) continue;
+    const result = await exportNodeFull(node);
+    if (!result) continue;
     out.push({
       name: node.name,
-      pngBase64: figma.base64Encode(bytes),
-      relX:   geom.x - originX,
-      relY:   geom.y - originY,
-      width:  geom.w,
-      height: geom.h,
+      pngBase64: figma.base64Encode(result.bytes),
+      relX:   result.box.x - originX,
+      relY:   result.box.y - originY,
+      width:  result.box.w,
+      height: result.box.h,
       opacity: totalOpacity,
       blendMode,
       labelColor,

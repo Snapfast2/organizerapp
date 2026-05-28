@@ -159,9 +159,9 @@ export default function CompanionBubble() {
                 var cy = l.relY + l.height / 2;
                 aeLayer.property("Transform").property("Position").setValue([cx, cy]);
 
-                // PNG exported at 2x → 50% scale = correct 1x display size.
+                // PNG exported at 1x → 100% scale = correct display size in AE.
                 // Anchor stays at default center so position = visual center.
-                aeLayer.property("Transform").property("Scale").setValue([50, 50]);
+                aeLayer.property("Transform").property("Scale").setValue([100, 100]);
 
                 var op = (l.opacity !== undefined) ? l.opacity : 1;
                 aeLayer.property("Transform").property("Opacity").setValue(op * 100);

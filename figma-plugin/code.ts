@@ -57,7 +57,7 @@ async function exportNodeFull(node: SceneNode): Promise<{ bytes: Uint8Array; box
     try {
       const bytes = await node.exportAsync({
         format: 'PNG',
-        constraint: { type: 'SCALE', value: 2 },
+        constraint: { type: 'SCALE', value: 1 }, // 1x: 4× faster, AE uses Scale 100%
         useAbsoluteBounds: true,
       });
       return { bytes, box: geom };
@@ -85,7 +85,7 @@ async function exportNodeFull(node: SceneNode): Promise<{ bytes: Uint8Array; box
     const renderBox = getRenderBox(node) ?? geom;
     const bytes = await node.exportAsync({
       format: 'PNG',
-      constraint: { type: 'SCALE', value: 2 },
+      constraint: { type: 'SCALE', value: 1 }, // 1x: 4× faster, AE uses Scale 100%
       // No useAbsoluteBounds → Figma exports at render bounds (full blur).
     });
     return { bytes, box: renderBox };
@@ -149,9 +149,16 @@ interface GroupExport {
 // ─── Recursive flat layer collector ───────────────────────────────────────────
 
 /**
- * @param labelColor   AE label color for the current group (0 = none).
- * @param colorCounter Shared counter — incremented each time a new top-level
- *                     group is entered (sub-groups inherit the parent color).
+ * Collects exportable layers recursively into `out`.
+ *
+ * PERF: at each level we bucket nodes into:
+ *   • non-blur leaves     → exported in parallel with Promise.all
+ *   • blur/shadow leaves  → exported sequentially (clipsContent toggle can't race)
+ *   • pure-vector groups  → treated as non-blur leaf (export whole group)
+ *   • complex containers  → recursed (blocks flush; must stay in sequence)
+ *
+ * Slot-based ordering: each node gets a reserved slot in a temp array so
+ * parallel exports don't scramble the AE layer order.
  */
 async function collectLayers(
   nodes: readonly SceneNode[],
@@ -162,76 +169,113 @@ async function collectLayers(
   labelColor: number,
   colorCounter: { n: number },
 ): Promise<void> {
-  // Figma children[0] = bottommost layer, children[n-1] = topmost.
-  // AE layers.add() inserts at index 1 (top), so adding bottom→top means
-  // the last-added (topmost) stays at AE index 1 = correct stacking order.
-  for (const node of nodes) {
-    if (!node.visible) continue;
-    if (isMaskLayer(node)) continue;
+  // Pre-filter: skip invisible / mask nodes early.
+  const visible = (nodes as SceneNode[]).filter(
+    n => n.visible && !isMaskLayer(n) && getGeomBox(n) !== null,
+  );
 
-    const geom = getGeomBox(node);
-    if (!geom) continue;
+  // ── Categorise nodes ─────────────────────────────────────────────────────
+  interface PendingNormal {
+    slot: number;
+    promise: Promise<{ bytes: Uint8Array; box: Box } | null>;
+    meta: { name: string; geom: Box; totalOpacity: number; blendMode: string; labelColor: number };
+  }
 
-    const nodeOpacity  = 'opacity'   in node ? (node as any).opacity   as number : 1;
+  // slots[] holds final LayerData in original node order.
+  // We allocate all slots upfront so parallel fills land in the right places.
+  // Complex containers get -1 (they recurse synchronously and push directly).
+  const slots: (LayerData | null | 'recurse')[] = new Array(visible.length).fill(null);
+  const normalPending: PendingNormal[] = [];
+  const blurNodes: { slot: number; node: SceneNode;
+    meta: { name: string; geom: Box; totalOpacity: number; blendMode: string; labelColor: number } }[] = [];
+
+  for (let i = 0; i < visible.length; i++) {
+    const node = visible[i];
+    const geom         = getGeomBox(node)!;
+    const nodeOpacity  = 'opacity'  in node ? (node as any).opacity  as number : 1;
     const totalOpacity = parentOpacity * nodeOpacity;
     const blendMode    = ('blendMode' in node ? (node as any).blendMode : 'NORMAL') as string;
 
     const isContainer = (
-      node.type === 'GROUP'    ||
-      node.type === 'FRAME'    ||
-      node.type === 'COMPONENT'||
-      node.type === 'INSTANCE'
+      node.type === 'GROUP' || node.type === 'FRAME' ||
+      node.type === 'COMPONENT' || node.type === 'INSTANCE'
     ) && 'children' in node;
 
-    if (isContainer) {
-      if (isPureVector(node)) {
-        // ── Flatten decorative shape groups → 1 PNG ──────────────────────────
-        const result = await exportNodeFull(node);
-        if (!result) continue;
-        out.push({
-          name: node.name,
-          pngBase64: figma.base64Encode(result.bytes),
-          relX:   result.box.x - originX,
-          relY:   result.box.y - originY,
-          width:  result.box.w,
-          height: result.box.h,
-          opacity: totalOpacity,
-          blendMode,
-          labelColor,
-        });
-      } else {
-        // ── Recurse — assign a new color only at the outermost group level ───
-        let thisGroupColor = labelColor;
-        if (labelColor === 0) {
-          thisGroupColor = (colorCounter.n % 16) + 1;
-          colorCounter.n++;
-        }
-        await collectLayers(
-          (node as any).children,
-          originX, originY,
-          totalOpacity,
-          out,
-          thisGroupColor,
-          colorCounter,
-        );
-      }
+    if (isContainer && !isPureVector(node)) {
+      // Complex container — must recurse; mark slot for later.
+      slots[i] = 'recurse';
       continue;
     }
 
-    // ── Leaf node → export as image ───────────────────────────────────────────
+    // Leaf or pure-vector group → export as PNG.
+    const meta = { name: node.name, geom, totalOpacity, blendMode, labelColor };
+
+    if (hasOverflowEffect(node)) {
+      blurNodes.push({ slot: i, node, meta });
+    } else {
+      normalPending.push({ slot: i, promise: exportNodeFull(node), meta });
+    }
+  }
+
+  // ── Parallel non-blur exports ─────────────────────────────────────────────
+  const normalResults = await Promise.all(normalPending.map(p => p.promise));
+  for (let i = 0; i < normalPending.length; i++) {
+    const { slot, meta } = normalPending[i];
+    const result = normalResults[i];
+    if (!result) continue;
+    slots[slot] = {
+      name:       meta.name,
+      pngBase64:  figma.base64Encode(result.bytes),
+      relX:       result.box.x - originX,
+      relY:       result.box.y - originY,
+      width:      result.box.w,
+      height:     result.box.h,
+      opacity:    meta.totalOpacity,
+      blendMode:  meta.blendMode,
+      labelColor: meta.labelColor,
+    };
+  }
+
+  // ── Sequential blur exports ───────────────────────────────────────────────
+  for (const { slot, node, meta } of blurNodes) {
     const result = await exportNodeFull(node);
     if (!result) continue;
-    out.push({
-      name: node.name,
-      pngBase64: figma.base64Encode(result.bytes),
-      relX:   result.box.x - originX,
-      relY:   result.box.y - originY,
-      width:  result.box.w,
-      height: result.box.h,
-      opacity: totalOpacity,
-      blendMode,
-      labelColor,
-    });
+    slots[slot] = {
+      name:       meta.name,
+      pngBase64:  figma.base64Encode(result.bytes),
+      relX:       result.box.x - originX,
+      relY:       result.box.y - originY,
+      width:      result.box.w,
+      height:     result.box.h,
+      opacity:    meta.totalOpacity,
+      blendMode:  meta.blendMode,
+      labelColor: meta.labelColor,
+    };
+  }
+
+  // ── Recurse into complex containers + flush results in original order ─────
+  for (let i = 0; i < visible.length; i++) {
+    const slot = slots[i];
+    if (slot === 'recurse') {
+      const node = visible[i];
+      const nodeOpacity  = 'opacity' in node ? (node as any).opacity as number : 1;
+      const totalOpacity = parentOpacity * nodeOpacity;
+      let thisGroupColor = labelColor;
+      if (labelColor === 0) {
+        thisGroupColor = (colorCounter.n % 16) + 1;
+        colorCounter.n++;
+      }
+      await collectLayers(
+        (node as any).children,
+        originX, originY,
+        totalOpacity,
+        out,
+        thisGroupColor,
+        colorCounter,
+      );
+    } else if (slot !== null) {
+      out.push(slot);
+    }
   }
 }
 

@@ -177,56 +177,83 @@ export default function CompanionBubble() {
       setFigmaPayload(null);
 
       const scriptCode = `
-        function getFolder(n, parent) {
-          var p = parent || app.project;
-          for (var i = 1; i <= p.numItems; i++) {
-            if (p.item(i) instanceof FolderItem && p.item(i).name === n) return p.item(i);
+        (function() {
+          function getFolder(n) {
+            for (var i = 1; i <= app.project.numItems; i++) {
+              if (app.project.item(i) instanceof FolderItem && app.project.item(i).name === n)
+                return app.project.item(i);
+            }
+            return app.project.items.addFolder(n);
           }
-          if (parent) return parent.items.addFolder(n);
-          return p.items.addFolder(n);
-        }
-        var figmaFolder = getFolder("Figma Imports");
-        var payload = ${payloadStr};
-        var groups = payload.groups || [];
-        var imported = 0;
-        for (var g = 0; g < groups.length; g++) {
-          var group = groups[g];
-          var layers = group.layers || [];
-          for (var i = 0; i < layers.length; i++) {
-            try {
-              var layer = layers[i];
-              var filePath = layer.imagePath || layer.localPath || layer.path;
-              if (!filePath) continue;
-              var f = new File(filePath);
-              if (!f.exists) continue;
-              var io = new ImportOptions(f);
-              var item = app.project.importFile(io);
-              item.name = layer.name || item.name;
-              item.parentFolder = figmaFolder;
-              imported++;
-            } catch(e) {}
+          function importFile(fp) {
+            var f = new File(fp);
+            if (!f.exists) return null;
+            return app.project.importFile(new ImportOptions(f));
           }
-          var precomps = group.precomps || [];
-          for (var p = 0; p < precomps.length; p++) {
-            var pc = precomps[p];
-            var pcLayers = pc.layers || [];
-            for (var s = 0; s < pcLayers.length; s++) {
-              try {
-                var sl = pcLayers[s];
-                var slPath = sl.imagePath || sl.localPath || sl.path;
-                if (!slPath) continue;
-                var sf = new File(slPath);
-                if (!sf.exists) continue;
-                var sio = new ImportOptions(sf);
-                var sitem = app.project.importFile(sio);
-                sitem.name = sl.name || sitem.name;
-                sitem.parentFolder = figmaFolder;
-                imported++;
-              } catch(e) {}
+          var bm = {
+            "NORMAL": BlendingMode.NORMAL, "MULTIPLY": BlendingMode.MULTIPLY,
+            "SCREEN": BlendingMode.SCREEN, "OVERLAY": BlendingMode.OVERLAY,
+            "DARKEN": BlendingMode.DARKEN, "LIGHTEN": BlendingMode.LIGHTEN,
+            "COLOR_DODGE": BlendingMode.COLOR_DODGE, "COLOR_BURN": BlendingMode.COLOR_BURN,
+            "HARD_LIGHT": BlendingMode.HARD_LIGHT, "SOFT_LIGHT": BlendingMode.SOFT_LIGHT,
+            "DIFFERENCE": BlendingMode.DIFFERENCE, "EXCLUSION": BlendingMode.EXCLUSION,
+            "HUE": BlendingMode.HUE, "SATURATION": BlendingMode.SATURATION,
+            "COLOR": BlendingMode.COLOR, "LUMINOSITY": BlendingMode.LUMINOSITY
+          };
+          function placeLayer(comp, ld, af, sc) {
+            var ft = importFile(ld.imagePath);
+            if (!ft) return;
+            ft.name = ld.name || ft.name;
+            ft.parentFolder = af;
+            var al = comp.layers.add(ft);
+            al.name = ld.name || al.name;
+            var lw = ld.width * sc, lh = ld.height * sc;
+            al.property("Position").setValue([(ld.relX * sc) + lw/2, (ld.relY * sc) + lh/2]);
+            if (sc !== 1) al.property("Scale").setValue([sc*100, sc*100]);
+            if (typeof ld.opacity === "number" && ld.opacity < 1) al.property("Opacity").setValue(ld.opacity * 100);
+            if (ld.blendMode && bm[ld.blendMode]) al.blendingMode = bm[ld.blendMode];
+          }
+          var figmaFolder = getFolder("Figma Imports");
+          var assetsFolder = getFolder("_Assets");
+          assetsFolder.parentFolder = figmaFolder;
+          var payload = ${payloadStr};
+          var groups = payload.groups || [];
+          for (var g = 0; g < groups.length; g++) {
+            var gr = groups[g];
+            var sc = (gr.exportScale === 2) ? 0.5 : 1;
+            var cw = Math.round(gr.groupWidth * sc) || 1920;
+            var ch = Math.round(gr.groupHeight * sc) || 1080;
+            var pcMap = {};
+            var pcs = gr.precomps || [];
+            for (var pi = 0; pi < pcs.length; pi++) {
+              var pc = pcs[pi];
+              var pw = Math.round(pc.width * sc) || 100;
+              var ph = Math.round(pc.height * sc) || 100;
+              var pcComp = app.project.items.addComp(pc.name || "Precomp_"+pi, pw, ph, 1, 10, 30);
+              pcComp.parentFolder = figmaFolder;
+              var pcL = pc.layers || [];
+              for (var si = pcL.length-1; si >= 0; si--) placeLayer(pcComp, pcL[si], assetsFolder, sc);
+              pcMap[pc.name] = pcComp;
+            }
+            var mc = app.project.items.addComp(gr.name || "Figma_"+g, cw, ch, 1, 10, 30);
+            mc.parentFolder = figmaFolder;
+            var ls = gr.layers || [];
+            for (var i = ls.length-1; i >= 0; i--) {
+              var l = ls[i];
+              if (l.isPrecomp && l.precompName && pcMap[l.precompName]) {
+                var pl = mc.layers.add(pcMap[l.precompName]);
+                pl.name = l.precompName;
+                var plw = l.width*sc, plh = l.height*sc;
+                pl.property("Position").setValue([(l.relX*sc)+plw/2, (l.relY*sc)+plh/2]);
+                if (typeof l.opacity==="number" && l.opacity<1) pl.property("Opacity").setValue(l.opacity*100);
+                if (l.blendMode && bm[l.blendMode]) pl.blendingMode = bm[l.blendMode];
+              } else {
+                placeLayer(mc, l, assetsFolder, sc);
+              }
             }
           }
-        }
-        "Imported " + imported + " layers from " + groups.length + " groups";
+          return "Built " + groups.length + " comps";
+        })();
       `;
       api?.companion?.executeScript?.(scriptCode);
     } catch (err) {

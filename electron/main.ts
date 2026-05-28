@@ -869,7 +869,7 @@ app.on('before-quit', () => {
   stopWatcher();
 });
 
-// â”€â”€â”€ Companion IPC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Companion IPC ———————————————————————————————————————————————————————————
 ipcMain.on('companion:hide', () => companionWindow?.hide());
 
 let dragInitialPos = [0, 0];
@@ -981,12 +981,13 @@ ipcMain.handle('companion:get-real-ae-project', async () => {
 
     const scriptLines = [
       'try {',
+      '  var sec = app.preferences.getPrefAsLong("Main Pref Section v2", "Pref_SCRIPTING_FILE_NETWORK_SECURITY");',
+      '  if (sec !== 1) alert("MooMotion necesita que actives: Edit > Preferences > Scripting & Expressions > Allow Scripts to Write Files and Access Network. Por favor actívalo para que funcione.");',
       `  var result = (app.project && app.project.file) ? app.project.file.fsName : "";`,
       `  var f = new File("${safeTemp}");`,
       '  f.open("w"); f.write(result); f.close();',
       '} catch(err) {',
-      `  var f = new File("${safeTemp}");`,
-      '  f.open("w"); f.write(""); f.close();',
+      '  alert("Error en MooMotion: " + err.toString());',
       '}',
     ].join('\n');
     const tempJsx = path.join(os.tmpdir(), 'ae_get_proj_companion.jsx');
@@ -997,7 +998,7 @@ ipcMain.handle('companion:get-real-ae-project', async () => {
     
     // Short poll
     let found = false;
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 20; i++) {
       await new Promise(r => setTimeout(r, 200));
       if (fs.existsSync(tempResultPath)) {
         const raw = fs.readFileSync(tempResultPath, 'utf-8').trim();

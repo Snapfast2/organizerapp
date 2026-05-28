@@ -23,6 +23,7 @@
 
     html, body {
       width: 100%;
+      overflow: hidden;
       background: var(--bg);
       font-family: 'Inter', -apple-system, sans-serif;
       font-size: 12px;
@@ -30,41 +31,41 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    .panel { padding: 10px 12px; display: flex; flex-direction: column; gap: 0; }
+    .panel { padding: 8px 10px; display: flex; flex-direction: column; gap: 0; }
 
     /* ── Header ── */
     .header {
       display: flex;
       align-items: center;
       gap: 7px;
-      padding-bottom: 10px;
+      padding-bottom: 8px;
       border-bottom: 1px solid var(--border);
     }
     .logo {
-      width: 22px; height: 22px;
+      width: 20px; height: 20px;
       background: rgba(74,222,128,0.1);
       border: 1px solid var(--green-border);
       border-radius: 5px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 12px; flex-shrink: 0;
+      font-size: 11px; flex-shrink: 0;
     }
     .app-name { font-size: 12px; font-weight: 600; flex: 1; }
     .version  { font-size: 10px; color: var(--muted); }
 
     /* ── Section ── */
     .section-label {
-      font-size: 9.5px;
+      font-size: 9px;
       font-weight: 600;
       color: var(--muted);
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      padding: 10px 0 5px;
+      padding: 7px 0 3px;
     }
 
     /* ── Action row ── */
     .action-row {
       display: flex; align-items: center; gap: 8px;
-      padding: 7px 10px;
+      padding: 6px 10px;
       border-radius: 6px;
       border: 1px solid var(--border);
       background: var(--surface);
@@ -75,13 +76,13 @@
     }
     .action-row:hover:not(:disabled) { background: #2a2a2a; border-color: rgba(255,255,255,0.13); }
     .action-row:disabled { opacity: 0.4; cursor: not-allowed; }
-    .action-icon { font-size: 13px; flex-shrink: 0; }
+    .action-icon { font-size: 12px; flex-shrink: 0; }
     .action-text { font-size: 11.5px; font-weight: 500; color: var(--green-dim); }
 
     /* ── Precomp mark button ── */
     .mark-btn {
       display: flex; align-items: center; gap: 8px;
-      padding: 7px 10px;
+      padding: 6px 10px;
       border-radius: 6px;
       border: 1px solid var(--border);
       background: var(--surface);
@@ -99,7 +100,7 @@
       background: rgba(251,191,36,0.12);
       border-color: rgba(251,191,36,0.45);
     }
-    .mark-icon { font-size: 12px; flex-shrink: 0; }
+    .mark-icon { font-size: 11px; flex-shrink: 0; }
     .mark-text { flex: 1; }
     .mark-label { font-size: 11.5px; font-weight: 500; color: var(--text); }
     .mark-sub   { font-size: 10px; color: var(--muted); margin-top: 1px; }
@@ -108,7 +109,7 @@
     /* ── Quality ── */
     .quality-wrap {
       display: flex; align-items: center; gap: 8px;
-      padding: 7px 10px;
+      padding: 5px 10px;
     }
     .quality-label { font-size: 11.5px; color: var(--muted); flex: 1; }
     .pill {
@@ -130,15 +131,15 @@
     .pill-sep { width: 1px; background: var(--border); }
 
     .scale-hint {
-      font-size: 9.5px;
+      font-size: 9px;
       color: var(--muted);
       text-align: right;
-      padding: 2px 10px 0;
-      opacity: 0.7;
+      padding: 1px 10px 0;
+      opacity: 0.6;
     }
 
     /* ── Progress ── */
-    .progress-wrap { display: none; padding: 4px 0; }
+    .progress-wrap { display: none; padding: 3px 0; }
     .progress-wrap.visible { display: block; }
     .progress-track {
       height: 2px; background: rgba(255,255,255,0.07);
@@ -154,9 +155,9 @@
 
     /* ── Footer ── */
     .footer {
-      padding: 8px 0 0;
+      padding: 6px 0 0;
       border-top: 1px solid var(--border);
-      margin-top: 8px;
+      margin-top: 6px;
     }
     .status-msg { font-size: 10.5px; color: var(--muted); text-align: center; }
     .status-msg.ok  { color: var(--green); }

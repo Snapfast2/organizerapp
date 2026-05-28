@@ -39,6 +39,7 @@ export default function CompanionBubble() {
   const [showRecents, setShowRecents] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
   const [isAERunning, setIsAERunning] = useState(false);
+  const [figmaPayload, setFigmaPayload] = useState<any>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
 
   const api = typeof window !== 'undefined' ? (window as any).electronAPI : null;
@@ -61,10 +62,26 @@ export default function CompanionBubble() {
         setIsAERunning(!!isRunning);
         const r = await api?.companion?.getRecents?.();
         if (r) setRecents(r);
+
+        // Check for pending Figma imports
+        try {
+          const res = await fetch('http://localhost:3000/api/ae-figma');
+          if (res.ok) {
+            const json = await res.json();
+            if (json.data && json.data.timestamp) {
+              setFigmaPayload(json.data);
+              setCollapsed(false); // Auto-expand to show notification
+            } else {
+              setFigmaPayload(null);
+            }
+          }
+        } catch (e) {
+          // Ignore network errors
+        }
       } catch { /* ignore */ }
     };
     load();
-    const iv = setInterval(load, 4000); // refresh every 4s
+    const iv = setInterval(load, 2000); // Polling every 2s for faster response
     return () => clearInterval(iv);
   }, [api]);
 
@@ -76,6 +93,111 @@ export default function CompanionBubble() {
   const handleOpenMain = useCallback(() => api?.companion?.openMain?.(), [api]);
   const handleImportAE  = useCallback(() => api?.companion?.importToAE?.(), [api]);
   const handleHide      = useCallback(() => api?.companion?.hide?.(), [api]);
+
+  const handleAcceptFigma = async () => {
+    if (!figmaPayload) return;
+    try {
+      await fetch('http://localhost:3000/api/ae-figma', { method: 'DELETE' });
+      const payloadStr = JSON.stringify(figmaPayload);
+      setFigmaPayload(null);
+
+      const scriptCode = `
+        var data = ${payloadStr};
+        app.beginUndoGroup("Figma Import");
+
+        var blendMap = {
+            "NORMAL":       BlendingMode.NORMAL,
+            "MULTIPLY":     BlendingMode.MULTIPLY,
+            "SCREEN":       BlendingMode.SCREEN,
+            "OVERLAY":      BlendingMode.OVERLAY,
+            "DARKEN":       BlendingMode.DARKEN,
+            "LIGHTEN":      BlendingMode.LIGHTEN,
+            "COLOR_DODGE":  BlendingMode.COLOR_DODGE,
+            "COLOR_BURN":   BlendingMode.COLOR_BURN,
+            "HARD_LIGHT":   BlendingMode.HARD_LIGHT,
+            "SOFT_LIGHT":   BlendingMode.SOFT_LIGHT,
+            "DIFFERENCE":   BlendingMode.DIFFERENCE,
+            "EXCLUSION":    BlendingMode.EXCLUSION,
+            "HUE":          BlendingMode.HUE,
+            "SATURATION":   BlendingMode.SATURATION,
+            "COLOR":        BlendingMode.COLOR,
+            "LUMINOSITY":   BlendingMode.LUMINOSITY,
+            "LINEAR_BURN":  BlendingMode.LINEAR_BURN,
+            "LINEAR_DODGE": BlendingMode.ADD
+        };
+
+        var groups = data.groups || [];
+
+        for (var g = 0; g < groups.length; g++) {
+            var grp = groups[g];
+            var gw  = Math.max(Math.round(grp.groupWidth  || 100), 4);
+            var gh  = Math.max(Math.round(grp.groupHeight || 100), 4);
+
+            var precomp = app.project.items.addComp(
+                grp.name || ("Group " + g),
+                gw, gh, 1, 10, 30
+            );
+
+            // layers[0] = bottommost in Figma.
+            // layers.add() inserts at top → adding bottom-first keeps correct order.
+            var layers = grp.layers || [];
+            for (var i = 0; i < layers.length; i++) {
+                var l = layers[i];
+                if (!l.imagePath) continue;
+
+                var io = new ImportOptions(new File(l.imagePath));
+                if (!io.canImportAs(ImportAsType.FOOTAGE)) continue;
+
+                var footage = app.project.importFile(io);
+                footage.name = l.name || ("Layer " + i);
+
+                var aeLayer = precomp.layers.add(footage);
+                aeLayer.name = l.name || ("Layer " + i);
+
+                // relX/relY = top-left relative to group origin.
+                // AE Position = center = relX + w/2, relY + h/2.
+                var cx = l.relX + (l.width  / 2);
+                var cy = l.relY + (l.height / 2);
+                aeLayer.property("Transform").property("Position").setValue([cx, cy]);
+
+                // 2x PNG → 50% scale for correct 1x logical size.
+                aeLayer.property("Transform").property("Scale").setValue([50, 50]);
+
+                var op = (l.opacity !== undefined) ? l.opacity : 1;
+                aeLayer.property("Transform").property("Opacity").setValue(op * 100);
+
+                if (l.blendMode && blendMap[l.blendMode] !== undefined) {
+                    try { aeLayer.blendingMode = blendMap[l.blendMode]; } catch(e) {}
+                }
+
+                // Label color — all layers from the same Figma group share a color.
+                // AE label 0 = None (layers not inside any group stay uncolored).
+                if (l.labelColor !== undefined) {
+                    try { aeLayer.label = l.labelColor; } catch(e) {}
+                }
+            }
+
+            precomp.openInViewer();
+        }
+
+        app.endUndoGroup();
+      `;
+
+
+      api?.companion?.executeScript?.(scriptCode);
+    } catch (e) {
+      console.error('Error handling figma import', e);
+    }
+  };
+
+  const handleDiscardFigma = async () => {
+    try {
+      await fetch('http://localhost:3000/api/ae-figma', { method: 'DELETE' });
+      setFigmaPayload(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const dragRef = useRef({ startX: 0, startY: 0, dragging: false });
 
@@ -153,6 +275,21 @@ export default function CompanionBubble() {
 
             {/* Actions */}
             <div className={styles.actions}>
+              {figmaPayload && (
+                <div style={{ background: 'rgba(24, 160, 251, 0.15)', border: '1px solid #18A0FB', borderRadius: 8, padding: 12, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 'bold', color: '#18A0FB', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>🎨</span> Figma export ready!
+                  </div>
+                  <div style={{ fontSize: 11, color: '#e5e7eb' }}>
+                    {figmaPayload.layers?.length} layers received from "{figmaPayload.documentName}"
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <button onClick={handleAcceptFigma} style={{ flex: 1, background: '#18A0FB', color: 'white', border: 'none', padding: '6px', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 'bold', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>Export to AE</button>
+                    <button onClick={handleDiscardFigma} style={{ flex: 1, background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', padding: '6px', borderRadius: 4, cursor: 'pointer', fontSize: 12, WebkitAppRegion: 'no-drag' } as React.CSSProperties}>Discard</button>
+                  </div>
+                </div>
+              )}
+
               <ActionButton
                 icon="🖥️"
                 label="Abrir MooMotion"

@@ -46,5 +46,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getRecents:       () => ipcRenderer.invoke('companion:get-recents'),
     startDrag:        () => ipcRenderer.send('companion:drag-start'),
     dragMove:         (totalDx: number, totalDy: number) => ipcRenderer.send('companion:drag-move', totalDx, totalDy),
+    executeScript:    (script: string) => ipcRenderer.send('companion:execute-script', script),
   },
 });

@@ -828,6 +828,21 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
     }
   });
 
+  ipcMain.on('companion:execute-script', async (_event, scriptCode: string) => {
+    try {
+      const { stdout: regOut } = await execAsync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe" /ve');
+      const match = regOut.match(/REG_SZ\s+(.+)$/im);
+      if (!match) return;
+      const aePath = match[1].trim();
+      const tempJsx = path.join(os.tmpdir(), 'ae_figma_bridge.jsx');
+      fs.writeFileSync(tempJsx, scriptCode);
+      const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
+      exec(`"${aePath}" -s "${evalScript}"`, { windowsHide: true });
+    } catch (err) {
+      console.error('Error running companion script:', err);
+    }
+  });
+
 
 app.whenReady().then(() => {
   createWindow();

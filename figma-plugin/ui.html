@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #1e1e1e;
+      color: #e5e5e5;
+      padding: 16px;
+      min-height: 80px;
+    }
+    #export-btn {
+      width: 100%;
+      background: #18A0FB;
+      color: white;
+      border: none;
+      padding: 10px 0;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #export-btn:hover { background: #0b80d0; }
+    #export-btn:disabled { background: #555; cursor: not-allowed; }
+    #status {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #999;
+      text-align: center;
+      min-height: 16px;
+    }
+    #status.ok  { color: #4ade80; }
+    #status.err { color: #f87171; }
+  </style>
+</head>
+<body>
+  <button id="export-btn">Export to Companion →</button>
+  <div id="status">Select a group, then click Export.</div>
+
+  <script>
+    const btn    = document.getElementById('export-btn');
+    const status = document.getElementById('status');
+
+    function setStatus(msg, cls) {
+      status.textContent = msg;
+      status.className = cls || '';
+    }
+
+    btn.onclick = () => {
+      btn.disabled = true;
+      setStatus('Exporting layers…');
+      parent.postMessage({ pluginMessage: { type: 'export-selection' } }, '*');
+    };
+
+    onmessage = async (event) => {
+      const msg = event.data.pluginMessage;
+      if (!msg) return;
+
+      if (msg.type === 'export-progress') {
+        setStatus(msg.message || 'Working…');
+        return;
+      }
+
+      if (msg.type === 'export-error') {
+        setStatus('❌ ' + (msg.message || 'Unknown error'), 'err');
+        btn.disabled = false;
+        return;
+      }
+
+      if (msg.type === 'send-to-server') {
+        setStatus('Sending to Companion…');
+        try {
+          const body = {
+            timestamp: Date.now(),
+            documentName: msg.documentName || 'Figma',
+            groups: msg.payload,   // Array<GroupExport>
+          };
+          const res = await fetch('http://localhost:3000/api/ae-figma', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (res.ok) {
+            setStatus('✅ Sent! Check the Companion.', 'ok');
+          } else {
+            setStatus('❌ Server error ' + res.status, 'err');
+          }
+        } catch (e) {
+          setStatus('❌ Network error – is Companion running?', 'err');
+        }
+        btn.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>

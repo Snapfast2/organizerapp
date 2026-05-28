@@ -52,7 +52,7 @@ const downloadsPath = path.join(require('os').homedir(), 'Downloads');
 const QUICK_DESTINATIONS = [
   { label: 'Escritorio',   path: path.join(require('os').homedir(), 'Desktop') },
   { label: 'Documentos',   path: path.join(require('os').homedir(), 'Documents') },
-  { label: 'ImÃ¡genes',     path: path.join(require('os').homedir(), 'Pictures') },
+  { label: 'Imágenes',     path: path.join(require('os').homedir(), 'Pictures') },
   { label: 'Videos',       path: path.join(require('os').homedir(), 'Videos') },
 ];
 

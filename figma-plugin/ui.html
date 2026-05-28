@@ -1,103 +1,321 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Inter', sans-serif;
-      background: #1e1e1e;
-      color: #e5e5e5;
-      padding: 16px;
-      min-height: 80px;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:        #4ade80;
+      --green-dim:    #86efac;
+      --green-glow:   rgba(74, 222, 128, 0.18);
+      --green-border: rgba(74, 222, 128, 0.22);
+      --bg:           #080e09;
+      --surface:      rgba(14, 26, 16, 0.96);
+      --text:         #d1fae5;
+      --text-muted:   #6b7280;
+      --red:          #f87171;
     }
-    #export-btn {
+
+    html, body {
       width: 100%;
-      background: #18A0FB;
-      color: white;
-      border: none;
-      padding: 10px 0;
-      border-radius: 6px;
+      min-height: 100%;
+      background: var(--bg);
+      font-family: 'Inter', -apple-system, sans-serif;
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .panel {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: rgba(74, 222, 128, 0.06);
+      border: 1px solid var(--green-border);
+      border-radius: 12px;
+    }
+
+    .logo {
+      font-size: 18px;
+      filter: drop-shadow(0 0 6px rgba(74,222,128,0.6));
+      flex-shrink: 0;
+    }
+
+    .header-text {
+      flex: 1;
+    }
+
+    .app-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--green-dim);
+      letter-spacing: 0.04em;
+    }
+
+    .app-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      flex-shrink: 0;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    .status-dot.busy {
+      background: #facc15;
+      box-shadow: 0 0 8px #facc15;
+      animation: pulse 1s ease-in-out infinite alternate;
+    }
+
+    .status-dot.error {
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+      animation: none;
+    }
+
+    @keyframes pulse {
+      from { opacity: 0.5; }
+      to   { opacity: 1; }
+    }
+
+    /* ── Export button ── */
+    .export-btn {
+      width: 100%;
+      padding: 11px 0;
+      border-radius: 10px;
+      border: 1px solid var(--green-border);
+      background: var(--green-glow);
+      color: var(--green-dim);
+      font-family: inherit;
       font-size: 13px;
       font-weight: 600;
+      letter-spacing: 0.02em;
       cursor: pointer;
-      transition: background 0.15s;
-    }
-    #export-btn:hover { background: #0b80d0; }
-    #export-btn:disabled { background: #555; cursor: not-allowed; }
-    #status {
-      margin-top: 12px;
-      font-size: 11px;
-      color: #999;
-      text-align: center;
-      min-height: 16px;
-    }
-    #status.ok  { color: #4ade80; }
-    #status.err { color: #f87171; }
-    #progress-bar-wrap {
-      display: none;
-      margin-top: 10px;
-      background: #333;
-      border-radius: 4px;
-      height: 4px;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+      position: relative;
       overflow: hidden;
     }
-    #progress-bar {
+
+    .export-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(74,222,128,0.12) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .export-btn:hover:not(:disabled) {
+      background: rgba(74, 222, 128, 0.26);
+      border-color: rgba(74, 222, 128, 0.5);
+      box-shadow: 0 0 20px rgba(74, 222, 128, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .export-btn:active:not(:disabled) {
+      transform: translateY(0) scale(0.99);
+    }
+
+    .export-btn:disabled {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(255,255,255,0.08);
+      color: var(--text-muted);
+      cursor: not-allowed;
+    }
+
+    /* ── Progress area ── */
+    .progress-area {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .progress-area.visible { display: flex; }
+
+    .progress-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .progress-label {
+      font-size: 10.5px;
+      color: var(--green-dim);
+      font-weight: 500;
+    }
+
+    .progress-pct {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-track {
+      height: 3px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
       height: 100%;
-      background: #18A0FB;
       width: 0%;
-      transition: width 0.2s;
+      background: linear-gradient(90deg, #4ade80, #86efac);
+      border-radius: 2px;
+      transition: width 0.25s ease;
+      box-shadow: 0 0 8px rgba(74,222,128,0.5);
+    }
+
+    /* ── Status message ── */
+    .status-msg {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      text-align: center;
+      min-height: 14px;
+      transition: color 0.2s;
+    }
+
+    .status-msg.ok  { color: var(--green); }
+    .status-msg.err { color: var(--red); }
+
+    /* ── Hint ── */
+    .hint {
+      font-size: 10px;
+      color: rgba(107, 114, 128, 0.6);
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: rgba(74,222,128,0.08);
     }
   </style>
 </head>
 <body>
-  <button id="export-btn">Export to Companion →</button>
-  <div id="status">Select a group, then click Export.</div>
-  <div id="progress-bar-wrap">
-    <div id="progress-bar"></div>
+  <div class="panel">
+
+    <!-- Header -->
+    <div class="header">
+      <span class="logo">🐄</span>
+      <div class="header-text">
+        <div class="app-name">Antigravity</div>
+        <div class="app-sub">Figma → After Effects</div>
+      </div>
+      <div class="status-dot" id="dot"></div>
+    </div>
+
+    <!-- Export button -->
+    <button class="export-btn" id="export-btn">
+      Export to Companion →
+    </button>
+
+    <!-- Progress -->
+    <div class="progress-area" id="progress-area">
+      <div class="progress-info">
+        <span class="progress-label" id="progress-label">Exporting…</span>
+        <span class="progress-pct" id="progress-pct">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Status -->
+    <div class="status-msg" id="status">Select a group or frame, then export.</div>
+
+    <!-- Hint -->
+    <div class="hint">Layers are streamed group-by-group.<br>Large designs won't crash.</div>
+
   </div>
 
   <script>
-    const btn         = document.getElementById('export-btn');
-    const statusEl    = document.getElementById('status');
-    const progressWrap = document.getElementById('progress-bar-wrap');
-    const progressBar  = document.getElementById('progress-bar');
+    const btn          = document.getElementById('export-btn');
+    const dot          = document.getElementById('dot');
+    const progressArea = document.getElementById('progress-area');
+    const progressFill = document.getElementById('progress-fill');
+    const progressLabel= document.getElementById('progress-label');
+    const progressPct  = document.getElementById('progress-pct');
+    const statusEl     = document.getElementById('status');
 
     const SERVER = 'http://localhost:3000/api/ae-figma';
 
+    // ── UI helpers ─────────────────────────────────────────────────────────────
     function setStatus(msg, cls) {
       statusEl.textContent = msg;
-      statusEl.className = cls || '';
+      statusEl.className   = 'status-msg ' + (cls || '');
     }
 
-    function setProgress(done, total) {
-      if (total <= 0) return;
-      const pct = Math.round((done / total) * 100);
-      progressBar.style.width = pct + '%';
+    function setBusy(busy) {
+      btn.disabled = busy;
+      dot.className = 'status-dot' + (busy ? ' busy' : '');
+      if (!busy) progressArea.classList.remove('visible');
     }
 
+    function setError(msg) {
+      setStatus('❌ ' + msg, 'err');
+      dot.className = 'status-dot error';
+      btn.disabled = false;
+      progressArea.classList.remove('visible');
+    }
+
+    // Force a browser repaint before continuing (so progress bar renders).
+    // This is critical inside async queues — without it the browser batches
+    // DOM updates and the user sees no animation.
+    function repaint() {
+      return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    }
+
+    function setProgress(done, total, label) {
+      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+      progressFill.style.width  = pct + '%';
+      progressPct.textContent   = pct + '%';
+      progressLabel.textContent = label || 'Sending…';
+    }
+
+    // ── Export button ─────────────────────────────────────────────────────────
     btn.onclick = () => {
-      btn.disabled = true;
-      progressWrap.style.display = 'block';
-      progressBar.style.width = '0%';
+      setBusy(true);
+      progressArea.classList.add('visible');
+      setProgress(0, 1, 'Exporting from Figma…');
       setStatus('Exporting layers…');
       parent.postMessage({ pluginMessage: { type: 'export-selection' } }, '*');
     };
 
-    // ── Streaming queue — send groups to server sequentially ──────────────────
-    // Each group arrives as a separate postMessage from the plugin.
-    // We enqueue server POSTs so they run one at a time (no race conditions).
-    let serverQueue = Promise.resolve();
+    // ── Streaming queue ────────────────────────────────────────────────────────
+    // POSTs to server run sequentially so we never have concurrent uploads.
+    let queue       = Promise.resolve();
     let totalGroups = 0;
     let sentGroups  = 0;
+    // We track "export phase" progress separately from "send phase"
+    // so the bar animates during BOTH phases.
+    let exportedGroups = 0;
 
     function enqueue(fn) {
-      serverQueue = serverQueue.then(fn).catch((e) => {
-        setStatus('❌ ' + e.message, 'err');
-        btn.disabled = false;
-      });
+      queue = queue.then(fn).catch((e) => setError(e.message));
     }
 
-    async function postToServer(body) {
+    async function post(body) {
       const res = await fetch(SERVER, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,15 +325,19 @@
       return res.json();
     }
 
+    // ── Plugin message handler ────────────────────────────────────────────────
     onmessage = (event) => {
       const msg = event.data.pluginMessage;
       if (!msg) return;
 
-      // ── Export started ────────────────────────────────────────────────────
+      // ── Export started ──────────────────────────────────────────────────
       if (msg.type === 'export-start') {
-        totalGroups = msg.total || 1;
-        sentGroups  = 0;
-        enqueue(() => postToServer({
+        totalGroups    = msg.total || 1;
+        sentGroups     = 0;
+        exportedGroups = 0;
+        // Reset queue in case of re-export
+        queue = Promise.resolve();
+        enqueue(() => post({
           action: 'start',
           total: totalGroups,
           documentName: msg.documentName || 'Figma',
@@ -123,40 +345,52 @@
         return;
       }
 
-      // ── One group exported by the plugin → send to server immediately ─────
+      // ── Progress from plugin (exporting phase) ──────────────────────────
+      if (msg.type === 'export-progress') {
+        exportedGroups++;
+        // Use first half of bar for "exporting from Figma" phase
+        const done = Math.min(exportedGroups, totalGroups);
+        setProgress(done, totalGroups * 2, msg.message || 'Exporting…');
+        return;
+      }
+
+      // ── One group done → queue server POST ─────────────────────────────
       if (msg.type === 'export-group') {
+        const groupSnapshot = msg.group;
         enqueue(async () => {
           sentGroups++;
-          setStatus(`Sending group ${sentGroups} of ${totalGroups}…`);
-          setProgress(sentGroups - 0.5, totalGroups);
-          await postToServer({ action: 'group', group: msg.group });
-          setProgress(sentGroups, totalGroups);
+          // Second half of bar = sending phase
+          const done = totalGroups + sentGroups;
+          setProgress(done - 0.5, totalGroups * 2,
+            `Sending group ${sentGroups} of ${totalGroups}…`);
+          await repaint();
+          await post({ action: 'group', group: groupSnapshot });
+          setProgress(done, totalGroups * 2,
+            `Sent ${sentGroups} of ${totalGroups}`);
+          await repaint();
         });
         return;
       }
 
-      // ── All groups exported → finalize ────────────────────────────────────
+      // ── All done ────────────────────────────────────────────────────────
       if (msg.type === 'export-done') {
         enqueue(async () => {
-          setStatus('Finalizing…');
-          await postToServer({ action: 'finalize' });
-          setStatus('✅ Sent! Check the Companion.', 'ok');
-          progressWrap.style.display = 'none';
+          setProgress(totalGroups * 2 - 0.5, totalGroups * 2, 'Finalizing…');
+          await repaint();
+          await post({ action: 'finalize' });
+          setProgress(totalGroups * 2, totalGroups * 2, 'Done!');
+          await repaint();
+          setStatus('✅ Ready in Companion!', 'ok');
+          dot.className = 'status-dot';
+          setTimeout(() => progressArea.classList.remove('visible'), 1200);
           btn.disabled = false;
         });
         return;
       }
 
-      // ── Error / progress (legacy / fallback) ──────────────────────────────
-      if (msg.type === 'export-progress') {
-        setStatus(msg.message || 'Working…');
-        return;
-      }
-
+      // ── Error ───────────────────────────────────────────────────────────
       if (msg.type === 'export-error') {
-        setStatus('❌ ' + (msg.message || 'Unknown error'), 'err');
-        progressWrap.style.display = 'none';
-        btn.disabled = false;
+        setError(msg.message || 'Unknown error');
         return;
       }
     };

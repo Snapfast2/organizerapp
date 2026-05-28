@@ -363,7 +363,12 @@ export default function CompanionBubble() {
 
   return (
     <div className={styles.root}>
-      <div className={`${styles.bubble} ${collapsed ? styles.bubbleCollapsed : styles.bubbleExpanded}`} ref={bubbleRef}>
+      <div
+        className={`${styles.bubble} ${collapsed ? styles.bubbleCollapsed : styles.bubbleExpanded}`}
+        ref={bubbleRef}
+        onMouseEnter={() => api?.companion?.setClickThrough?.(false)}
+        onMouseLeave={() => api?.companion?.setClickThrough?.(true)}
+      >
 
         {/* ── Drag handle ───────────────────────────────── */}
         <div

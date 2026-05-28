@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   companion: {
     hide:             () => ipcRenderer.send('companion:hide'),
     setSize:          (w: number, h: number) => ipcRenderer.send('companion:set-size', w, h),
+    setClickThrough:  (ignore: boolean) => ipcRenderer.send('companion:set-click-through', ignore),
     openMain:         () => ipcRenderer.send('companion:open-main'),
     importToAE:       () => ipcRenderer.send('companion:import-to-ae'),
     isAERunning:      () => ipcRenderer.invoke('companion:is-ae-running'),

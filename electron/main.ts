@@ -391,6 +391,10 @@ function createCompanion() {
 
   companionWindow.loadURL(`http://localhost:${NEXT_PORT}/companion`);
 
+  // Make the transparent area click-through by default.
+  // The renderer will toggle this off when the cursor enters the bubble content.
+  companionWindow.setIgnoreMouseEvents(true, { forward: true });
+
   // 'screen-saver' is the highest z-order level on Windows â€”
   // puts the companion above AE, browsers, fullscreen apps, everything
   companionWindow.setAlwaysOnTop(true, 'screen-saver');
@@ -888,6 +892,15 @@ ipcMain.on('companion:set-size', (_e, width: number, height: number) => {
   if (!companionWindow || companionWindow.isDestroyed()) return;
   const [x, y] = companionWindow.getPosition();
   companionWindow.setBounds({ x, y, width: Math.round(width), height: Math.round(height) }, true);
+});
+
+ipcMain.on('companion:set-click-through', (_e, ignore: boolean) => {
+  if (!companionWindow || companionWindow.isDestroyed()) return;
+  if (ignore) {
+    companionWindow.setIgnoreMouseEvents(true, { forward: true });
+  } else {
+    companionWindow.setIgnoreMouseEvents(false);
+  }
 });
 
 ipcMain.on('companion:open-main', () => {

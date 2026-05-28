@@ -249,7 +249,7 @@ export default function CompanionBubble() {
                 var pl = mc.layers.add(pcMap[l.precompName]);
                 pl.name = l.precompName;
                 pl.property("Position").setValue([l.relX + l.width/2, l.relY + l.height/2]);
-                if (es === 2) pl.property("Scale").setValue([50, 50]);
+                // Precomp already has internal layers at 50% for 2x, so keep precomp at 100%
                 if (typeof l.opacity==="number" && l.opacity<1) pl.property("Opacity").setValue(l.opacity*100);
                 if (l.blendMode && bm[l.blendMode]) pl.blendingMode = bm[l.blendMode];
               } else {

@@ -70,14 +70,21 @@
       border: 1px solid var(--border);
       background: var(--surface);
       cursor: pointer;
-      transition: background 0.1s, border-color 0.1s;
+      transition: background 0.1s, border-color 0.1s, transform 0.1s;
       width: 100%; text-align: left;
       margin-bottom: 2px;
     }
     .action-row:hover:not(:disabled) { background: #2a2a2a; border-color: rgba(255,255,255,0.13); }
+    .action-row:active:not(:disabled) { transform: scale(0.97); }
     .action-row:disabled { opacity: 0.4; cursor: not-allowed; }
-    .action-icon { font-size: 12px; flex-shrink: 0; }
+    .action-icon { font-size: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .action-icon svg { width: 14px; height: 14px; fill: var(--green-dim); }
     .action-text { font-size: 11.5px; font-weight: 500; color: var(--green-dim); }
+    .hover-arrow {
+      opacity: 0; transform: translateX(-4px); transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: inline-block; font-family: monospace; font-size: 10px; font-weight: bold; margin-left: 2px;
+    }
+    .action-row:hover:not(:disabled) .hover-arrow { opacity: 1; transform: translateX(0); }
 
     /* ── Precomp mark button ── */
     .mark-btn {
@@ -87,10 +94,11 @@
       border: 1px solid var(--border);
       background: var(--surface);
       cursor: pointer;
-      transition: background 0.1s, border-color 0.1s;
+      transition: background 0.1s, border-color 0.1s, transform 0.1s;
       width: 100%; text-align: left;
     }
     .mark-btn:hover:not(:disabled) { background: #2a2a2a; border-color: rgba(255,255,255,0.13); }
+    .mark-btn:active:not(:disabled) { transform: scale(0.97); }
     .mark-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .mark-btn.active {
       border-color: rgba(251,191,36,0.3);
@@ -115,22 +123,28 @@
     }
     .quality-label { font-size: 11.5px; color: var(--muted); flex: 1; }
     .pill {
-      display: flex;
+      display: flex; position: relative;
       background: rgba(255,255,255,0.05);
       border: 1px solid var(--border);
       border-radius: 5px;
-      overflow: hidden;
     }
+    .pill-slider {
+      position: absolute; top: 0; left: 0; bottom: 0; width: 50%;
+      background: var(--green-glow); border-radius: 4px;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 0;
+    }
+    .pill.is-2x .pill-slider { transform: translateX(100%); }
     .pill-btn {
       padding: 3px 9px;
       border: none; background: transparent;
       color: var(--muted);
       font-family: inherit; font-size: 10.5px; font-weight: 600;
       cursor: pointer;
-      transition: background 0.1s, color 0.1s;
+      transition: color 0.15s;
+      position: relative; z-index: 1; flex: 1;
     }
-    .pill-btn.active { background: var(--green-glow); color: var(--green-dim); }
-    .pill-sep { width: 1px; background: var(--border); }
+    .pill-btn.active { color: var(--green-dim); }
 
     .scale-hint {
       font-size: 9px;
@@ -172,8 +186,20 @@
     .status-msg.ok  { color: var(--green); animation: pop-in  0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
     /* 5. Shake on error */
     .status-msg.err { color: var(--red);   animation: shake   0.45s ease-out both; }
+    
+    .status-msg.exporting::after {
+      content: '';
+      animation: ellipsis 1.5s infinite;
+    }
 
     /* ── @keyframes ─────────────────────────────────────────────────────── */
+
+    @keyframes ellipsis {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75%, 100% { content: '...'; }
+    }
 
     /* 1. AE Logo — gentle pulse */
     @keyframes ae-pulse {
@@ -210,10 +236,20 @@
       90%      { transform: translateX(-1px); }
     }
 
+    /* 6. Cow wiggle */
+    @keyframes cow-wiggle {
+      0%, 100% { transform: rotate(0deg); }
+      5%  { transform: rotate(-15deg); }
+      15% { transform: rotate(15deg); }
+      25% { transform: rotate(-10deg); }
+      35% { transform: rotate(0deg); }
+    }
+
     /* Apply always-on animations */
     .action-icon { animation: ae-pulse 3s ease-in-out infinite; display: flex; align-items: center; justify-content: center; }
     .action-icon svg { width: 14px; height: 14px; fill: var(--green-dim); }
-    .logo        { animation: logo-glow     4s ease-in-out infinite; }
+    .logo        { animation: logo-glow 4s ease-in-out infinite; }
+    .logo svg    { animation: cow-wiggle 6s ease-in-out infinite; transform-origin: center bottom; }
   </style>
 </head>
 <body>
@@ -238,7 +274,7 @@
           <path d="M26.684 17.023c-0.026 0.236-0.039 0.412-0.051 0.524-0.011 0.089-0.084 0.158-0.174 0.162l-0 0c-0.075 0-0.212 0.012-0.412 0.026-0.197 0.023-0.425 0.037-0.656 0.037-0.023 0-0.046-0-0.070-0l0.004 0c-0.287 0-0.588-0.050-0.911-0.050h-3.956c0.051 0.417 0.188 0.793 0.394 1.122l-0.007-0.012c0.221 0.333 0.531 0.592 0.897 0.745l0.013 0.005c0.45 0.198 0.976 0.313 1.527 0.313 0.025 0 0.050-0 0.075-0.001l-0.004 0c0.465-0.009 0.912-0.059 1.345-0.145l-0.049 0.008c0.414-0.054 0.789-0.155 1.143-0.298l-0.031 0.011c0.062-0.049 0.1-0.025 0.1 0.1v1.911c-0.002 0.054-0.012 0.105-0.027 0.152l0.001-0.004c-0.023 0.035-0.052 0.064-0.085 0.087l-0.001 0.001c-0.36 0.163-0.779 0.293-1.216 0.37l-0.032 0.005c-0.479 0.096-1.029 0.152-1.592 0.152-0.063 0-0.126-0.001-0.189-0.002l0.009 0c-0.048 0.001-0.104 0.002-0.161 0.002-0.806 0-1.574-0.161-2.274-0.453l0.039 0.014c-0.627-0.277-1.154-0.68-1.568-1.179l-0.006-0.007c-0.38-0.46-0.675-1.006-0.853-1.602l-0.008-0.033c-0.166-0.545-0.261-1.172-0.261-1.821 0-0.71 0.114-1.393 0.325-2.032l-0.013 0.046c0.213-0.658 0.532-1.227 0.943-1.718l-0.007 0.008c0.409-0.492 0.912-0.892 1.482-1.174l0.026-0.012c0.554-0.247 1.201-0.391 1.881-0.391 0.071 0 0.143 0.002 0.213 0.005l-0.010-0c0.031-0.001 0.068-0.001 0.105-0.001 0.662 0 1.291 0.143 1.857 0.4l-0.028-0.011c0.525 0.231 0.964 0.57 1.305 0.992l0.005 0.006c0.318 0.405 0.573 0.878 0.741 1.39l0.009 0.033c0.15 0.451 0.236 0.97 0.236 1.509 0 0.005 0 0.009-0 0.014v-0.001c0 0.299-0.012 0.562-0.024 0.799zM16.886 22.004h-2.608c-0.005 0-0.011 0.001-0.017 0.001-0.086 0-0.159-0.058-0.182-0.137l-0-0.001-1.023-2.995h-4.642l-0.948 2.945c-0.021 0.101-0.109 0.176-0.214 0.176-0.008 0-0.016-0-0.024-0.001l0.001 0h-2.346c-0.137 0-0.175-0.075-0.137-0.225l4.018-11.52c0.037-0.125 0.075-0.237 0.125-0.387 0.048-0.242 0.075-0.52 0.075-0.804 0-0.002 0-0.005 0-0.007v0c-0.001-0.005-0.001-0.010-0.001-0.016 0-0.060 0.043-0.11 0.1-0.121l0.001-0h3.232c0.087 0 0.15 0.037 0.162 0.1l4.555 12.791c0.037 0.137 0.001 0.201-0.125 0.201zM25.672 1.399h-19.343c-0.001 0-0.003 0-0.004 0-2.927 0-5.299 2.373-5.299 5.299 0 0.002 0 0.003 0 0.005v-0 18.594c0 0.001 0 0.003 0 0.004 0 2.927 2.373 5.299 5.299 5.299 0.002 0 0.003 0 0.005 0h19.343c0.001 0 0.003 0 0.004 0 2.927 0 5.299-2.373 5.299-5.299 0-0.002 0-0.003 0-0.005v0-18.594c0-0.001 0-0.003 0-0.004 0-2.927-2.373-5.299-5.299-5.299-0.002 0-0.003 0-0.005 0h0zM22.39 14.053c-0.029-0.002-0.064-0.003-0.098-0.003-0.676 0-1.263 0.382-1.557 0.942l-0.005 0.010c-0.138 0.261-0.235 0.564-0.273 0.886l-0.001 0.012h2.632c0.324 0 0.562 0 0.711-0.012 0.108-0.009 0.206-0.045 0.289-0.101l-0.002 0.001v-0.125c0-0 0-0.001 0-0.001 0-0.165-0.028-0.323-0.079-0.471l0.003 0.010c-0.218-0.672-0.838-1.149-1.57-1.149-0.018 0-0.035 0-0.053 0.001l0.003-0zM11.682 14.415c-0.125-0.387-0.237-0.761-0.362-1.148s-0.237-0.749-0.337-1.111c-0.1-0.349-0.187-0.674-0.275-0.973h-0.025c-0.135 0.651-0.281 1.191-0.455 1.718l0.031-0.108c-0.187 0.599-0.374 1.223-0.574 1.847-0.162 0.636-0.362 1.223-0.549 1.747h3.17c-0.075-0.262-0.175-0.574-0.287-0.899-0.112-0.337-0.225-0.699-0.337-1.073z"></path>
         </svg>
       </span>
-      <span class="action-text">Send selection to AE</span>
+      <span class="action-text">Send selection to AE <span class="hover-arrow">→</span></span>
     </button>
 
     <!-- Progress -->
@@ -263,9 +299,9 @@
     <div class="section-label">Options</div>
     <div class="quality-wrap">
       <span class="quality-label">Export scale</span>
-      <div class="pill">
+      <div class="pill" id="scale-pill">
+        <div class="pill-slider"></div>
         <button class="pill-btn active" id="opt-1x" onclick="setScale(1)">1×</button>
-        <div class="pill-sep"></div>
         <button class="pill-btn" id="opt-2x" onclick="setScale(2)">2×</button>
       </div>
     </div>
@@ -296,13 +332,14 @@
 
     // ── Quality toggle ─────────────────────────────────────────────────────────
     let exportScale = 1;
-    function setScale(s) {
-      exportScale = s;
-      opt1x.classList.toggle('active', s === 1);
-      opt2x.classList.toggle('active', s === 2);
-      scaleHint.textContent = s === 1
-        ? 'Fast · AE scale 100%'
-        : 'Sharp · AE scale 50%';
+    const scalePill = document.getElementById('scale-pill');
+
+    function setScale(scale) {
+      exportScale = scale;
+      document.getElementById('opt-1x').classList.toggle('active', scale === 1);
+      document.getElementById('opt-2x').classList.toggle('active', scale === 2);
+      scalePill.classList.toggle('is-2x', scale === 2);
+      scaleHint.textContent = scale === 1 ? 'Fast · AE scale 100%' : 'High Quality · AE scale 50%';
     }
 
     // ── Selection info from plugin ─────────────────────────────────────────────
@@ -382,7 +419,7 @@
       setBusy(true);
       progressWrap.classList.add('visible');
       setProgress(0, 1, 'Starting…');
-      setStatus('Exporting…');
+      setStatus('Exporting', 'exporting');
       parent.postMessage({ pluginMessage: { type: 'export-selection', scale: exportScale } }, '*');
     };
 
@@ -429,7 +466,7 @@
 
       if (msg.type === 'export-progress') {
         exportedGroups++;
-        setProgress(exportedGroups, totalGroups * 2, msg.message || 'Exporting…');
+        setProgress(exportedGroups, totalGroups * 2, msg.message || 'Processing layers…');
         return;
       }
 

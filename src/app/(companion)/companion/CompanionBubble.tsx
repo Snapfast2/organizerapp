@@ -143,6 +143,31 @@ export default function CompanionBubble() {
         var precompsFolder = getFolder("Precomps", docFolder);
         var assetsFolder = getFolder("Assets", docFolder);
 
+        // ── Step 0: Ensure OS File System Organization ───
+        var fsAssetsDir = null;
+        if (app.project.file) {
+            var aeProjDir = app.project.file.parent.fsName;
+            var osAssets = new Folder(aeProjDir + "/Assets");
+            if (!osAssets.exists) osAssets.create();
+            var osFigma = new Folder(osAssets.fsName + "/Figma Imports");
+            if (!osFigma.exists) osFigma.create();
+            
+            var safeDocName = docName.replace(/[^a-z0-9_ -]/gi, '_');
+            var osDoc = new Folder(osFigma.fsName + "/" + safeDocName);
+            if (!osDoc.exists) osDoc.create();
+            
+            fsAssetsDir = osDoc;
+        }
+
+        function getFinalImagePath(tempPath) {
+            if (!fsAssetsDir) return tempPath;
+            var srcFile = new File(tempPath);
+            if (!srcFile.exists) return tempPath;
+            var dstFile = new File(fsAssetsDir.fsName + "/" + srcFile.name);
+            srcFile.copy(dstFile.fsName);
+            return dstFile.fsName;
+        }
+
         var groups = data.groups || [];
         for (var g = 0; g < groups.length; g++) {
             var grp = groups[g];
@@ -176,7 +201,8 @@ export default function CompanionBubble() {
                     var sl = subLayers[si];
                     if (!sl.imagePath) continue;
 
-                    var sio = new ImportOptions(new File(sl.imagePath));
+                    var finalPath = getFinalImagePath(sl.imagePath);
+                    var sio = new ImportOptions(new File(finalPath));
                     if (!sio.canImportAs(ImportAsType.FOOTAGE)) continue;
 
                     var sFootage = app.project.importFile(sio);
@@ -237,7 +263,8 @@ export default function CompanionBubble() {
 
                 if (!l.imagePath) continue;
 
-                var io = new ImportOptions(new File(l.imagePath));
+                var finalPath = getFinalImagePath(l.imagePath);
+                var io = new ImportOptions(new File(finalPath));
                 if (!io.canImportAs(ImportAsType.FOOTAGE)) continue;
 
                 var footage = app.project.importFile(io);

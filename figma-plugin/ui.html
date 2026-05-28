@@ -147,9 +147,15 @@
     }
     .progress-fill {
       height: 100%; width: 0%;
-      background: var(--green);
       border-radius: 1px;
       transition: width 0.2s ease;
+      /* 3. Shimmer: moving sheen while exporting */
+      background: linear-gradient(90deg,
+        rgba(74,222,128,0.75) 0%,
+        rgba(134,239,172,1)   45%,
+        rgba(74,222,128,0.75) 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.6s linear infinite;
     }
     .progress-lbl { font-size: 10px; color: var(--muted); margin-top: 3px; }
 
@@ -160,8 +166,51 @@
       margin-top: 6px;
     }
     .status-msg { font-size: 10.5px; color: var(--muted); text-align: center; }
-    .status-msg.ok  { color: var(--green); }
-    .status-msg.err { color: var(--red); }
+    /* 4. Pop-in on success */
+    .status-msg.ok  { color: var(--green); animation: pop-in  0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+    /* 5. Shake on error */
+    .status-msg.err { color: var(--red);   animation: shake   0.45s ease-out both; }
+
+    /* ── @keyframes ─────────────────────────────────────────────────────── */
+
+    /* 1. ✦ sparkle — gentle pulse + slight rotate */
+    @keyframes sparkle-pulse {
+      0%, 100% { opacity: 0.55; transform: scale(1)    rotate(0deg);  }
+      50%       { opacity: 1;   transform: scale(1.28) rotate(22deg); }
+    }
+
+    /* 2. Logo border glow */
+    @keyframes logo-glow {
+      0%, 100% { box-shadow: 0 0 0px  rgba(74,222,128,0);    }
+      50%       { box-shadow: 0 0 10px rgba(74,222,128,0.4); }
+    }
+
+    /* 3. Progress shimmer */
+    @keyframes shimmer {
+      0%   { background-position: -200% 0; }
+      100% { background-position:  200% 0; }
+    }
+
+    /* 4. Status pop-in (success) */
+    @keyframes pop-in {
+      0%   { opacity: 0; transform: scale(0.85) translateY(4px); }
+      65%  { opacity: 1; transform: scale(1.05) translateY(-1px); }
+      100% { opacity: 1; transform: scale(1)    translateY(0);    }
+    }
+
+    /* 5. Error shake */
+    @keyframes shake {
+      0%,100% { transform: translateX(0);   }
+      15%      { transform: translateX(-4px); }
+      35%      { transform: translateX( 4px); }
+      55%      { transform: translateX(-3px); }
+      75%      { transform: translateX( 2px); }
+      90%      { transform: translateX(-1px); }
+    }
+
+    /* Apply always-on animations */
+    .action-icon { animation: sparkle-pulse 3s ease-in-out infinite; }
+    .logo        { animation: logo-glow     4s ease-in-out infinite; }
   </style>
 </head>
 <body>
@@ -286,7 +335,11 @@
     // ── UI helpers ─────────────────────────────────────────────────────────────
     function setStatus(msg, cls) {
       statusEl.textContent = msg;
-      statusEl.className   = 'status-msg ' + (cls || '');
+      // Force-restart CSS animation on every call (even same class).
+      statusEl.style.animation = 'none';
+      void statusEl.offsetWidth;         // trigger reflow
+      statusEl.style.animation = '';
+      statusEl.className = 'status-msg ' + (cls || '');
     }
 
     function setBusy(busy) {

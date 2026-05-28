@@ -3,259 +3,193 @@
 <head>
   <meta charset="utf-8" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
       --green:        #4ade80;
       --green-dim:    #86efac;
-      --green-glow:   rgba(74, 222, 128, 0.18);
-      --green-border: rgba(74, 222, 128, 0.22);
-      --bg:           #080e09;
-      --surface:      rgba(14, 26, 16, 0.96);
-      --text:         #d1fae5;
-      --text-muted:   #6b7280;
+      --green-glow:   rgba(74, 222, 128, 0.15);
+      --green-border: rgba(74, 222, 128, 0.2);
+      --bg:           #1a1a1a;
+      --surface:      #222;
+      --text:         #e5e5e5;
+      --text-muted:   #888;
       --red:          #f87171;
+      --border:       rgba(255,255,255,0.08);
     }
 
     html, body {
       width: 100%;
-      min-height: 100%;
       background: var(--bg);
       font-family: 'Inter', -apple-system, sans-serif;
+      font-size: 12px;
       color: var(--text);
       -webkit-font-smoothing: antialiased;
     }
 
-    .panel {
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
+    /* ── Layout ── */
+    .panel { padding: 12px; display: flex; flex-direction: column; gap: 1px; }
 
     /* ── Header ── */
     .header {
       display: flex;
       align-items: center;
+      gap: 7px;
+      padding: 0 0 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2px;
+    }
+    .logo {
+      width: 24px; height: 24px;
+      background: rgba(74,222,128,0.12);
+      border: 1px solid var(--green-border);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .app-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+    .version  { font-size: 10px; color: var(--text-muted); }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-muted);
+      padding: 10px 0 4px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    /* ── Action row (main export button) ── */
+    .action-row {
+      display: flex;
+      align-items: center;
       gap: 8px;
       padding: 8px 10px;
-      background: rgba(74, 222, 128, 0.06);
-      border: 1px solid var(--green-border);
-      border-radius: 12px;
-    }
-
-    .logo {
-      font-size: 18px;
-      filter: drop-shadow(0 0 6px rgba(74,222,128,0.6));
-      flex-shrink: 0;
-    }
-
-    .header-text {
-      flex: 1;
-    }
-
-    .app-name {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--green-dim);
-      letter-spacing: 0.04em;
-    }
-
-    .app-sub {
-      font-size: 10px;
-      color: var(--text-muted);
-      margin-top: 1px;
-    }
-
-    .status-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 8px var(--green);
-      flex-shrink: 0;
-      transition: background 0.3s, box-shadow 0.3s;
-    }
-
-    .status-dot.busy {
-      background: #facc15;
-      box-shadow: 0 0 8px #facc15;
-      animation: pulse 1s ease-in-out infinite alternate;
-    }
-
-    .status-dot.error {
-      background: var(--red);
-      box-shadow: 0 0 8px var(--red);
-      animation: none;
-    }
-
-    @keyframes pulse {
-      from { opacity: 0.5; }
-      to   { opacity: 1; }
-    }
-
-    /* ── Export button ── */
-    .export-btn {
-      width: 100%;
-      padding: 11px 0;
-      border-radius: 10px;
-      border: 1px solid var(--green-border);
-      background: var(--green-glow);
-      color: var(--green-dim);
-      font-family: inherit;
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
       cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
-      position: relative;
-      overflow: hidden;
+      transition: background 0.12s, border-color 0.12s;
+      width: 100%;
+      text-align: left;
     }
-
-    .export-btn::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, rgba(74,222,128,0.12) 0%, transparent 60%);
-      pointer-events: none;
+    .action-row:hover:not(:disabled) {
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(255,255,255,0.14);
     }
-
-    .export-btn:hover:not(:disabled) {
-      background: rgba(74, 222, 128, 0.26);
-      border-color: rgba(74, 222, 128, 0.5);
-      box-shadow: 0 0 20px rgba(74, 222, 128, 0.15);
-      transform: translateY(-1px);
-    }
-
-    .export-btn:active:not(:disabled) {
-      transform: translateY(0) scale(0.99);
-    }
-
-    .export-btn:disabled {
-      background: rgba(255,255,255,0.04);
-      border-color: rgba(255,255,255,0.08);
-      color: var(--text-muted);
+    .action-row:disabled {
+      opacity: 0.45;
       cursor: not-allowed;
     }
+    .action-icon { font-size: 14px; flex-shrink: 0; }
+    .action-text { font-size: 12px; color: var(--green-dim); font-weight: 500; }
 
-    /* ── Progress area ── */
-    .progress-area {
-      display: none;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .progress-area.visible { display: flex; }
-
-    .progress-info {
+    /* ── Option rows ── */
+    .option-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background 0.12s;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+    }
+    .option-row:hover { background: rgba(255,255,255,0.04); }
+
+    .checkbox {
+      width: 14px; height: 14px;
+      border: 1.5px solid rgba(255,255,255,0.25);
+      border-radius: 3px;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.12s, background 0.12s;
+      font-size: 9px;
+      color: #000;
+    }
+    .checkbox.on {
+      background: var(--green);
+      border-color: var(--green);
     }
 
-    .progress-label {
-      font-size: 10.5px;
-      color: var(--green-dim);
-      font-weight: 500;
-    }
+    .option-text { font-size: 11.5px; color: var(--text-muted); }
+    .option-text b { color: var(--text); font-weight: 500; }
 
-    .progress-pct {
-      font-size: 10px;
-      color: var(--text-muted);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .progress-track {
-      height: 3px;
-      background: rgba(255,255,255,0.07);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-
-    .progress-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #4ade80, #86efac);
-      border-radius: 2px;
-      transition: width 0.25s ease;
-      box-shadow: 0 0 8px rgba(74,222,128,0.5);
-    }
-
-    /* ── Status message ── */
-    .status-msg {
-      font-size: 10.5px;
-      color: var(--text-muted);
-      text-align: center;
-      min-height: 14px;
-      transition: color 0.2s;
-    }
-
-    .status-msg.ok  { color: var(--green); }
-    .status-msg.err { color: var(--red); }
-
-    /* ── Quality toggle ── */
-    .quality-row {
+    /* Quality toggle (pill) */
+    .quality-wrap {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 0 2px;
+      gap: 8px;
+      padding: 7px 10px;
     }
-
-    .quality-label {
-      font-size: 10.5px;
-      color: var(--text-muted);
-    }
-
-    .toggle-pill {
+    .quality-label { font-size: 11.5px; color: var(--text-muted); flex: 1; }
+    .pill {
       display: flex;
       background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(74,222,128,0.15);
-      border-radius: 8px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
       overflow: hidden;
-      padding: 2px;
-      gap: 2px;
     }
-
-    .toggle-option {
-      padding: 4px 12px;
-      border-radius: 6px;
+    .pill-btn {
+      padding: 3px 9px;
       border: none;
       background: transparent;
       color: var(--text-muted);
       font-family: inherit;
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-      letter-spacing: 0.02em;
+      transition: background 0.12s, color 0.12s;
     }
-
-    .toggle-option.active {
+    .pill-btn.active {
       background: var(--green-glow);
       color: var(--green-dim);
-      box-shadow: 0 0 10px rgba(74,222,128,0.1);
     }
+    .pill-sep { width: 1px; background: var(--border); }
 
-    .toggle-hint {
-      font-size: 9.5px;
-      color: rgba(107,114,128,0.55);
-      text-align: right;
+    /* ── Progress ── */
+    .progress-wrap { display: none; padding: 0 10px 4px; }
+    .progress-wrap.visible { display: block; }
+    .progress-track {
+      height: 2px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 1px;
+      overflow: hidden;
+      margin-top: 4px;
     }
-
-    .hint {
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--green);
+      border-radius: 1px;
+      transition: width 0.2s ease;
+    }
+    .progress-label {
       font-size: 10px;
-      color: rgba(107, 114, 128, 0.6);
-      text-align: center;
-      line-height: 1.4;
+      color: var(--text-muted);
+      margin-top: 3px;
     }
 
-    /* ── Divider ── */
-    .divider {
-      height: 1px;
-      background: rgba(74,222,128,0.08);
+    /* ── Footer ── */
+    .footer {
+      padding: 8px 0 0;
+      border-top: 1px solid var(--border);
+      margin-top: 6px;
     }
+    .status-msg {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+    .status-msg.ok  { color: var(--green); }
+    .status-msg.err { color: var(--red); }
   </style>
 </head>
 <body>
@@ -263,128 +197,106 @@
 
     <!-- Header -->
     <div class="header">
-      <span class="logo">🐄</span>
-      <div class="header-text">
-        <div class="app-name">Antigravity</div>
-        <div class="app-sub">Figma → After Effects</div>
-      </div>
-      <div class="status-dot" id="dot"></div>
+      <div class="logo">🐄</div>
+      <span class="app-name">Antigravity</span>
+      <span class="version">v0.1</span>
     </div>
 
-    <!-- Quality toggle -->
-  <div class="quality-row">
-    <span class="quality-label">Export quality</span>
-    <div class="toggle-pill">
-      <button class="toggle-option active" id="opt-1x" onclick="setScale(1)">1×</button>
-      <button class="toggle-option"        id="opt-2x" onclick="setScale(2)">2×</button>
-    </div>
-  </div>
-  <div class="toggle-hint" id="scale-hint">Fast · AE scale 100%</div>
-
-    <button class="export-btn" id="export-btn">
-      Export to Companion →
+    <!-- Actions -->
+    <div class="section-label">Actions</div>
+    <button class="action-row" id="export-btn">
+      <span class="action-icon">✦</span>
+      <span class="action-text">Send selection to AE</span>
     </button>
 
     <!-- Progress -->
-    <div class="progress-area" id="progress-area">
-      <div class="progress-info">
-        <span class="progress-label" id="progress-label">Exporting…</span>
-        <span class="progress-pct" id="progress-pct">0%</span>
-      </div>
-      <div class="progress-track">
-        <div class="progress-fill" id="progress-fill"></div>
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="progress-label" id="progress-label">Exporting…</div>
+    </div>
+
+    <!-- Options -->
+    <div class="section-label">Options</div>
+
+    <div class="quality-wrap">
+      <span class="quality-label">Export scale</span>
+      <div class="pill">
+        <button class="pill-btn active" id="opt-1x" onclick="setScale(1)">1×</button>
+        <div class="pill-sep"></div>
+        <button class="pill-btn" id="opt-2x" onclick="setScale(2)">2×</button>
       </div>
     </div>
 
-    <div class="divider"></div>
-
-    <!-- Status -->
-    <div class="status-msg" id="status">Select a group or frame, then export.</div>
-
-    <!-- Hint -->
-    <div class="hint">Layers are streamed group-by-group.<br>Large designs won't crash.</div>
+    <!-- Footer -->
+    <div class="footer">
+      <div class="status-msg" id="status">Select a group, then export.</div>
+    </div>
 
   </div>
 
   <script>
     const btn          = document.getElementById('export-btn');
-    const dot          = document.getElementById('dot');
-    const progressArea = document.getElementById('progress-area');
+    const statusEl     = document.getElementById('status');
+    const progressWrap = document.getElementById('progress-wrap');
     const progressFill = document.getElementById('progress-fill');
     const progressLabel= document.getElementById('progress-label');
-    const progressPct  = document.getElementById('progress-pct');
-    const statusEl     = document.getElementById('status');
     const opt1x        = document.getElementById('opt-1x');
     const opt2x        = document.getElementById('opt-2x');
-    const scaleHint    = document.getElementById('scale-hint');
 
     const SERVER = 'http://localhost:3000/api/ae-figma';
 
     // ── Quality toggle ─────────────────────────────────────────────────────────
-    let exportScale = 1; // 1 or 2
-
+    let exportScale = 1;
     function setScale(s) {
       exportScale = s;
       opt1x.classList.toggle('active', s === 1);
       opt2x.classList.toggle('active', s === 2);
-      scaleHint.textContent = s === 1
-        ? 'Fast · AE scale 100%'
-        : 'Sharp · AE scale 50%';
     }
 
     // ── UI helpers ─────────────────────────────────────────────────────────────
     function setStatus(msg, cls) {
       statusEl.textContent = msg;
-      statusEl.className   = 'status-msg ' + (cls || '');
+      statusEl.className = 'status-msg ' + (cls || '');
     }
 
     function setBusy(busy) {
       btn.disabled = busy;
-      dot.className = 'status-dot' + (busy ? ' busy' : '');
-      if (!busy) progressArea.classList.remove('visible');
+      if (!busy) { progressWrap.classList.remove('visible'); }
     }
 
     function setError(msg) {
       setStatus('❌ ' + msg, 'err');
-      dot.className = 'status-dot error';
       btn.disabled = false;
-      progressArea.classList.remove('visible');
+      progressWrap.classList.remove('visible');
     }
 
-    // Force a browser repaint before continuing (so progress bar renders).
-    // This is critical inside async queues — without it the browser batches
-    // DOM updates and the user sees no animation.
     function repaint() {
       return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
     }
 
     function setProgress(done, total, label) {
       const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-      progressFill.style.width  = pct + '%';
-      progressPct.textContent   = pct + '%';
-      progressLabel.textContent = label || 'Sending…';
+      progressFill.style.width = pct + '%';
+      progressLabel.textContent = label || '';
     }
 
-    // ── Export button ─────────────────────────────────────────────────────────
+    // ── Export ─────────────────────────────────────────────────────────────────
     btn.onclick = () => {
       setBusy(true);
-      progressArea.classList.add('visible');
-      setProgress(0, 1, 'Exporting from Figma…');
-      setStatus('Exporting layers…');
+      progressWrap.classList.add('visible');
+      setProgress(0, 1, 'Starting…');
+      setStatus('Exporting…');
       parent.postMessage({ pluginMessage: { type: 'export-selection', scale: exportScale } }, '*');
     };
 
     // ── Streaming queue ────────────────────────────────────────────────────────
-    // POSTs to server run sequentially so we never have concurrent uploads.
-    let queue       = Promise.resolve();
+    let queue = Promise.resolve();
     let totalGroups = 0;
     let sentGroups  = 0;
-    // We track "export phase" progress separately from "send phase"
-    // so the bar animates during BOTH phases.
     let exportedGroups = 0;
 
     function enqueue(fn) {
-      queue = queue.then(fn).catch((e) => setError(e.message));
+      queue = queue.then(fn).catch(e => setError(e.message));
     }
 
     async function post(body) {
@@ -397,73 +309,52 @@
       return res.json();
     }
 
-    // ── Plugin message handler ────────────────────────────────────────────────
+    // ── Messages ───────────────────────────────────────────────────────────────
     onmessage = (event) => {
       const msg = event.data.pluginMessage;
       if (!msg) return;
 
-      // ── Export started ──────────────────────────────────────────────────
       if (msg.type === 'export-start') {
-        totalGroups    = msg.total || 1;
-        sentGroups     = 0;
-        exportedGroups = 0;
-        // Reset queue in case of re-export
+        totalGroups = msg.total || 1;
+        sentGroups = exportedGroups = 0;
         queue = Promise.resolve();
-        enqueue(() => post({
-          action: 'start',
-          total: totalGroups,
-          documentName: msg.documentName || 'Figma',
-        }));
+        enqueue(() => post({ action: 'start', total: totalGroups, documentName: msg.documentName || 'Figma' }));
         return;
       }
 
-      // ── Progress from plugin (exporting phase) ──────────────────────────
       if (msg.type === 'export-progress') {
         exportedGroups++;
-        // Use first half of bar for "exporting from Figma" phase
-        const done = Math.min(exportedGroups, totalGroups);
-        setProgress(done, totalGroups * 2, msg.message || 'Exporting…');
+        setProgress(exportedGroups, totalGroups * 2, msg.message || 'Exporting…');
         return;
       }
 
-      // ── One group done → queue server POST ─────────────────────────────
       if (msg.type === 'export-group') {
-        const groupSnapshot = msg.group;
+        const g = msg.group;
         enqueue(async () => {
           sentGroups++;
-          // Second half of bar = sending phase
-          const done = totalGroups + sentGroups;
-          setProgress(done - 0.5, totalGroups * 2,
-            `Sending group ${sentGroups} of ${totalGroups}…`);
+          setProgress(totalGroups + sentGroups - 0.5, totalGroups * 2, `Sending ${sentGroups}/${totalGroups}…`);
           await repaint();
-          await post({ action: 'group', group: groupSnapshot });
-          setProgress(done, totalGroups * 2,
-            `Sent ${sentGroups} of ${totalGroups}`);
+          await post({ action: 'group', group: g });
+          setProgress(totalGroups + sentGroups, totalGroups * 2);
           await repaint();
         });
         return;
       }
 
-      // ── All done ────────────────────────────────────────────────────────
       if (msg.type === 'export-done') {
         enqueue(async () => {
-          setProgress(totalGroups * 2 - 0.5, totalGroups * 2, 'Finalizing…');
+          setProgress(totalGroups * 2, totalGroups * 2, 'Finalizing…');
           await repaint();
           await post({ action: 'finalize' });
-          setProgress(totalGroups * 2, totalGroups * 2, 'Done!');
-          await repaint();
           setStatus('✅ Ready in Companion!', 'ok');
-          dot.className = 'status-dot';
-          setTimeout(() => progressArea.classList.remove('visible'), 1200);
+          progressWrap.classList.remove('visible');
           btn.disabled = false;
         });
         return;
       }
 
-      // ── Error ───────────────────────────────────────────────────────────
       if (msg.type === 'export-error') {
         setError(msg.message || 'Unknown error');
-        return;
       }
     };
   </script>

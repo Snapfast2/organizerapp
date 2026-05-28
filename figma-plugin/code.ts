@@ -138,18 +138,32 @@ function isPureVector(node: SceneNode): boolean {
 
 interface LayerData {
   name: string;
-  pngBase64: string;
+  // Image layers have pngBase64 (plugin) / imagePath (server after save)
+  pngBase64?: string;
   /** Top-left of the node's geometry relative to the group/frame origin. */
   relX: number;
   relY: number;
-  /** Geometry width/height — matches the exported PNG at 1x (PNG is 2x). */
   width: number;
   height: number;
   opacity: number;
   blendMode: string;
-  /** AE label color (0=none, 1-16). All layers of the same top-level Figma
-   *  group share the same color so they're visually grouped in AE. */
   labelColor: number;
+  // Precomp reference layers (no PNG, resolved to sub-comp in AE)
+  isPrecomp?: true;
+  precompName?: string;
+}
+
+/** A sub-composition to create in AE, produced by a *-prefixed group in Figma. */
+interface PrecompSpec {
+  name: string;      // clean name (asterisk stripped)
+  width: number;
+  height: number;
+  relX: number;      // position of this precomp in the parent comp
+  relY: number;
+  opacity: number;
+  blendMode: string;
+  labelColor: number;
+  layers: LayerData[]; // flat layers inside the precomp
 }
 
 interface GroupExport {
@@ -160,7 +174,8 @@ interface GroupExport {
   absoluteY: number;
   /** 1 = 1x export (AE scale 100%), 2 = 2x export (AE scale 50%) */
   exportScale: 1 | 2;
-  layers: LayerData[];
+  layers: LayerData[];      // flat + precomp-ref entries
+  precomps: PrecompSpec[];  // sub-comps to create first in AE
 }
 
 // ─── Recursive flat layer collector ───────────────────────────────────────────
@@ -186,6 +201,7 @@ async function collectLayers(
   labelColor: number,
   colorCounter: { n: number },
   exportScale: 1 | 2,
+  precomps: PrecompSpec[],   // accumulator for *-prefixed groups
 ): Promise<void> {
   // Pre-filter: skip invisible / mask nodes early.
   const visible = (nodes as SceneNode[]).filter(
@@ -199,12 +215,11 @@ async function collectLayers(
     meta: { name: string; geom: Box; totalOpacity: number; blendMode: string; labelColor: number };
   }
 
-  // slots[] holds final LayerData in original node order.
-  // We allocate all slots upfront so parallel fills land in the right places.
-  // Complex containers get -1 (they recurse synchronously and push directly).
-  const slots: (LayerData | null | 'recurse')[] = new Array(visible.length).fill(null);
+  const slots: (LayerData | null | 'recurse' | 'precomp')[] = new Array(visible.length).fill(null);
   const normalPending: PendingNormal[] = [];
   const blurNodes: { slot: number; node: SceneNode;
+    meta: { name: string; geom: Box; totalOpacity: number; blendMode: string; labelColor: number } }[] = [];
+  const precompNodes: { slot: number; node: SceneNode;
     meta: { name: string; geom: Box; totalOpacity: number; blendMode: string; labelColor: number } }[] = [];
 
   for (let i = 0; i < visible.length; i++) {
@@ -219,14 +234,21 @@ async function collectLayers(
       node.type === 'COMPONENT' || node.type === 'INSTANCE'
     ) && 'children' in node;
 
+    // Build meta once — used by both container and leaf paths.
+    const meta = { name: node.name, geom, totalOpacity, blendMode, labelColor };
+
     if (isContainer && !isPureVector(node)) {
-      // Complex container — must recurse; mark slot for later.
-      slots[i] = 'recurse';
+      // *-prefixed containers become precomps in AE.
+      if (node.name.startsWith('*')) {
+        precompNodes.push({ slot: i, node, meta });
+      } else {
+        slots[i] = 'recurse';
+      }
       continue;
     }
 
     // Leaf or pure-vector group → export as PNG.
-    const meta = { name: node.name, geom, totalOpacity, blendMode, labelColor };
+    // (meta already built above)
 
     if (hasOverflowEffect(node)) {
       blurNodes.push({ slot: i, node, meta });
@@ -271,7 +293,56 @@ async function collectLayers(
     };
   }
 
-  // ── Recurse into complex containers + flush results in original order ─────
+  // ── Build precomps from *-prefixed container nodes ────────────────────────
+  for (const { slot, node, meta } of precompNodes) {
+    const geom = meta.geom;
+    const cleanName = node.name.replace(/^\*+/, '').trim() || node.name;
+
+    // Assign a new label color for layers inside the precomp.
+    let subColor = (colorCounter.n % 16) + 1;
+    colorCounter.n++;
+
+    // Collect all children relative to the *node's own origin.
+    const subLayers: LayerData[] = [];
+    await collectLayers(
+      (node as any).children,
+      geom.x, geom.y,           // use *node as origin so sub-layers are comp-relative
+      meta.totalOpacity,
+      subLayers,
+      subColor,
+      colorCounter,
+      exportScale,
+      precomps,                 // nested *nodes are also supported
+    );
+
+    precomps.push({
+      name:       cleanName,
+      width:      geom.w,
+      height:     geom.h,
+      relX:       geom.x - originX,
+      relY:       geom.y - originY,
+      opacity:    meta.totalOpacity,
+      blendMode:  meta.blendMode,
+      labelColor: meta.labelColor,
+      layers:     subLayers,
+    });
+
+    // Place a precomp-ref entry in the parent's layer order.
+    slots[slot] = {
+      name:        cleanName,
+      isPrecomp:   true,
+      precompName: cleanName,
+      relX:        geom.x - originX,
+      relY:        geom.y - originY,
+      width:       geom.w,
+      height:      geom.h,
+      opacity:     meta.totalOpacity,
+      blendMode:   meta.blendMode,
+      labelColor:  meta.labelColor,
+    };
+  }
+
+  // ── Recurse into non-* complex containers + flush all slots in order ──────
   for (let i = 0; i < visible.length; i++) {
     const slot = slots[i];
     if (slot === 'recurse') {
@@ -291,8 +362,9 @@ async function collectLayers(
         thisGroupColor,
         colorCounter,
         exportScale,
+        precomps,
       );
-    } else if (slot !== null) {
+    } else if (slot !== null && slot !== 'precomp') {
       out.push(slot);
     }
   }
@@ -348,7 +420,8 @@ async function exportGroup(group: SceneNode, exportScale: 1 | 2 = 1): Promise<Gr
     : [group];
 
   const colorCounter = { n: 0 };
-  await collectLayers(frameChildren, geom.x, geom.y, 1, layers, 0, colorCounter, exportScale);
+  const precomps: PrecompSpec[] = [];
+  await collectLayers(frameChildren, geom.x, geom.y, 1, layers, 0, colorCounter, exportScale, precomps);
 
   return {
     name: group.name,
@@ -358,6 +431,7 @@ async function exportGroup(group: SceneNode, exportScale: 1 | 2 = 1): Promise<Gr
     absoluteY: geom.y,
     exportScale,
     layers,
+    precomps,
   };
 }
 

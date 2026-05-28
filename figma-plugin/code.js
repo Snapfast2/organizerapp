@@ -149,16 +149,14 @@ function isPureVector(node) {
  * Slot-based ordering: each node gets a reserved slot in a temp array so
  * parallel exports don't scramble the AE layer order.
  */
-function collectLayers(nodes, originX, originY, parentOpacity, out, labelColor, colorCounter, exportScale) {
+function collectLayers(nodes, originX, originY, parentOpacity, out, labelColor, colorCounter, exportScale, precomps) {
     return __awaiter(this, void 0, void 0, function* () {
         // Pre-filter: skip invisible / mask nodes early.
         const visible = nodes.filter(n => n.visible && !isMaskLayer(n) && getGeomBox(n) !== null);
-        // slots[] holds final LayerData in original node order.
-        // We allocate all slots upfront so parallel fills land in the right places.
-        // Complex containers get -1 (they recurse synchronously and push directly).
         const slots = new Array(visible.length).fill(null);
         const normalPending = [];
         const blurNodes = [];
+        const precompNodes = [];
         for (let i = 0; i < visible.length; i++) {
             const node = visible[i];
             const geom = getGeomBox(node);
@@ -167,13 +165,20 @@ function collectLayers(nodes, originX, originY, parentOpacity, out, labelColor, 
             const blendMode = ('blendMode' in node ? node.blendMode : 'NORMAL');
             const isContainer = (node.type === 'GROUP' || node.type === 'FRAME' ||
                 node.type === 'COMPONENT' || node.type === 'INSTANCE') && 'children' in node;
+            // Build meta once — used by both container and leaf paths.
+            const meta = { name: node.name, geom, totalOpacity, blendMode, labelColor };
             if (isContainer && !isPureVector(node)) {
-                // Complex container — must recurse; mark slot for later.
-                slots[i] = 'recurse';
+                // *-prefixed containers become precomps in AE.
+                if (node.name.startsWith('*')) {
+                    precompNodes.push({ slot: i, node, meta });
+                }
+                else {
+                    slots[i] = 'recurse';
+                }
                 continue;
             }
             // Leaf or pure-vector group → export as PNG.
-            const meta = { name: node.name, geom, totalOpacity, blendMode, labelColor };
+            // (meta already built above)
             if (hasOverflowEffect(node)) {
                 blurNodes.push({ slot: i, node, meta });
             }
@@ -217,7 +222,43 @@ function collectLayers(nodes, originX, originY, parentOpacity, out, labelColor, 
                 labelColor: meta.labelColor,
             };
         }
-        // ── Recurse into complex containers + flush results in original order ─────
+        // ── Build precomps from *-prefixed container nodes ────────────────────────
+        for (const { slot, node, meta } of precompNodes) {
+            const geom = meta.geom;
+            const cleanName = node.name.replace(/^\*+/, '').trim() || node.name;
+            // Assign a new label color for layers inside the precomp.
+            let subColor = (colorCounter.n % 16) + 1;
+            colorCounter.n++;
+            // Collect all children relative to the *node's own origin.
+            const subLayers = [];
+            yield collectLayers(node.children, geom.x, geom.y, // use *node as origin so sub-layers are comp-relative
+            meta.totalOpacity, subLayers, subColor, colorCounter, exportScale, precomps);
+            precomps.push({
+                name: cleanName,
+                width: geom.w,
+                height: geom.h,
+                relX: geom.x - originX,
+                relY: geom.y - originY,
+                opacity: meta.totalOpacity,
+                blendMode: meta.blendMode,
+                labelColor: meta.labelColor,
+                layers: subLayers,
+            });
+            // Place a precomp-ref entry in the parent's layer order.
+            slots[slot] = {
+                name: cleanName,
+                isPrecomp: true,
+                precompName: cleanName,
+                relX: geom.x - originX,
+                relY: geom.y - originY,
+                width: geom.w,
+                height: geom.h,
+                opacity: meta.totalOpacity,
+                blendMode: meta.blendMode,
+                labelColor: meta.labelColor,
+            };
+        }
+        // ── Recurse into non-* complex containers + flush all slots in order ──────
         for (let i = 0; i < visible.length; i++) {
             const slot = slots[i];
             if (slot === 'recurse') {
@@ -229,9 +270,9 @@ function collectLayers(nodes, originX, originY, parentOpacity, out, labelColor, 
                     thisGroupColor = (colorCounter.n % 16) + 1;
                     colorCounter.n++;
                 }
-                yield collectLayers(node.children, originX, originY, totalOpacity, out, thisGroupColor, colorCounter, exportScale);
+                yield collectLayers(node.children, originX, originY, totalOpacity, out, thisGroupColor, colorCounter, exportScale, precomps);
             }
-            else if (slot !== null) {
+            else if (slot !== null && slot !== 'precomp') {
                 out.push(slot);
             }
         }
@@ -286,7 +327,8 @@ function exportGroup(group_1) {
             ? group.children
             : [group];
         const colorCounter = { n: 0 };
-        yield collectLayers(frameChildren, geom.x, geom.y, 1, layers, 0, colorCounter, exportScale);
+        const precomps = [];
+        yield collectLayers(frameChildren, geom.x, geom.y, 1, layers, 0, colorCounter, exportScale, precomps);
         return {
             name: group.name,
             groupWidth: geom.w,
@@ -295,6 +337,7 @@ function exportGroup(group_1) {
             absoluteY: geom.y,
             exportScale,
             layers,
+            precomps,
         };
     });
 }

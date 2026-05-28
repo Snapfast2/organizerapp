@@ -28,7 +28,9 @@ let session: {
 // ── Save a single group's layer PNGs to disk; return the group with imagePaths ─
 async function saveGroupImages(group: any): Promise<any> {
   const safeName = (group.name || 'group').replace(/[^a-z0-9]/gi, '_');
-  const layers   = group.layers ?? [];
+
+  // Save flat layers.
+  const layers = group.layers ?? [];
   for (let i = 0; i < layers.length; i++) {
     const layer = layers[i];
     if (layer.pngBase64) {
@@ -39,6 +41,25 @@ async function saveGroupImages(group: any): Promise<any> {
       delete layer.pngBase64;
     }
   }
+
+  // Save layers inside each precomp group.
+  const precomps = group.precomps ?? [];
+  for (let pi = 0; pi < precomps.length; pi++) {
+    const pc       = precomps[pi];
+    const pcSafe   = (pc.name || `pc${pi}`).replace(/[^a-z0-9]/gi, '_');
+    const subLayers = pc.layers ?? [];
+    for (let si = 0; si < subLayers.length; si++) {
+      const sl = subLayers[si];
+      if (sl.pngBase64) {
+        const slName   = (sl.name || 'layer').replace(/[^a-z0-9]/gi, '_');
+        const filePath = path.join(TEMP_ASSETS_DIR, `pc_${pcSafe}_${slName}_${si}.png`);
+        await fs.writeFile(filePath, Buffer.from(sl.pngBase64, 'base64'));
+        sl.imagePath = filePath.replace(/\\/g, '/');
+        delete sl.pngBase64;
+      }
+    }
+  }
+
   return group;
 }
 

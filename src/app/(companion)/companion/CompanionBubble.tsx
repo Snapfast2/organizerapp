@@ -132,17 +132,90 @@ export default function CompanionBubble() {
             var grp = groups[g];
             var gw  = Math.max(Math.round(grp.groupWidth  || 100), 4);
             var gh  = Math.max(Math.round(grp.groupHeight || 100), 4);
+            var aeScale = (grp.exportScale === 2) ? 50 : 100;
 
             var precomp = app.project.items.addComp(
                 grp.name || ("Group " + g),
                 gw, gh, 1, 10, 30
             );
 
-            // layers[0] = bottommost in Figma.
-            // layers.add() inserts at top → adding bottom-first keeps correct order.
+            // ── Step 1: create sub-comps for any *-prefixed precomp groups ───
+            var precompMap = {};
+            var precompSpecs = grp.precomps || [];
+            for (var pi = 0; pi < precompSpecs.length; pi++) {
+                var ps  = precompSpecs[pi];
+                var psw = Math.max(Math.round(ps.width  || 100), 4);
+                var psh = Math.max(Math.round(ps.height || 100), 4);
+
+                var subComp = app.project.items.addComp(
+                    ps.name || ("Precomp " + pi),
+                    psw, psh, 1, 10, 30
+                );
+                precompMap[ps.name] = subComp;
+
+                var subLayers = ps.layers || [];
+                for (var si = 0; si < subLayers.length; si++) {
+                    var sl = subLayers[si];
+                    if (!sl.imagePath) continue;
+
+                    var sio = new ImportOptions(new File(sl.imagePath));
+                    if (!sio.canImportAs(ImportAsType.FOOTAGE)) continue;
+
+                    var sFootage = app.project.importFile(sio);
+                    sFootage.name = sl.name || ("Layer " + si);
+
+                    var sLayer = subComp.layers.add(sFootage);
+                    sLayer.name = sl.name || ("Layer " + si);
+
+                    var scx = sl.relX + sl.width  / 2;
+                    var scy = sl.relY + sl.height / 2;
+                    sLayer.property("Transform").property("Position").setValue([scx, scy]);
+                    sLayer.property("Transform").property("Scale").setValue([aeScale, aeScale]);
+
+                    var sOp = (sl.opacity !== undefined) ? sl.opacity : 1;
+                    sLayer.property("Transform").property("Opacity").setValue(sOp * 100);
+
+                    if (sl.blendMode && blendMap[sl.blendMode] !== undefined) {
+                        try { sLayer.blendingMode = blendMap[sl.blendMode]; } catch(e) {}
+                    }
+                    if (sl.labelColor !== undefined) {
+                        try { sLayer.label = sl.labelColor; } catch(e) {}
+                    }
+                }
+            }
+
+            // ── Step 2: add flat layers + precomp-ref layers to main comp ───
             var layers = grp.layers || [];
             for (var i = 0; i < layers.length; i++) {
                 var l = layers[i];
+
+                if (l.isPrecomp) {
+                    // Place the sub-comp as a precomp layer in the main comp.
+                    var subCompRef = precompMap[l.precompName];
+                    if (!subCompRef) continue;
+
+                    var pcLayer = precomp.layers.add(subCompRef);
+                    pcLayer.name = l.name || l.precompName;
+
+                    // Center the precomp at its correct position.
+                    var pccx = l.relX + l.width  / 2;
+                    var pccy = l.relY + l.height / 2;
+                    pcLayer.property("Transform").property("Position").setValue([pccx, pccy]);
+                    // Precomp layer itself always 100% — scaling happens inside.
+                    pcLayer.property("Transform").property("Scale").setValue([100, 100]);
+
+                    var pcOp = (l.opacity !== undefined) ? l.opacity : 1;
+                    pcLayer.property("Transform").property("Opacity").setValue(pcOp * 100);
+
+                    if (l.blendMode && blendMap[l.blendMode] !== undefined) {
+                        try { pcLayer.blendingMode = blendMap[l.blendMode]; } catch(e) {}
+                    }
+                    if (l.labelColor !== undefined) {
+                        try { pcLayer.label = l.labelColor; } catch(e) {}
+                    }
+                    continue;
+                }
+
                 if (!l.imagePath) continue;
 
                 var io = new ImportOptions(new File(l.imagePath));
@@ -159,10 +232,7 @@ export default function CompanionBubble() {
                 var cy = l.relY + l.height / 2;
                 aeLayer.property("Transform").property("Position").setValue([cx, cy]);
 
-                // Scale depends on export resolution chosen in the plugin:
-                //   1x export → 100% scale (pixel-perfect at comp size)
-                //   2x export → 50% scale (retina-sharp assets at correct visual size)
-                var aeScale = (g.exportScale === 2) ? 50 : 100;
+                // 1x export → 100% scale, 2x export → 50% scale.
                 aeLayer.property("Transform").property("Scale").setValue([aeScale, aeScale]);
 
                 var op = (l.opacity !== undefined) ? l.opacity : 1;
@@ -172,8 +242,6 @@ export default function CompanionBubble() {
                     try { aeLayer.blendingMode = blendMap[l.blendMode]; } catch(e) {}
                 }
 
-                // Label color — all layers from the same Figma group share a color.
-                // AE label 0 = None (layers not inside any group stay uncolored).
                 if (l.labelColor !== undefined) {
                     try { aeLayer.label = l.labelColor; } catch(e) {}
                 }

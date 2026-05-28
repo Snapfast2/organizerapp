@@ -200,16 +200,17 @@ export default function CompanionBubble() {
             "HUE": BlendingMode.HUE, "SATURATION": BlendingMode.SATURATION,
             "COLOR": BlendingMode.COLOR, "LUMINOSITY": BlendingMode.LUMINOSITY
           };
-          function placeLayer(comp, ld, af, sc) {
+          function placeLayer(comp, ld, af, exportScale) {
             var ft = importFile(ld.imagePath);
             if (!ft) return;
             ft.name = ld.name || ft.name;
             ft.parentFolder = af;
             var al = comp.layers.add(ft);
             al.name = ld.name || al.name;
-            var lw = ld.width * sc, lh = ld.height * sc;
-            al.property("Position").setValue([(ld.relX * sc) + lw/2, (ld.relY * sc) + lh/2]);
-            if (sc !== 1) al.property("Scale").setValue([sc*100, sc*100]);
+            // Position uses design coordinates (1x), AE anchor is center
+            al.property("Position").setValue([ld.relX + ld.width/2, ld.relY + ld.height/2]);
+            // Scale: 2x export = image is 2x size, display at 50%
+            if (exportScale === 2) al.property("Scale").setValue([50, 50]);
             if (typeof ld.opacity === "number" && ld.opacity < 1) al.property("Opacity").setValue(ld.opacity * 100);
             if (ld.blendMode && bm[ld.blendMode]) al.blendingMode = bm[ld.blendMode];
           }
@@ -218,40 +219,47 @@ export default function CompanionBubble() {
           assetsFolder.parentFolder = figmaFolder;
           var payload = ${payloadStr};
           var groups = payload.groups || [];
+          var lastComp = null;
           for (var g = 0; g < groups.length; g++) {
             var gr = groups[g];
-            var sc = (gr.exportScale === 2) ? 0.5 : 1;
-            var cw = Math.round(gr.groupWidth * sc) || 1920;
-            var ch = Math.round(gr.groupHeight * sc) || 1080;
+            var es = gr.exportScale || 1;
+            // Comp dimensions are always design size (1x)
+            var cw = Math.round(gr.groupWidth) || 1920;
+            var ch = Math.round(gr.groupHeight) || 1080;
             var pcMap = {};
             var pcs = gr.precomps || [];
             for (var pi = 0; pi < pcs.length; pi++) {
               var pc = pcs[pi];
-              var pw = Math.round(pc.width * sc) || 100;
-              var ph = Math.round(pc.height * sc) || 100;
+              var pw = Math.round(pc.width) || 100;
+              var ph = Math.round(pc.height) || 100;
               var pcComp = app.project.items.addComp(pc.name || "Precomp_"+pi, pw, ph, 1, 10, 30);
               pcComp.parentFolder = figmaFolder;
               var pcL = pc.layers || [];
-              for (var si = pcL.length-1; si >= 0; si--) placeLayer(pcComp, pcL[si], assetsFolder, sc);
+              // Forward: Figma children[0]=bottom, AE layers.add=top → correct stacking
+              for (var si = 0; si < pcL.length; si++) placeLayer(pcComp, pcL[si], assetsFolder, es);
               pcMap[pc.name] = pcComp;
             }
             var mc = app.project.items.addComp(gr.name || "Figma_"+g, cw, ch, 1, 10, 30);
             mc.parentFolder = figmaFolder;
             var ls = gr.layers || [];
-            for (var i = ls.length-1; i >= 0; i--) {
+            // Forward iteration: first layer (bottom) added first, last (top) ends up on top
+            for (var i = 0; i < ls.length; i++) {
               var l = ls[i];
               if (l.isPrecomp && l.precompName && pcMap[l.precompName]) {
                 var pl = mc.layers.add(pcMap[l.precompName]);
                 pl.name = l.precompName;
-                var plw = l.width*sc, plh = l.height*sc;
-                pl.property("Position").setValue([(l.relX*sc)+plw/2, (l.relY*sc)+plh/2]);
+                pl.property("Position").setValue([l.relX + l.width/2, l.relY + l.height/2]);
+                if (es === 2) pl.property("Scale").setValue([50, 50]);
                 if (typeof l.opacity==="number" && l.opacity<1) pl.property("Opacity").setValue(l.opacity*100);
                 if (l.blendMode && bm[l.blendMode]) pl.blendingMode = bm[l.blendMode];
               } else {
-                placeLayer(mc, l, assetsFolder, sc);
+                placeLayer(mc, l, assetsFolder, es);
               }
             }
+            lastComp = mc;
           }
+          // Open the last comp in viewer
+          if (lastComp) lastComp.openInViewer();
           return "Built " + groups.length + " comps";
         })();
       `;

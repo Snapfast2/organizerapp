@@ -70,7 +70,9 @@
 }
 
 .cowIcon {
-  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
   flex-shrink: 0;
   filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.5));

@@ -554,10 +554,10 @@ ipcMain.on('popup:move', async (_event, { filePath, destDir }: { filePath: strin
     fs.renameSync(filePath, destPath);
     // Notify main window to refresh if it's showing the dest folder
     mainWindow?.webContents.send('fs:refresh');
-    new Notification({ title: 'FileOrganizer', body: `Archivo movido a ${path.basename(destDir)}` }).show();
+    new Notification({ title: 'MooMotion', body: `Archivo movido a ${path.basename(destDir)}` }).show();
   } catch (err) {
     console.error('popup:move error', err);
-    new Notification({ title: 'FileOrganizer Error', body: `No se pudo mover el archivo` }).show();
+    new Notification({ title: 'MooMotion Error', body: `No se pudo mover el archivo` }).show();
   }
   activePopup?.close();
 });

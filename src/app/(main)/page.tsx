@@ -949,8 +949,10 @@ export default function FileOrgApp() {
 
           {/* Center: icon + name */}
           <div className="titlebar-center">
-            <FolderOpen size={14} color="var(--accent)" strokeWidth={2.5} />
-            <span>FileOrganizer</span>
+            <svg viewBox="0 -1.9 40 40" xmlns="http://www.w3.org/2000/svg" style={{ width: 14, height: 14, fill: 'var(--accent)', flexShrink: 0 }}>
+              <path d="M34,6.2h-2v-4c0-2.2-1.4-2.9-3.1-1.4l-6.5,5.4h-4.8l-6.5-5.4C9.4,0.4,8,1,8,3.2v4H6a6,6,0,0,0,0,12h.4l1.3,6.4A6.694,6.694,0,0,0,6,29.2a6.957,6.957,0,0,0,7,7h14a6.957,6.957,0,0,0,7-7,7.069,7.069,0,0,0-1.7-4.6l1.3-6.4h.4a6,6,0,0,0,0-12Zm-7,16H11.3l-.8-4H12a2,2,0,0,0,0-4h-2.2a4.457,4.457,0,0,1,.8-2.6A4.154,4.154,0,0,1,14,10.2h12a4.293,4.293,0,0,1,3.4,1.4,3.849,3.849,0,0,1,.8,2.6H28a2,2,0,0,0,0,4h1.5l-.8,4Zm-23-10a2.006,2.006,0,0,1,2-2h.8a8.77,8.77,0,0,0-1,4h0A2.046,2.046,0,0,1,4,12.2Zm23,20h-1v-2a2,2,0,0,0-4,0v2h-4v-2a2,2,0,0,0-4,0v2h-1a3,3,0,0,1,0-6h14a3,3,0,0,1,0,6Zm7.2-18h0a7.674,7.674,0,0,0-1-4h.8a2.006,2.006,0,0,1,2,2A2.046,2.046,0,0,1,34.2,14.2Z"/>
+            </svg>
+            <span>MooMotion</span>
           </div>
 
           {/* Right: window controls */}
@@ -970,7 +972,7 @@ export default function FileOrgApp() {
 
       {/* â”€â”€â”€ HEADER â”€â”€â”€ */}
       <header className="header">
-        {!isElectron && <div className="header-logo"><FolderOpen size={20} color="var(--accent)" strokeWidth={2.5} /> FileOrganizer</div>}
+        {!isElectron && <div className="header-logo"><FolderOpen size={20} color="var(--accent)" strokeWidth={2.5} /> MooMotion</div>}
         <div className="header-search">
           <button 
             className="btn btn-ghost btn-icon" 

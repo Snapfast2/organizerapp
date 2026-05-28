@@ -126,6 +126,7 @@ export default function CompanionBubble() {
   const [realActiveProject, setRealActiveProject] = useState<string | null>(null);
   const [isUntracked, setIsUntracked] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
   const [recents, setRecents] = useState<RecentFile[]>([]);
   const [showRecents, setShowRecents] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
@@ -374,11 +375,14 @@ export default function CompanionBubble() {
         })
       });
       const data = await res.json();
-      if (res.ok && data.path) {
-        const scriptCode = `app.open(new File("${data.path.replace(/\\/g, '/')}"));`;
+      if (res.ok && (data.newAepPath || data.path)) {
+        const targetPath = data.newAepPath || data.path;
+        const scriptCode = `app.open(new File("${targetPath.replace(/\\/g, '/')}"));`;
         api?.companion?.executeScript?.(scriptCode);
         setRealActiveProject(null);
         setIsUntracked(false);
+        setExportSuccess(true);
+        setTimeout(() => setExportSuccess(false), 3000);
       }
     } catch (e) {
       console.error(e);
@@ -438,15 +442,16 @@ export default function CompanionBubble() {
                 </div>
                 <button 
                   onClick={handleSaveToHub}
-                  disabled={isMigrating}
+                  disabled={isMigrating || exportSuccess}
                   style={{
-                    background: '#18A0FB', color: 'white', border: 'none',
+                    background: exportSuccess ? '#0EC900' : '#18A0FB', color: 'white', border: 'none',
                     borderRadius: 4, padding: '4px 8px', fontSize: 10,
-                    cursor: isMigrating ? 'not-allowed' : 'pointer',
-                    marginTop: 4, fontWeight: 600
+                    cursor: (isMigrating || exportSuccess) ? 'not-allowed' : 'pointer',
+                    marginTop: 4, fontWeight: 600,
+                    transition: 'background 0.2s'
                   }}
                 >
-                  {isMigrating ? 'Moviendo...' : '📥 Organizar en el Hub'}
+                  {exportSuccess ? '✅ Exportado al Hub' : (isMigrating ? 'Moviendo...' : '📥 Organizar en el Hub')}
                 </button>
               </div>
             )}

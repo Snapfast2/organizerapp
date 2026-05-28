@@ -1759,3 +1759,9 @@ body.popup-page [class*="nextjs"] {
   background-color: var(--bg-hover) !important;
   color: var(--accent) !important;
 }
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}

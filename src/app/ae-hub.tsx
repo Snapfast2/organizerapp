@@ -632,6 +632,16 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
                           >
                             {project.name}
                           </span>
+                          {Date.now() - new Date(project.lastOpened || 0).getTime() < 120000 && (
+                            <span style={{ 
+                              background: 'var(--accent-dim)', color: 'var(--accent)',
+                              fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 10,
+                              textTransform: 'uppercase', letterSpacing: '0.5px',
+                              animation: 'pulse 2s infinite'
+                            }}>
+                              NUEVO
+                            </span>
+                          )}
                           {!project.exists && (
                             <span style={{ 
                               background: 'var(--danger-bg)', 

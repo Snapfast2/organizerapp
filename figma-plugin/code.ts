@@ -6,7 +6,7 @@ function isMaskLayer(node: SceneNode): boolean {
   return 'isMask' in node && (node as any).isMask === true;
 }
 
-/** Pure geometry bounds — no effects. Used for group origin calculations. */
+/** Geometry bounds (absoluteBoundingBox). Used for positions and comp sizes. */
 function getGeomBox(node: SceneNode): { x: number; y: number; w: number; h: number } | null {
   const box = node.absoluteBoundingBox;
   if (!box) return null;
@@ -14,27 +14,23 @@ function getGeomBox(node: SceneNode): { x: number; y: number; w: number; h: numb
 }
 
 /**
- * Rendered bounds including blur/shadow overflow.
- * Used for image sizes and positions so blurred layers aren't clipped.
- * Falls back to geometry bounds if render bounds are unavailable.
+ * Export a node as a 2x PNG using its OWN geometry bounds (useAbsoluteBounds).
+ *
+ * WHY useAbsoluteBounds:
+ *   absoluteRenderBounds is clipped to the parent frame's boundary if the
+ *   parent has clipsContent=true (standard for mobile UI frames). Without this
+ *   flag, assets that extend beyond the frame get silently cropped in the PNG.
+ *   useAbsoluteBounds bypasses the parent clip and captures the full asset.
+ *
+ * The downside: blur/glow effects that overflow the geometry are not captured.
+ * This is acceptable — content integrity > glow overflow in animation work.
  */
-function getRenderBox(node: SceneNode): { x: number; y: number; w: number; h: number } | null {
-  const r = (node as any).absoluteRenderBounds as
-    | { x: number; y: number; width: number; height: number }
-    | null | undefined;
-  if (r && r.width > 0 && r.height > 0) {
-    return { x: r.x, y: r.y, w: r.width, h: r.height };
-  }
-  return getGeomBox(node);
-}
-
 async function exportPNG(node: SceneNode): Promise<Uint8Array | null> {
   try {
-    // No useAbsoluteBounds — Figma exports the full render area (incl. blur/shadow).
-    // getRenderBox() gives matching coords so positions stay correct in AE.
     return await node.exportAsync({
       format: 'PNG',
-      constraint: { type: 'SCALE', value: 2 }, // 2x retina; AE layer set to 50%
+      constraint: { type: 'SCALE', value: 2 },
+      useAbsoluteBounds: true,
     });
   } catch (e) {
     console.error('Export failed for', node.name, e);
@@ -68,14 +64,16 @@ function isPureVector(node: SceneNode): boolean {
 interface LayerData {
   name: string;
   pngBase64: string;
+  /** Top-left of the node's geometry relative to the group/frame origin. */
   relX: number;
   relY: number;
+  /** Geometry width/height — matches the exported PNG at 1x (PNG is 2x). */
   width: number;
   height: number;
   opacity: number;
   blendMode: string;
-  /** AE label color index (0 = none, 1-16 = AE colors). All layers from the
-   *  same Figma group share the same color so they're visually grouped in AE. */
+  /** AE label color (0=none, 1-16). All layers of the same top-level Figma
+   *  group share the same color so they're visually grouped in AE. */
   labelColor: number;
 }
 
@@ -91,8 +89,9 @@ interface GroupExport {
 // ─── Recursive flat layer collector ───────────────────────────────────────────
 
 /**
- * @param labelColor   AE label color index for the current group (0 = none).
- * @param colorCounter Shared counter — incremented each time we enter a new group.
+ * @param labelColor   AE label color for the current group (0 = none).
+ * @param colorCounter Shared counter — incremented each time a new top-level
+ *                     group is entered (sub-groups inherit the parent color).
  */
 async function collectLayers(
   nodes: readonly SceneNode[],
@@ -103,16 +102,15 @@ async function collectLayers(
   labelColor: number,
   colorCounter: { n: number },
 ): Promise<void> {
-  // Figma children[0] = bottommost, children[n-1] = topmost.
-  // AE layers.add() always inserts at index 1 (top), pushing others down.
-  // Iterating bottom→top means the last item added (Figma top) stays at AE index 1. ✓
+  // Figma children[0] = bottommost layer, children[n-1] = topmost.
+  // AE layers.add() inserts at index 1 (top), so adding bottom→top means
+  // the last-added (topmost) stays at AE index 1 = correct stacking order.
   for (const node of nodes) {
     if (!node.visible) continue;
     if (isMaskLayer(node)) continue;
 
-    const geom   = getGeomBox(node);
-    const render = getRenderBox(node);
-    if (!geom || !render) continue;
+    const geom = getGeomBox(node);
+    if (!geom) continue;
 
     const nodeOpacity  = 'opacity'   in node ? (node as any).opacity   as number : 1;
     const totalOpacity = parentOpacity * nodeOpacity;
@@ -133,21 +131,19 @@ async function collectLayers(
         out.push({
           name: node.name,
           pngBase64: figma.base64Encode(bytes),
-          relX: render.x - originX,
-          relY: render.y - originY,
-          width: render.w,
-          height: render.h,
+          relX:   geom.x - originX,
+          relY:   geom.y - originY,
+          width:  geom.w,
+          height: geom.h,
           opacity: totalOpacity,
           blendMode,
           labelColor,
         });
       } else {
-        // ── Recurse — only assign a NEW color at the outermost group level ────
-        // Sub-groups inherit the parent group's color so every layer that
-        // belongs to the same visual unit shares ONE color swatch in AE.
+        // ── Recurse — assign a new color only at the outermost group level ───
         let thisGroupColor = labelColor;
         if (labelColor === 0) {
-          thisGroupColor = (colorCounter.n % 16) + 1; // cycles 1-16
+          thisGroupColor = (colorCounter.n % 16) + 1;
           colorCounter.n++;
         }
         await collectLayers(
@@ -168,10 +164,10 @@ async function collectLayers(
     out.push({
       name: node.name,
       pngBase64: figma.base64Encode(bytes),
-      relX: render.x - originX,
-      relY: render.y - originY,
-      width: render.w,
-      height: render.h,
+      relX:   geom.x - originX,
+      relY:   geom.y - originY,
+      width:  geom.w,
+      height: geom.h,
       opacity: totalOpacity,
       blendMode,
       labelColor,
@@ -215,8 +211,7 @@ async function exportGroup(group: SceneNode): Promise<GroupExport | null> {
           pngBase64: figma.base64Encode(bytes),
           relX: 0, relY: 0,
           width: geom.w, height: geom.h,
-          opacity: 1,
-          blendMode: 'NORMAL',
+          opacity: 1, blendMode: 'NORMAL',
           labelColor: 0,
         });
       } catch (e) {

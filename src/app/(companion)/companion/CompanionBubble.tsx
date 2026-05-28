@@ -154,13 +154,13 @@ export default function CompanionBubble() {
                 var aeLayer = precomp.layers.add(footage);
                 aeLayer.name = l.name || ("Layer " + i);
 
-                // relX/relY = top-left relative to group origin.
-                // AE Position = center = relX + w/2, relY + h/2.
-                var cx = l.relX + (l.width  / 2);
-                var cy = l.relY + (l.height / 2);
+                // Position = geometry center in comp space.
+                var cx = l.relX + l.width  / 2;
+                var cy = l.relY + l.height / 2;
                 aeLayer.property("Transform").property("Position").setValue([cx, cy]);
 
-                // 2x PNG → 50% scale for correct 1x logical size.
+                // PNG exported at 2x → 50% scale = correct 1x display size.
+                // Anchor stays at default center so position = visual center.
                 aeLayer.property("Transform").property("Scale").setValue([50, 50]);
 
                 var op = (l.opacity !== undefined) ? l.opacity : 1;

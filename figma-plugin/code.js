@@ -13,7 +13,7 @@ figma.showUI(__html__, { width: 320, height: 500 });
 function isMaskLayer(node) {
     return 'isMask' in node && node.isMask === true;
 }
-/** Pure geometry bounds — no effects. Used for group origin calculations. */
+/** Geometry bounds (absoluteBoundingBox). Used for positions and comp sizes. */
 function getGeomBox(node) {
     const box = node.absoluteBoundingBox;
     if (!box)
@@ -21,25 +21,24 @@ function getGeomBox(node) {
     return { x: box.x, y: box.y, w: box.width, h: box.height };
 }
 /**
- * Rendered bounds including blur/shadow overflow.
- * Used for image sizes and positions so blurred layers aren't clipped.
- * Falls back to geometry bounds if render bounds are unavailable.
+ * Export a node as a 2x PNG using its OWN geometry bounds (useAbsoluteBounds).
+ *
+ * WHY useAbsoluteBounds:
+ *   absoluteRenderBounds is clipped to the parent frame's boundary if the
+ *   parent has clipsContent=true (standard for mobile UI frames). Without this
+ *   flag, assets that extend beyond the frame get silently cropped in the PNG.
+ *   useAbsoluteBounds bypasses the parent clip and captures the full asset.
+ *
+ * The downside: blur/glow effects that overflow the geometry are not captured.
+ * This is acceptable — content integrity > glow overflow in animation work.
  */
-function getRenderBox(node) {
-    const r = node.absoluteRenderBounds;
-    if (r && r.width > 0 && r.height > 0) {
-        return { x: r.x, y: r.y, w: r.width, h: r.height };
-    }
-    return getGeomBox(node);
-}
 function exportPNG(node) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            // No useAbsoluteBounds — Figma exports the full render area (incl. blur/shadow).
-            // getRenderBox() gives matching coords so positions stay correct in AE.
             return yield node.exportAsync({
                 format: 'PNG',
-                constraint: { type: 'SCALE', value: 2 }, // 2x retina; AE layer set to 50%
+                constraint: { type: 'SCALE', value: 2 },
+                useAbsoluteBounds: true,
             });
         }
         catch (e) {
@@ -78,22 +77,22 @@ function isPureVector(node) {
 }
 // ─── Recursive flat layer collector ───────────────────────────────────────────
 /**
- * @param labelColor   AE label color index for the current group (0 = none).
- * @param colorCounter Shared counter — incremented each time we enter a new group.
+ * @param labelColor   AE label color for the current group (0 = none).
+ * @param colorCounter Shared counter — incremented each time a new top-level
+ *                     group is entered (sub-groups inherit the parent color).
  */
 function collectLayers(nodes, originX, originY, parentOpacity, out, labelColor, colorCounter) {
     return __awaiter(this, void 0, void 0, function* () {
-        // Figma children[0] = bottommost, children[n-1] = topmost.
-        // AE layers.add() always inserts at index 1 (top), pushing others down.
-        // Iterating bottom→top means the last item added (Figma top) stays at AE index 1. ✓
+        // Figma children[0] = bottommost layer, children[n-1] = topmost.
+        // AE layers.add() inserts at index 1 (top), so adding bottom→top means
+        // the last-added (topmost) stays at AE index 1 = correct stacking order.
         for (const node of nodes) {
             if (!node.visible)
                 continue;
             if (isMaskLayer(node))
                 continue;
             const geom = getGeomBox(node);
-            const render = getRenderBox(node);
-            if (!geom || !render)
+            if (!geom)
                 continue;
             const nodeOpacity = 'opacity' in node ? node.opacity : 1;
             const totalOpacity = parentOpacity * nodeOpacity;
@@ -111,22 +110,20 @@ function collectLayers(nodes, originX, originY, parentOpacity, out, labelColor, 
                     out.push({
                         name: node.name,
                         pngBase64: figma.base64Encode(bytes),
-                        relX: render.x - originX,
-                        relY: render.y - originY,
-                        width: render.w,
-                        height: render.h,
+                        relX: geom.x - originX,
+                        relY: geom.y - originY,
+                        width: geom.w,
+                        height: geom.h,
                         opacity: totalOpacity,
                         blendMode,
                         labelColor,
                     });
                 }
                 else {
-                    // ── Recurse — only assign a NEW color at the outermost group level ────
-                    // Sub-groups inherit the parent group's color so every layer that
-                    // belongs to the same visual unit shares ONE color swatch in AE.
+                    // ── Recurse — assign a new color only at the outermost group level ───
                     let thisGroupColor = labelColor;
                     if (labelColor === 0) {
-                        thisGroupColor = (colorCounter.n % 16) + 1; // cycles 1-16
+                        thisGroupColor = (colorCounter.n % 16) + 1;
                         colorCounter.n++;
                     }
                     yield collectLayers(node.children, originX, originY, totalOpacity, out, thisGroupColor, colorCounter);
@@ -140,10 +137,10 @@ function collectLayers(nodes, originX, originY, parentOpacity, out, labelColor, 
             out.push({
                 name: node.name,
                 pngBase64: figma.base64Encode(bytes),
-                relX: render.x - originX,
-                relY: render.y - originY,
-                width: render.w,
-                height: render.h,
+                relX: geom.x - originX,
+                relY: geom.y - originY,
+                width: geom.w,
+                height: geom.h,
                 opacity: totalOpacity,
                 blendMode,
                 labelColor,
@@ -187,8 +184,7 @@ function exportGroup(group) {
                         pngBase64: figma.base64Encode(bytes),
                         relX: 0, relY: 0,
                         width: geom.w, height: geom.h,
-                        opacity: 1,
-                        blendMode: 'NORMAL',
+                        opacity: 1, blendMode: 'NORMAL',
                         labelColor: 0,
                     });
                 }

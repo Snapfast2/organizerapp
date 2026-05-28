@@ -224,7 +224,7 @@ export default function CompanionBubble() {
   const isDraggingRef = useRef(false);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    dragRef.current = { startX: e.clientX, startY: e.clientY, dragging: false };
+    dragRef.current = { startX: e.screenX, startY: e.screenY, dragging: false };
     e.currentTarget.setPointerCapture(e.pointerId);
     // Immediately lock click-through OFF when pointer is captured
     api?.companion?.setClickThrough?.(false);
@@ -233,8 +233,8 @@ export default function CompanionBubble() {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
-    const totalDx = e.clientX - dragRef.current.startX;
-    const totalDy = e.clientY - dragRef.current.startY;
+    const totalDx = e.screenX - dragRef.current.startX;
+    const totalDy = e.screenY - dragRef.current.startY;
 
     if (!dragRef.current.dragging) {
       if (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5) {

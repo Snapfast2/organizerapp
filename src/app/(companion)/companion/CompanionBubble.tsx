@@ -177,31 +177,56 @@ export default function CompanionBubble() {
       setFigmaPayload(null);
 
       const scriptCode = `
-        function getFolder(n) {
-          for (var i = 1; i <= app.project.numItems; i++) {
-            if (app.project.item(i) instanceof FolderItem && app.project.item(i).name === n) return app.project.item(i);
+        function getFolder(n, parent) {
+          var p = parent || app.project;
+          for (var i = 1; i <= p.numItems; i++) {
+            if (p.item(i) instanceof FolderItem && p.item(i).name === n) return p.item(i);
           }
-          var f = app.project.items.addFolder(n);
-          return f;
+          if (parent) return parent.items.addFolder(n);
+          return p.items.addFolder(n);
         }
         var figmaFolder = getFolder("Figma Imports");
         var payload = ${payloadStr};
+        var groups = payload.groups || [];
         var imported = 0;
-        for (var i = 0; i < payload.layers.length; i++) {
-          try {
-            var layer = payload.layers[i];
-            var filePath = layer.localPath || layer.path;
-            if (!filePath) continue;
-            var f = new File(filePath);
-            if (!f.exists) continue;
-            var io = new ImportOptions(f);
-            var item = app.project.importFile(io);
-            item.name = layer.name || item.name;
-            item.parentFolder = figmaFolder;
-            imported++;
-          } catch(e) {}
+        for (var g = 0; g < groups.length; g++) {
+          var group = groups[g];
+          var layers = group.layers || [];
+          for (var i = 0; i < layers.length; i++) {
+            try {
+              var layer = layers[i];
+              var filePath = layer.imagePath || layer.localPath || layer.path;
+              if (!filePath) continue;
+              var f = new File(filePath);
+              if (!f.exists) continue;
+              var io = new ImportOptions(f);
+              var item = app.project.importFile(io);
+              item.name = layer.name || item.name;
+              item.parentFolder = figmaFolder;
+              imported++;
+            } catch(e) {}
+          }
+          var precomps = group.precomps || [];
+          for (var p = 0; p < precomps.length; p++) {
+            var pc = precomps[p];
+            var pcLayers = pc.layers || [];
+            for (var s = 0; s < pcLayers.length; s++) {
+              try {
+                var sl = pcLayers[s];
+                var slPath = sl.imagePath || sl.localPath || sl.path;
+                if (!slPath) continue;
+                var sf = new File(slPath);
+                if (!sf.exists) continue;
+                var sio = new ImportOptions(sf);
+                var sitem = app.project.importFile(sio);
+                sitem.name = sl.name || sitem.name;
+                sitem.parentFolder = figmaFolder;
+                imported++;
+              } catch(e) {}
+            }
+          }
         }
-        "Imported " + imported + " of " + payload.layers.length + " layers";
+        "Imported " + imported + " layers from " + groups.length + " groups";
       `;
       api?.companion?.executeScript?.(scriptCode);
     } catch (err) {

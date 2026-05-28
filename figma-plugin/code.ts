@@ -35,29 +35,21 @@ function hasOverflowEffect(node: SceneNode): boolean {
 }
 
 /**
- * Exports a node as a 2x PNG and returns the PNG bytes + the bounding box
- * that corresponds to those pixels (for correct positioning in AE).
- *
- * Strategy:
- *  - Normal nodes  → useAbsoluteBounds:true  (geometry bounds, no parent clip)
- *  - Blur/shadow   → temporarily disable clipsContent on all ancestor frames,
- *                    export at full render bounds (captures the glow/blur
- *                    overflow), then restore clipsContent.
- *
- * This handles both:
- *   1. Assets that overflow the parent frame (fixed by useAbsoluteBounds)
- *   2. Blur/glow effects that extend beyond geometry (fixed by clip-disable)
+ * Exports a node as a PNG and returns bytes + bounding box.
+ * exportScale: 1 = 1x fast (AE 100%), 2 = 2x sharp (AE 50%).
  */
-async function exportNodeFull(node: SceneNode): Promise<{ bytes: Uint8Array; box: Box } | null> {
+async function exportNodeFull(
+  node: SceneNode,
+  exportScale: 1 | 2 = 1,
+): Promise<{ bytes: Uint8Array; box: Box } | null> {
   const geom = getGeomBox(node);
   if (!geom) return null;
 
   if (!hasOverflowEffect(node)) {
-    // No blur/shadow — export at geometry bounds, safe from parent clipping.
     try {
       const bytes = await node.exportAsync({
         format: 'PNG',
-        constraint: { type: 'SCALE', value: 1 }, // 1x: 4× faster, AE uses Scale 100%
+        constraint: { type: 'SCALE', value: exportScale },
         useAbsoluteBounds: true,
       });
       return { bytes, box: geom };
@@ -85,7 +77,7 @@ async function exportNodeFull(node: SceneNode): Promise<{ bytes: Uint8Array; box
     const renderBox = getRenderBox(node) ?? geom;
     const bytes = await node.exportAsync({
       format: 'PNG',
-      constraint: { type: 'SCALE', value: 1 }, // 1x: 4× faster, AE uses Scale 100%
+      constraint: { type: 'SCALE', value: exportScale },
       // No useAbsoluteBounds → Figma exports at render bounds (full blur).
     });
     return { bytes, box: renderBox };
@@ -143,6 +135,8 @@ interface GroupExport {
   groupHeight: number;
   absoluteX: number;
   absoluteY: number;
+  /** 1 = 1x export (AE scale 100%), 2 = 2x export (AE scale 50%) */
+  exportScale: 1 | 2;
   layers: LayerData[];
 }
 
@@ -168,6 +162,7 @@ async function collectLayers(
   out: LayerData[],
   labelColor: number,
   colorCounter: { n: number },
+  exportScale: 1 | 2,
 ): Promise<void> {
   // Pre-filter: skip invisible / mask nodes early.
   const visible = (nodes as SceneNode[]).filter(
@@ -213,7 +208,7 @@ async function collectLayers(
     if (hasOverflowEffect(node)) {
       blurNodes.push({ slot: i, node, meta });
     } else {
-      normalPending.push({ slot: i, promise: exportNodeFull(node), meta });
+      normalPending.push({ slot: i, promise: exportNodeFull(node, exportScale), meta });
     }
   }
 
@@ -238,7 +233,7 @@ async function collectLayers(
 
   // ── Sequential blur exports ───────────────────────────────────────────────
   for (const { slot, node, meta } of blurNodes) {
-    const result = await exportNodeFull(node);
+    const result = await exportNodeFull(node, exportScale);
     if (!result) continue;
     slots[slot] = {
       name:       meta.name,
@@ -272,6 +267,7 @@ async function collectLayers(
         out,
         thisGroupColor,
         colorCounter,
+        exportScale,
       );
     } else if (slot !== null) {
       out.push(slot);
@@ -281,7 +277,7 @@ async function collectLayers(
 
 // ─── Top-level export ─────────────────────────────────────────────────────────
 
-async function exportGroup(group: SceneNode): Promise<GroupExport | null> {
+async function exportGroup(group: SceneNode, exportScale: 1 | 2 = 1): Promise<GroupExport | null> {
   const geom = getGeomBox(group);
   if (!geom) return null;
 
@@ -307,7 +303,7 @@ async function exportGroup(group: SceneNode): Promise<GroupExport | null> {
         if (hasEffects) tmp.effects = f.effects  as Effect[];
         if (f.cornerRadius !== figma.mixed) tmp.cornerRadius = f.cornerRadius;
 
-        const bytes = await tmp.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 2 } });
+        const bytes = await tmp.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: exportScale } });
         tmp.remove();
 
         layers.push({
@@ -329,7 +325,7 @@ async function exportGroup(group: SceneNode): Promise<GroupExport | null> {
     : [group];
 
   const colorCounter = { n: 0 };
-  await collectLayers(frameChildren, geom.x, geom.y, 1, layers, 0, colorCounter);
+  await collectLayers(frameChildren, geom.x, geom.y, 1, layers, 0, colorCounter, exportScale);
 
   return {
     name: group.name,
@@ -337,6 +333,7 @@ async function exportGroup(group: SceneNode): Promise<GroupExport | null> {
     groupHeight: geom.h,
     absoluteX: geom.x,
     absoluteY: geom.y,
+    exportScale,
     layers,
   };
 }
@@ -353,10 +350,9 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
 
-  // ── Streaming export: one group at a time ────────────────────────────────
-  // Each group is sent to the UI (and immediately to the server) as soon as
-  // it finishes exporting. This keeps plugin memory bounded to ~1 group at a
-  // time instead of accumulating every PNG before sending.
+  // Read scale preference from UI (1 or 2, default 1).
+  const exportScale: 1 | 2 = msg.scale === 2 ? 2 : 1;
+
   figma.ui.postMessage({
     type: 'export-start',
     total: selection.length,
@@ -370,7 +366,7 @@ figma.ui.onmessage = async (msg) => {
     });
 
     try {
-      const result = await exportGroup(node);
+      const result = await exportGroup(node, exportScale);
       if (result) {
         figma.ui.postMessage({ type: 'export-group', group: result });
       }

@@ -195,7 +195,55 @@
     .status-msg.ok  { color: var(--green); }
     .status-msg.err { color: var(--red); }
 
-    /* ── Hint ── */
+    /* ── Quality toggle ── */
+    .quality-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2px;
+    }
+
+    .quality-label {
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+
+    .toggle-pill {
+      display: flex;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(74,222,128,0.15);
+      border-radius: 8px;
+      overflow: hidden;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .toggle-option {
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      letter-spacing: 0.02em;
+    }
+
+    .toggle-option.active {
+      background: var(--green-glow);
+      color: var(--green-dim);
+      box-shadow: 0 0 10px rgba(74,222,128,0.1);
+    }
+
+    .toggle-hint {
+      font-size: 9.5px;
+      color: rgba(107,114,128,0.55);
+      text-align: right;
+    }
+
     .hint {
       font-size: 10px;
       color: rgba(107, 114, 128, 0.6);
@@ -223,7 +271,16 @@
       <div class="status-dot" id="dot"></div>
     </div>
 
-    <!-- Export button -->
+    <!-- Quality toggle -->
+  <div class="quality-row">
+    <span class="quality-label">Export quality</span>
+    <div class="toggle-pill">
+      <button class="toggle-option active" id="opt-1x" onclick="setScale(1)">1×</button>
+      <button class="toggle-option"        id="opt-2x" onclick="setScale(2)">2×</button>
+    </div>
+  </div>
+  <div class="toggle-hint" id="scale-hint">Fast · AE scale 100%</div>
+
     <button class="export-btn" id="export-btn">
       Export to Companion →
     </button>
@@ -257,8 +314,23 @@
     const progressLabel= document.getElementById('progress-label');
     const progressPct  = document.getElementById('progress-pct');
     const statusEl     = document.getElementById('status');
+    const opt1x        = document.getElementById('opt-1x');
+    const opt2x        = document.getElementById('opt-2x');
+    const scaleHint    = document.getElementById('scale-hint');
 
     const SERVER = 'http://localhost:3000/api/ae-figma';
+
+    // ── Quality toggle ─────────────────────────────────────────────────────────
+    let exportScale = 1; // 1 or 2
+
+    function setScale(s) {
+      exportScale = s;
+      opt1x.classList.toggle('active', s === 1);
+      opt2x.classList.toggle('active', s === 2);
+      scaleHint.textContent = s === 1
+        ? 'Fast · AE scale 100%'
+        : 'Sharp · AE scale 50%';
+    }
 
     // ── UI helpers ─────────────────────────────────────────────────────────────
     function setStatus(msg, cls) {
@@ -299,7 +371,7 @@
       progressArea.classList.add('visible');
       setProgress(0, 1, 'Exporting from Figma…');
       setStatus('Exporting layers…');
-      parent.postMessage({ pluginMessage: { type: 'export-selection' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'export-selection', scale: exportScale } }, '*');
     };
 
     // ── Streaming queue ────────────────────────────────────────────────────────

@@ -232,6 +232,28 @@ export async function POST(request: NextRequest) {
         fs.writeFileSync(tempJsx, scriptContent);
         // evalFile path also uses forward slashes (AE ExtendScript requirement)
         const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
+
+        // Check if AE is currently running
+        let isAERunning = false;
+        try {
+          const { stdout } = await execFileAsync('tasklist', ['/FI', 'IMAGENAME eq AfterFX.exe']);
+          if (stdout.includes('AfterFX.exe')) {
+            isAERunning = true;
+          }
+        } catch (e) {
+          // ignore
+        }
+
+        if (!isAERunning) {
+          // If AE is not running, launching it with -s will cause it to close automatically after the script.
+          // To prevent this, we launch it normally first, wait a moment, and then send the script.
+          execFile('cmd', ['/c', 'start', '""', aePath]);
+          // Wait 2 seconds to ensure the process is registered before sending the script
+          await new Promise(r => setTimeout(r, 2000));
+        }
+
+        // Now send the script. If AE was already running, it just executes.
+        // If we just launched it, this sends the script to the loading instance and it stays open.
         execFile(aePath, ['-s', evalScript], (err) => {
           if (err) console.error('Error al abrir AE:', err);
         });

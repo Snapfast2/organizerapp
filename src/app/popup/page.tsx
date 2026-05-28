@@ -145,10 +145,10 @@ function PopupContent() {
           transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease',
           WebkitAppRegion: 'drag',
         }}
-        backgroundColor="rgba(10, 10, 10, 0.95)"
-        glowColor="142 70 54"
+        backgroundColor="rgba(26, 26, 26, 0.96)"
+        glowColor="74 222 128"
         edgeSensitivity={30}
-        borderRadius={28}
+        borderRadius={16}
         glowRadius={40}
         glowIntensity={1}
         coneSpread={25}
@@ -170,7 +170,7 @@ function PopupContent() {
             width: '100%', height: '100%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             position: 'relative', zIndex: 2,
-            borderRadius: 27,
+            borderRadius: 15,
             background: 'transparent',
           }}>
             {/* Green flash background */}
@@ -178,17 +178,17 @@ function PopupContent() {
               position: 'absolute', inset: 0,
               background: 'radial-gradient(circle at center, rgba(74,222,128,0.3) 0%, transparent 60%)',
               animation: 'ae-flash-green 1.5s ease-out forwards',
-              borderRadius: 27,
+              borderRadius: 15,
             }} />
             
             {/* Container for the icons */}
-            <div style={{ position: 'relative', width: 80, height: 80 }}>
+            <div style={{ position: 'relative', width: 60, height: 60 }}>
               {/* Animated Checkmark */}
               <div style={{
                 position: 'absolute', inset: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <svg width="80" height="80" viewBox="0 0 100 100">
+                <svg width="60" height="60" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="35" fill="none" stroke="#4ade80" strokeWidth="5" strokeDasharray="220" strokeDashoffset="220" style={{ animation: 'ae-draw-circle 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards' }} />
                   <path d="M35 50 L45 60 L65 40" fill="none" stroke="#4ade80" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="100" strokeDashoffset="100" style={{ animation: 'ae-draw-check 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s forwards' }} />
                 </svg>
@@ -201,40 +201,40 @@ function PopupContent() {
               width: '100%',
               position: 'relative',
               zIndex: 2,
-              padding: '18px 20px 16px',
+              padding: '12px 14px 10px',
               fontFamily: "'Inter', -apple-system, sans-serif",
               color: '#fff',
               display: 'flex',
               flexDirection: 'column',
               height: '100%',
-              borderRadius: 27, // Inner radius slightly less than outer
+              borderRadius: 15, // Inner radius slightly less than outer
               background: 'transparent',
               boxSizing: 'border-box',
             }}>
               
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
               <div style={{
-                width: 44, height: 44, borderRadius: 10,
+                width: 36, height: 36, borderRadius: 6,
                 background: 'rgba(74, 222, 128, 0.1)',
                 border: '1px solid rgba(74, 222, 128, 0.2)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0,
               }}>
-                <MainIcon size={22} color="var(--accent)" strokeWidth={2} />
+                <MainIcon size={18} color="var(--accent)" strokeWidth={2} />
               </div>
-              <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
-                <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>
+              <div style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
+                <div style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>
                   {done ? 'Movido correctamente' : 'Nuevo archivo descargado'}
                 </div>
                 <div style={{
-                  fontSize: 14, fontWeight: 500, color: '#fff',
+                  fontSize: 13, fontWeight: 500, color: '#fff',
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   lineHeight: 1.3,
                 }}>
                   {fileName}
                 </div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }}>
                   {done ? `→ ${movedTo}` : fileSize}
                 </div>
               </div>
@@ -254,7 +254,7 @@ function PopupContent() {
                     e.currentTarget.style.background = 'transparent';
                   }}
                 >
-                  <X size={16} />
+                  <X size={14} />
                 </button>
               )}
             </div>
@@ -262,7 +262,7 @@ function PopupContent() {
             {/* Destinations */}
             {!done && (
               <>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
                   ¿A dónde va?
                 </div>
                 {isAE && (
@@ -270,35 +270,35 @@ function PopupContent() {
                     <button
                       onClick={handleAEImport}
                       style={{
-                        background: 'rgba(215, 142, 255, 0.1)',
-                        border: '1px solid rgba(215, 142, 255, 0.3)',
-                        borderRadius: 8,
-                        padding: '10px 12px',
+                        background: 'rgba(215, 142, 255, 0.08)',
+                        border: '1px solid rgba(215, 142, 255, 0.2)',
+                        borderRadius: 6,
+                        padding: '8px 10px',
                         color: '#e5b3ff',
-                        fontSize: 12.5,
+                        fontSize: 11.5,
                         fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: 8,
+                        gap: 6,
                         transition: 'all 0.15s ease',
                         width: '100%',
-                        marginBottom: 6,
+                        marginBottom: 4,
                         fontFamily: 'inherit',
                         WebkitAppRegion: 'no-drag',
                       } as any}
-                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(215, 142, 255, 0.2)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(215, 142, 255, 0.1)'; }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(215, 142, 255, 0.15)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(215, 142, 255, 0.08)'; }}
                     >
-                      <Clapperboard size={16} color="#e5b3ff" strokeWidth={2.5} />
+                      <Clapperboard size={14} color="#e5b3ff" strokeWidth={2.5} />
                       <span>Importar a After Effects</span>
                     </button>
                     {/* Delete original checkbox */}
                     <label
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 7,
-                        marginBottom: 8, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        marginBottom: 6, cursor: 'pointer',
                         WebkitAppRegion: 'no-drag',
                       } as any}
                     >
@@ -308,13 +308,13 @@ function PopupContent() {
                         onChange={e => setDeleteOriginal(e.target.checked)}
                         style={{ accentColor: '#e5b3ff', cursor: 'pointer' }}
                       />
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
                         Eliminar original tras copiar al proyecto
                       </span>
                     </label>
                   </>
                 )}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                   {dests.map((dest) => {
                     const DestIcon = getDestIcon(dest.label);
                     return (
@@ -322,32 +322,32 @@ function PopupContent() {
                         key={dest.path}
                         onClick={() => handleMove(dest)}
                         style={{
-                          background: 'rgba(255,255,255,0.03)',
-                          border: '1px solid rgba(255,255,255,0.06)',
-                          borderRadius: 8,
-                          padding: '10px 12px',
+                          background: '#222',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: 6,
+                          padding: '8px 10px',
                           color: '#fff',
-                          fontSize: 12.5,
+                          fontSize: 11.5,
                           fontWeight: 500,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 8,
-                          transition: 'all 0.15s ease',
+                          gap: 6,
+                          transition: 'all 0.1s ease',
                           textAlign: 'left',
                           fontFamily: 'inherit',
                           WebkitAppRegion: 'no-drag',
                         } as any}
                         onMouseEnter={e => {
-                          e.currentTarget.style.background = 'rgba(74,222,128,0.08)';
-                          e.currentTarget.style.borderColor = 'rgba(74,222,128,0.3)';
+                          e.currentTarget.style.background = '#2a2a2a';
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.13)';
                         }}
                         onMouseLeave={e => {
-                          e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
-                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)';
+                          e.currentTarget.style.background = '#222';
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
                         }}
                       >
-                        <DestIcon size={16} color="var(--accent)" strokeWidth={2} />
+                        <DestIcon size={14} color="var(--accent)" strokeWidth={2} />
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dest.label}</span>
                       </button>
                     );
@@ -365,7 +365,7 @@ function PopupContent() {
               background: 'rgba(255,255,255,0.05)',
               zIndex: 3,
               overflow: 'hidden',
-              borderRadius: '0 0 28px 28px',
+              borderRadius: '0 0 16px 16px',
             }}>
               <div style={{
                 height: '100%',

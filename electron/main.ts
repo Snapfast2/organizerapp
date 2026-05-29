@@ -674,10 +674,10 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
           ].join('\n');
           const tempJsx = path.join(os.tmpdir(), 'ae_get_proj.jsx');
           fs.writeFileSync(tempJsx, scriptLines);
-          const child = spawn(aePath, ['-r', tempJsx], {
+          const child = spawn('cmd.exe', ['/c', 'start', '""', aePath, '-r', tempJsx], {
             detached: true,
-            stdio: 'ignore',
-            windowsHide: true
+            windowsHide: true,
+            stdio: 'ignore'
           });
           child.unref();
 
@@ -791,13 +791,12 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
       fs.writeFileSync(tempJsx, script);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
 
-      // windowsHide:true prevents the spawned AfterFX.exe from stealing focus
-      // which was causing AE's window to unmaximize
-      // Spawning detached to survive companion app restarts
-      const child = spawn(aePath, ['-s', evalScript], {
+      // Usamos cmd /c start para desvincular el proceso de Node/Electron
+      // y evitar que sea matado cuando la app se reinicia.
+      const child = spawn('cmd.exe', ['/c', 'start', '""', aePath, '-s', evalScript], {
         detached: true,
-        stdio: 'ignore',
-        windowsHide: true
+        windowsHide: true,
+        stdio: 'ignore'
       });
       child.on('error', (err) => {
         console.error('Error ejecutando AE:', err);
@@ -839,10 +838,10 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
       const tempJsx = path.join(os.tmpdir(), 'ae_relink.jsx');
       fs.writeFileSync(tempJsx, relinkScript);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
-      const child = spawn(aePath, ['-s', evalScript], {
+      const child = spawn('cmd.exe', ['/c', 'start', '""', aePath, '-s', evalScript], {
         detached: true,
-        stdio: 'ignore',
-        windowsHide: true
+        windowsHide: true,
+        stdio: 'ignore'
       });
       child.unref();
     } catch (err) {
@@ -859,10 +858,10 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
       const tempJsx = path.join(os.tmpdir(), 'ae_figma_bridge.jsx');
       fs.writeFileSync(tempJsx, scriptCode);
       const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
-      const child = spawn(aePath, ['-s', evalScript], {
+      const child = spawn('cmd.exe', ['/c', 'start', '""', aePath, '-s', evalScript], {
         detached: true,
-        stdio: 'ignore',
-        windowsHide: true
+        windowsHide: true,
+        stdio: 'ignore'
       });
       child.unref();
     } catch (err) {
@@ -871,7 +870,23 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
   });
 
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (!isDev) {
+    try {
+      const next = require('next');
+      const http = require('http');
+      const nextApp = next({ dev: false, dir: PROJECT_ROOT });
+      const handle = nextApp.getRequestHandler();
+      await nextApp.prepare();
+      http.createServer((req: any, res: any) => {
+        handle(req, res);
+      }).listen(NEXT_PORT, '127.0.0.1');
+      console.log('Next.js server started on port', NEXT_PORT);
+    } catch (err) {
+      console.error('Failed to start Next.js server:', err);
+    }
+  }
+
   createWindow();
   createTray();
 
@@ -890,6 +905,27 @@ app.on('before-quit', () => {
   isQuitting = true;
   globalShortcut.unregisterAll();
   stopWatcher();
+
+  try {
+    const scriptLines = [
+      'try {',
+      '  if (app.project && app.project.file) { app.project.save(); }',
+      '} catch(e) {}'
+    ].join('\n');
+    const tempJsx = path.join(os.tmpdir(), 'ae_autosave.jsx');
+    fs.writeFileSync(tempJsx, scriptLines);
+    const regOut = execSync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe" /ve', { encoding: 'utf-8' });
+    const match = regOut.match(/REG_SZ\s+(.+)$/im);
+    if (match) {
+      const aePath = match[1].trim();
+      const evalScript = `$.evalFile('${tempJsx.replace(/\\/g, '/')}');`;
+      spawn('cmd.exe', ['/c', 'start', '""', aePath, '-s', evalScript], {
+        detached: true, windowsHide: true, stdio: 'ignore'
+      }).unref();
+    }
+  } catch (err) {
+    console.error('Error in auto-save:', err);
+  }
 });
 
 // ——— Companion IPC ———————————————————————————————————————————————————————————

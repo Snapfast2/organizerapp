@@ -16,6 +16,7 @@
   "build": {
     "appId": "com.fileorganizer.app",
     "productName": "MooMotion",
+    "asar": false,
     "directories": {
       "output": "dist"
     },

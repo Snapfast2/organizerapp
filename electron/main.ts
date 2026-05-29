@@ -482,7 +482,21 @@ function createTray() {
   tray.on('double-click', () => showMainWindowAnimated());
 }
 
-// â”€â”€â”€ IPC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── IPC ───────────────────────────────────────────────────────
+ipcMain.on('window:close', () => {
+  if (mainWindow) mainWindow.close();
+});
+
+ipcMain.on('app:restart', () => {
+  app.relaunch();
+  app.exit(0);
+});
+
+ipcMain.on('test-download-popup', () => {
+  pendingPopups.push({ filePath: path.join(downloadsPath, 'Ejemplo_Video_After_Effects.mp4') });
+  showNextPopup();
+});
+
 ipcMain.on('window:minimize', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const win = mainWindow;
@@ -849,6 +863,19 @@ app.setAppUserModelId(isDev ? process.execPath : 'com.fileorganizer.app');
     }
   });
 
+  ipcMain.on('companion:open-figma', async () => {
+    try {
+      const figmaPath = path.join(os.homedir(), 'AppData', 'Local', 'Figma', 'Figma.exe');
+      if (fs.existsSync(figmaPath)) {
+        spawn(figmaPath, [], { detached: true, stdio: 'ignore' }).unref();
+      } else {
+        await shell.openExternal('figma://');
+      }
+    } catch (e) {
+      console.error('Failed to open Figma:', e);
+    }
+  });
+
   ipcMain.on('companion:execute-script', async (_event, scriptCode: string) => {
     try {
       const { stdout: regOut } = await execAsync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AfterFX.exe" /ve');
@@ -930,6 +957,7 @@ app.on('before-quit', () => {
 
 // ——— Companion IPC ———————————————————————————————————————————————————————————
 ipcMain.on('companion:hide', () => companionWindow?.hide());
+ipcMain.on('companion:toggle', () => toggleCompanion());
 
 let dragInitialPos = [0, 0];
 

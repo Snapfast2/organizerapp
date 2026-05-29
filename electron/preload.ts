@@ -5,11 +5,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimize: () => ipcRenderer.send('window:minimize'),
   maximize: () => ipcRenderer.send('window:maximize'),
   close:    () => ipcRenderer.send('window:close'),
+  restartApp: () => ipcRenderer.send('app:restart'),
   isElectron: true,
 
   // Download popup actions
   popupMove:   (filePath: string, destDir: string) => ipcRenderer.send('popup:move', { filePath, destDir }),
   popupIgnore: () => ipcRenderer.send('popup:ignore'),
+  testDownloadPopup: () => ipcRenderer.send('test-download-popup'),
 
   // Listen for fs refresh from main — returns cleanup fn to call on unmount
   onFsRefresh: (cb: () => void) => {
@@ -38,6 +40,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── MooMotion Companion ────────────────────────────────────────
   companion: {
     hide:             () => ipcRenderer.send('companion:hide'),
+    toggle:           () => ipcRenderer.send('companion:toggle'),
     setSize:          (w: number, h: number) => ipcRenderer.send('companion:set-size', w, h),
     setClickThrough:  (ignore: boolean) => ipcRenderer.send('companion:set-click-through', ignore),
     openMain:         () => ipcRenderer.send('companion:open-main'),
@@ -50,5 +53,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     startDrag:        () => ipcRenderer.send('companion:drag-start'),
     dragMove:         (totalDx: number, totalDy: number) => ipcRenderer.send('companion:drag-move', totalDx, totalDy),
     executeScript:    (script: string) => ipcRenderer.send('companion:execute-script', script),
+    openFigma:        () => ipcRenderer.send('companion:open-figma'),
   },
 });

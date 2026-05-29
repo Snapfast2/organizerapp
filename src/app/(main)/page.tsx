@@ -992,6 +992,31 @@ export default function FileOrgApp() {
           />
         </div>
         <div className="header-actions">
+          {isElectron && (
+            <>
+              <button 
+                className="btn btn-ghost btn-icon" 
+                onClick={() => (window as any).electronAPI?.companion?.toggle?.()} 
+                title="Mostrar/Ocultar Companion"
+              >
+                <Sparkles size={16} color="var(--accent)" />
+              </button>
+              <button 
+                className="btn btn-ghost btn-icon" 
+                onClick={() => (window as any).electronAPI?.testDownloadPopup?.()} 
+                title="Probar Popup de Descarga"
+              >
+                <Monitor size={16} color="var(--accent)" />
+              </button>
+              <button 
+                className="btn btn-ghost btn-icon" 
+                onClick={() => (window as any).electronAPI?.restartApp?.()} 
+                title="Reiniciar aplicación"
+              >
+                <RefreshCw size={16} color="#ef4444" />
+              </button>
+            </>
+          )}
           <button 
             className={`btn btn-ghost btn-icon`} 
             onClick={() => !isScanningAE && doAction('scan-ae', {})} 

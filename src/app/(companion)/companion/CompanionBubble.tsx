@@ -100,7 +100,7 @@ function ActionButton({ icon, label, sublabel, onClick, accent }: ActionButtonPr
   return (
     <button
       className={`${styles.actionBtn} ${accent ? styles.actionBtnAccent : ''}`}
-      onClick={onClick}
+      onClick={() => { onClick(); }}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       <span className={styles.actionIcon}>{icon}</span>
@@ -176,9 +176,13 @@ export default function CompanionBubble() {
           const res = await fetch('http://localhost:3000/api/ae-figma');
           if (res.ok) {
             const json = await res.json();
-            if (json.data && json.data.timestamp) {
-              setFigmaPayload(json.data);
-              setCollapsed(false); // Auto-expand to show notification
+            if (json.data && json.data.groups) {
+              setFigmaPayload((prev: any) => {
+                if (!prev || prev.timestamp !== json.data.timestamp) {
+                  setCollapsed(false);
+                }
+                return json.data;
+              });
             } else {
               setFigmaPayload(null);
             }
@@ -489,6 +493,12 @@ export default function CompanionBubble() {
                 </div>
               )}
 
+              <ActionButton
+                icon={<FigmaSvg />}
+                label="Abrir Figma"
+                sublabel="Lanzamiento Rápido"
+                onClick={() => api?.companion?.openFigma?.()}
+              />
               <ActionButton
                 icon={<MonitorSvg />}
                 label="Abrir MooMotion"

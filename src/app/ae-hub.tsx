@@ -124,7 +124,6 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
         body: JSON.stringify({ action: 'open', path })
       });
       if (res.ok) {
-        // Record it in recent list (which case 'open' also does, but refresh to be safe)
         setTimeout(fetchHubData, 1000);
       } else {
         toast('No se pudo abrir el proyecto', 'error');
@@ -324,7 +323,6 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
       if (res.ok) {
         const assetMsg = data.copiedAssets > 0 ? `, ${data.copiedAssets} asset(s) copiados` : '';
         toast(`✓ Proyecto migrado${assetMsg}. Carpeta: ${data.projectFolder}`, 'success');
-        // If AE has a relink script, run it
         if (data.relinkScript) {
           const api = (window as any).electronAPI;
           api?.aeRunRelinkScript?.(data.relinkScript);
@@ -345,7 +343,6 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
     if (api?.openProjectFolder) {
       api.openProjectFolder(folderPath);
     } else {
-      // Fallback: open via explorer through API
       fetch('/api/fs/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -354,7 +351,6 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
     }
   };
 
-  // Color label action
   const handleSetColorLabel = async (filePath: string, labelId: string) => {
     try {
       const res = await fetch('/api/ae-hub', {
@@ -392,19 +388,13 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
     e.preventDefault();
     setDragOverGroupId(null);
     const path = e.dataTransfer.getData('text/plain');
-    if (path) {
-      handleAddToGroup(groupId, path);
-    }
+    if (path) handleAddToGroup(groupId, path);
   };
 
   const toggleGroupCollapse = (groupId: string) => {
-    setCollapsedGroups(prev => ({
-      ...prev,
-      [groupId]: !prev[groupId]
-    }));
+    setCollapsedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
   };
 
-  // Helpers
   const formatBytes = (bytes?: number) => {
     if (!bytes) return '—';
     if (bytes < 1024) return `${bytes} B`;
@@ -427,661 +417,365 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
     }
   };
 
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16 }}>
         <Loader className="spin-animation" size={32} color="var(--accent)" />
-        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Cargando Hub de Proyectos...</span>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Cargando Hub...</span>
       </div>
     );
   }
 
-  // Calculate stats
-  const totalProjectsScanned = recentProjects.length;
+  // ── Greeting ───────────────────────────────────────────────────────────────
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const greetingLine = recentProjects.length === 0
+    ? `${greeting} — ¿arrancamos con un proyecto nuevo?`
+    : `${greeting} — tenés ${recentProjects.length} proyecto${recentProjects.length !== 1 ? 's' : ''} activos`;
+
   const totalAssetsCount = recentProjects.reduce((acc, p) => acc + (p.dependencyCount || 0), 0);
 
-  return (
-    <div className="hub-container" style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 28, height: '100%', overflowY: 'auto' }}>
-      
-      {/* ─── HERO HEADER ─── */}
-      <div className="hub-hero" style={{ 
-        background: 'linear-gradient(135deg, rgba(14,201,0,0.08) 0%, rgba(3,6,3,0) 100%)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '28px 36px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        {/* Glow behind */}
-        <div style={{
-          position: 'absolute',
-          top: '-50%', right: '-10%',
-          width: 300, height: 300,
-          borderRadius: '50%',
-          background: 'rgba(14,201,0,0.12)',
-          filter: 'blur(80px)',
-          zIndex: 0,
-          pointerEvents: 'none'
-        }} />
+  // ── Reusable label picker ─────────────────────────────────────────────────
+  const renderLabelPicker = (project: RecentProject) =>
+    labelPickerFor === project.path ? (
+      <>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onClick={() => setLabelPickerFor(null)} />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          style={{
+            position: 'fixed',
+            top: labelPickerPos.above ? labelPickerPos.y - 274 : labelPickerPos.y,
+            left: labelPickerPos.x,
+            zIndex: 9999,
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            boxShadow: 'var(--shadow-float)',
+            padding: '10px 12px',
+            minWidth: 200,
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: 8 }}>ETIQUETA AE</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {AE_LABELS.map(label => (
+              <button key={label.id} onClick={() => handleSetColorLabel(project.path, label.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, background: project.colorLabel === label.id ? 'rgba(255,255,255,0.07)' : 'transparent', border: project.colorLabel === label.id ? `1px solid ${label.color}44` : '1px solid transparent', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', width: '100%', textAlign: 'left', transition: 'background 0.15s' }}
+              >
+                <span style={{ width: 12, height: 12, borderRadius: '50%', background: label.color, flexShrink: 0, boxShadow: project.colorLabel === label.id ? `0 0 6px ${label.color}88` : 'none' }} />
+                <span style={{ fontSize: 11.5, color: 'var(--text-primary)' }}>{label.name}</span>
+                {project.colorLabel === label.id && <span style={{ marginLeft: 'auto', fontSize: 10, color: label.color }}>✓</span>}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      </>
+    ) : null;
 
-        <div style={{ zIndex: 1 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Clapperboard color="var(--accent)" size={26} /> Hub de Proyectos
+  // ── RENDER ─────────────────────────────────────────────────────────────────
+  return (
+    <div style={{ padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 28, height: '100%', overflowY: 'auto' }}>
+
+      {/* ─── HERO ─────────────────────────────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        style={{
+          background: 'linear-gradient(135deg, rgba(14,201,0,0.11) 0%, rgba(14,201,0,0.03) 55%, transparent 100%)',
+          border: '1px solid rgba(14,201,0,0.16)',
+          borderRadius: 16,
+          padding: '30px 36px',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Animated glow orb */}
+        <motion.div
+          animate={{ scale: [1, 1.14, 1], opacity: [0.10, 0.20, 0.10] }}
+          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ position: 'absolute', top: '-40%', right: '-5%', width: 380, height: 380, borderRadius: '50%', background: 'radial-gradient(circle, rgba(14,201,0,0.18) 0%, transparent 70%)', pointerEvents: 'none' }}
+        />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10, opacity: 0.75 }}>
+            MooMotion · After Effects Hub
+          </div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--text-primary)', marginBottom: 6, lineHeight: 1.2 }}>
+            {greetingLine}
           </h1>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Gestión inteligente de flujos de trabajo en After Effects
+          <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 24, fontFamily: 'monospace' }}>
+            {BASE_DIR} &nbsp;·&nbsp; {groups.length} grupo{groups.length !== 1 ? 's' : ''} &nbsp;·&nbsp; {totalAssetsCount} assets
           </p>
-          
-          {/* Mini stats */}
-          <div style={{ display: 'flex', gap: 24, marginTop: 18 }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recientes</div>
-              <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--accent)' }}>{totalProjectsScanned}</div>
-            </div>
-            <div style={{ width: 1, backgroundColor: 'var(--border)', height: 32 }} />
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grupos</div>
-              <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>{groups.length}</div>
-            </div>
-            <div style={{ width: 1, backgroundColor: 'var(--border)', height: 32 }} />
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assets Escaneados</div>
-              <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--blue)' }}>{totalAssetsCount}</div>
-            </div>
+
+          {/* Quick Actions */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {[
+              { icon: <Plus size={15} strokeWidth={2.5} />, label: 'Nuevo Proyecto', sub: 'Estructura AE completa', accent: true,  onClick: () => openCreateModal() },
+              { icon: <FolderOpen size={15} />,             label: 'Explorar Disco',  sub: BASE_DIR,               accent: false, onClick: () => navigate(BASE_DIR) },
+              { icon: <ExternalLink size={15} />,           label: 'Escanear Assets', sub: 'Deps sin vincular',      accent: false, onClick: () => toast('Función próximamente', 'info') },
+              { icon: <FolderPlus size={15} />,             label: 'Nuevo Grupo',     sub: 'Organizar proyectos',    accent: false, onClick: () => setShowCreateGroupModal(true) },
+            ].map((action, i) => (
+              <motion.button
+                key={i}
+                whileHover={{ y: -2, boxShadow: action.accent ? '0 8px 24px rgba(14,201,0,0.28)' : '0 6px 18px rgba(0,0,0,0.28)' }}
+                whileTap={{ scale: 0.97 }}
+                onClick={action.onClick}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 9,
+                  padding: '9px 16px', borderRadius: 9,
+                  background: action.accent ? 'var(--accent)' : 'rgba(255,255,255,0.05)',
+                  border: action.accent ? 'none' : '1px solid rgba(255,255,255,0.09)',
+                  color: action.accent ? '#000' : 'var(--text-primary)',
+                  cursor: 'pointer', fontWeight: 600, fontSize: 12.5,
+                  transition: 'background 0.15s',
+                }}
+              >
+                <span style={{ color: action.accent ? '#000' : 'var(--accent)', flexShrink: 0 }}>{action.icon}</span>
+                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+                  <span>{action.label}</span>
+                  <span style={{ fontSize: 9.5, fontWeight: 400, opacity: 0.55, fontFamily: action.sub.includes(':\\') ? 'monospace' : 'inherit' }}>{action.sub}</span>
+                </span>
+              </motion.button>
+            ))}
           </div>
         </div>
+      </motion.div>
 
-        <div style={{ display: 'flex', gap: 12, zIndex: 1 }}>
-          <button 
-            className="btn btn-primary glow-card" 
-            style={{ padding: '0 20px', height: 42, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-            onClick={() => openCreateModal()}
-          >
-            <Plus size={16} strokeWidth={2.5} /> Crear Proyecto
-          </button>
-          <button 
-            className="btn btn-default"
-            style={{ height: 42, padding: '0 16px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}
-            onClick={() => navigate('E:\\Motion')}
-          >
-            <FolderOpen size={16} /> Explorar Disco
-          </button>
-        </div>
-      </div>
+      {/* ─── MAIN 2-COL LAYOUT ────────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 272px', gap: 22, alignItems: 'start' }}>
 
-      {/* ─── TWO COLUMN LAYOUT ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 28, alignItems: 'start' }}>
-        
-        {/* LEFT COLUMN: RECENT PROJECTS */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            Proyectos Recientes
-          </h2>
+        {/* LEFT: Recent Projects — 2-column cards */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h2 style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Proyectos Recientes</h2>
+            {recentProjects.length > 0 && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{recentProjects.length} proyectos</span>}
+          </div>
 
           {recentProjects.length === 0 ? (
-            <div style={{ 
-              border: '1px dashed var(--border)', 
-              borderRadius: 'var(--radius-md)', 
-              padding: '48px 24px', 
-              textAlign: 'center', 
-              color: 'var(--text-secondary)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 12
-            }}>
-              <Clapperboard size={36} color="var(--border)" />
-              <div style={{ fontSize: 13 }}>No hay proyectos abiertos recientemente</div>
-              <button 
-                className="btn btn-ghost" 
-                style={{ fontSize: 12, color: 'var(--accent)' }}
-                onClick={() => openCreateModal()}
-              >
-                Crear tu primer proyecto
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              style={{ border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 12, padding: '56px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}
+            >
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(14,201,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Clapperboard size={24} color="var(--accent)" strokeWidth={1.5} />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Sin proyectos aún</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Creá tu primer proyecto o abrí uno desde After Effects</div>
+              </div>
+              <button className="btn btn-primary glow-card" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => openCreateModal()}>
+                <Plus size={14} /> Crear Proyecto
               </button>
-            </div>
+            </motion.div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <AnimatePresence>
-                {recentProjects.map(project => (
-                  <motion.div
-                    key={project.path}
-                    layoutId={`recent-${project.path}`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    draggable
-                    onDragStart={(e: any) => handleDragStart(e, project.path)}
-                    style={{
-                      background: 'var(--bg-surface)',
-                      border: '1px solid var(--border)',
-                      borderLeft: `3px solid ${getLabelColor(project.colorLabel)}`,
-                      borderRadius: 'var(--radius-md)',
-                      padding: '14px 18px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'grab',
-                      transition: 'border-color 0.2s, box-shadow 0.2s',
-                      position: 'relative',
-                    }}
-                    onMouseEnter={e => {
-                      const labelColor = getLabelColor(project.colorLabel);
-                      const el = e.currentTarget as HTMLElement;
-                      el.style.border = `1px solid ${labelColor}88`;
-                      el.style.borderLeft = `3px solid ${labelColor}`;
-                      el.style.boxShadow = `0 0 14px ${labelColor}22`;
-                    }}
-                    onMouseLeave={e => {
-                      const labelColor = getLabelColor(project.colorLabel);
-                      const el = e.currentTarget as HTMLElement;
-                      el.style.border = '1px solid var(--border)';
-                      el.style.borderLeft = `3px solid ${labelColor}`;
-                      el.style.boxShadow = '';
-                    }}
-                  >
-                    {/* Click outside handler */}
-                    {labelPickerFor === project.path && (
-                      <div
-                        style={{ position: 'fixed', inset: 0, zIndex: 199 }}
-                        onClick={() => setLabelPickerFor(null)}
-                      />
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1, minWidth: 0 }}>
-                      {/* AEP Icon with color label */}
-                      <div style={{ position: 'relative', flexShrink: 0 }}>
-                        <div 
-                          style={{ cursor: 'pointer', lineHeight: 0 }}
-                          onClick={(e) => {
+                {recentProjects.map((project, idx) => {
+                  const labelColor = getLabelColor(project.colorLabel);
+                  return (
+                    <motion.div
+                      key={project.path}
+                      initial={{ opacity: 0, y: 14 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ delay: idx * 0.035, duration: 0.22 }}
+                      draggable
+                      onDragStart={(e: any) => handleDragStart(e, project.path)}
+                      onMouseEnter={e => {
+                        const el = e.currentTarget as HTMLElement;
+                        el.style.borderColor = labelColor + '55';
+                        el.style.boxShadow = `0 4px 20px ${labelColor}14`;
+                        el.style.transform = 'translateY(-2px)';
+                      }}
+                      onMouseLeave={e => {
+                        const el = e.currentTarget as HTMLElement;
+                        el.style.borderColor = 'rgba(255,255,255,0.06)';
+                        el.style.boxShadow = 'none';
+                        el.style.transform = 'none';
+                      }}
+                      style={{
+                        background: 'var(--bg-surface)',
+                        border: '1px solid rgba(255,255,255,0.06)',
+                        borderRadius: 12,
+                        padding: '14px',
+                        display: 'flex', flexDirection: 'column', gap: 10,
+                        cursor: 'grab',
+                        transition: 'border-color 0.2s, box-shadow 0.2s, transform 0.2s',
+                        position: 'relative', overflow: 'visible',
+                      }}
+                    >
+                      {/* Color top bar */}
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: labelColor, borderRadius: '12px 12px 0 0', opacity: project.colorLabel && project.colorLabel !== 'none' ? 1 : 0.12 }} />
+
+                      {renderLabelPicker(project)}
+
+                      {/* Icon + name */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 5 }}>
+                        <div
+                          style={{ flexShrink: 0, cursor: 'pointer', lineHeight: 0 }}
+                          onClick={e => {
                             e.stopPropagation();
-                            if (labelPickerFor === project.path) {
-                              setLabelPickerFor(null);
-                            } else {
-                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                              setLabelPickerPos({ x: rect.left, y: rect.bottom + 6, above: rect.bottom + 220 > window.innerHeight });
-                              setLabelPickerFor(project.path);
-                            }
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setLabelPickerPos({ x: rect.left, y: rect.bottom + 6, above: rect.bottom + 274 > window.innerHeight });
+                            setLabelPickerFor(labelPickerFor === project.path ? null : project.path);
                           }}
-                          title="Click para cambiar etiqueta de color"
+                          title="Click para cambiar etiqueta"
                         >
-                          <AepIcon color={getLabelColor(project.colorLabel)} size={36} />
+                          <AepIcon color={labelColor} size={30} />
                         </div>
-                        {/* Color label picker popover */}
-                        {labelPickerFor === project.path && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: -4 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9 }}
-                            style={{
-                              position: 'fixed',
-                              top: labelPickerPos.above
-                                ? labelPickerPos.y - (7 * 34 + 40) // aprox altura del menú
-                                : labelPickerPos.y,
-                              left: labelPickerPos.x,
-                              zIndex: 9999,
-                              background: 'var(--bg-elevated)',
-                              border: '1px solid var(--border)',
-                              borderRadius: 10,
-                              boxShadow: 'var(--shadow-float)',
-                              padding: '10px 12px',
-                              minWidth: 200,
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: 8 }}>ETIQUETA AE</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              {AE_LABELS.map(label => (
-                                <button
-                                  key={label.id}
-                                  onClick={() => handleSetColorLabel(project.path, label.id)}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: 8,
-                                    background: project.colorLabel === label.id ? 'rgba(255,255,255,0.07)' : 'transparent',
-                                    border: project.colorLabel === label.id ? `1px solid ${label.color}44` : '1px solid transparent',
-                                    borderRadius: 6,
-                                    padding: '5px 8px',
-                                    cursor: 'pointer',
-                                    width: '100%',
-                                    textAlign: 'left',
-                                    transition: 'background 0.15s'
-                                  }}
-                                >
-                                  <span style={{
-                                    width: 12, height: 12,
-                                    borderRadius: '50%',
-                                    background: label.color,
-                                    flexShrink: 0,
-                                    boxShadow: project.colorLabel === label.id ? `0 0 6px ${label.color}88` : 'none'
-                                  }} />
-                                  <span style={{ fontSize: 11.5, color: 'var(--text-primary)' }}>{label.name}</span>
-                                  {project.colorLabel === label.id && (
-                                    <span style={{ marginLeft: 'auto', fontSize: 10, color: label.color }}>✓</span>
-                                  )}
-                                </button>
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </div>
-                      
-                      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span 
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
                             onClick={() => handleOpenProject(project.path)}
-                            style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                            style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', marginBottom: 2 }}
                             className="hover-accent"
                           >
                             {project.name}
-                          </span>
-                          {Date.now() - new Date(project.lastOpened || 0).getTime() < 120000 && (
-                            <span style={{ 
-                              background: 'var(--accent-dim)', color: 'var(--accent)',
-                              fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 10,
-                              textTransform: 'uppercase', letterSpacing: '0.5px',
-                              animation: 'pulse 2s infinite'
-                            }}>
-                              NUEVO
-                            </span>
-                          )}
-                          {!project.exists && (
-                            <span style={{ 
-                              background: 'var(--danger-bg)', 
-                              color: 'var(--danger)', 
-                              fontSize: 9, 
-                              fontWeight: 600, 
-                              padding: '2px 6px', 
-                              borderRadius: 4,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 3
-                            }}>
-                              <AlertCircle size={10} /> No existe
-                            </span>
-                          )}
-                        </div>
-
-                        <span 
-                          onClick={() => handleOpenLocation(project.path)}
-                          style={{ fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                          className="hover-underline"
-                          title="Click para ver en carpeta"
-                        >
-                          {project.path}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexShrink: 0 }}>
-                      {/* Meta stats */}
-                      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-secondary)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Assets vinculados">
-                          <Link2 size={13} color="var(--text-muted)" />
-                          <span>{project.dependencyCount || 0}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Peso del archivo">
-                          <HardDrive size={13} color="var(--text-muted)" />
-                          <span>{formatBytes(project.size)}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Última apertura">
-                          <Calendar size={13} color="var(--text-muted)" />
-                          <span>{timeAgo(project.lastOpened)}</span>
-                        </div>
-                      </div>
-
-                      {/* Dropdown for groups / removal */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <button 
-                          className="btn btn-ghost btn-icon"
-                          style={{ width: 28, height: 28 }}
-                          onClick={() => handleOpenProject(project.path)}
-                          title="Abrir en After Effects"
-                        >
-                          <Play size={13} color="var(--accent)" fill="var(--accent-glow)" />
-                        </button>
-                        
-                        {/* Add to group quickly via floating menu */}
-                        <div style={{ position: 'relative' }} className="group-selector-parent">
-                          <button 
-                            className="btn btn-ghost btn-icon"
-                            style={{ width: 28, height: 28 }}
-                            title="Asignar a un Grupo"
+                          </div>
+                          <div
+                            onClick={() => handleOpenLocation(project.path)}
+                            style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', fontFamily: 'monospace' }}
+                            className="hover-underline"
+                            title={project.path}
                           >
-                            <FolderPlus size={13} />
-                          </button>
-                          
-                          {/* Floating menu */}
-                          <div className="group-selector-dropdown" style={{
-                            position: 'absolute',
-                            right: 0, top: '100%',
-                            background: 'var(--bg-elevated)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 'var(--radius-sm)',
-                            boxShadow: 'var(--shadow-float)',
-                            padding: 4,
-                            zIndex: 100,
-                            display: 'none',
-                            minWidth: 160
-                          }}>
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 8px', fontWeight: 600 }}>ASIGNAR A:</div>
-                            {groups.map(g => (
-                              <button
-                                key={g.id}
-                                className="dropdown-item"
-                                style={{
-                                  width: '100%', textAlign: 'left', padding: '6px 8px', fontSize: 11.5,
-                                  background: 'transparent', border: 'none', color: 'var(--text-primary)',
-                                  borderRadius: 4, cursor: 'pointer', display: 'flex', gap: 6
-                                }}
-                                onClick={() => handleAddToGroup(g.id, project.path)}
-                              >
-                                <Folder size={12} color="var(--accent)" />
-                                {g.name}
-                              </button>
-                            ))}
-                            {groups.length === 0 && (
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '6px 8px' }}>Crea un grupo primero</div>
-                            )}
+                            {project.path.replace(/^[A-Z]:\\Motion\\/, '').replace(/\\[^\\]+\.aep$/, '')}
                           </div>
                         </div>
-
-                        {/* Open Folder button (only if project has a dedicated folder) */}
-                        {project.projectFolder && (
-                          <button
-                            className="btn btn-ghost btn-icon"
-                            style={{ width: 28, height: 28 }}
-                            onClick={() => handleOpenProjectFolder(project.projectFolder!)}
-                            title="Abrir carpeta del proyecto"
-                          >
-                            <FolderOpen size={13} color="var(--blue)" />
-                          </button>
-                        )}
-
-                        {/* Migrate button (shown for legacy projects without their own folder) */}
-                        {!project.projectFolder && (
-                          <button
-                            className="btn btn-ghost btn-icon"
-                            style={{ width: 28, height: 28, opacity: migratingPath === project.path ? 0.5 : 1 }}
-                            onClick={() => handleMigrate(project)}
-                            title="Crear carpeta de proyecto y organizar assets"
-                            disabled={!!migratingPath}
-                          >
-                            {migratingPath === project.path
-                              ? <Loader size={13} className="spin-animation" />
-                              : <FolderPlus size={13} color="var(--yellow, #e8c540)" />
-                            }
-                          </button>
-                        )}
-
-                        <button 
-                          className="btn btn-ghost btn-icon hover-danger"
-                          style={{ width: 28, height: 28 }}
-                          onClick={() => handleRemoveRecent(project.path)}
-                          title="Remover de recientes"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {!project.exists && <span title="Archivo no encontrado" style={{ flexShrink: 0 }}><AlertCircle size={13} color="var(--danger)" style={{ marginTop: 2 }} /></span>}
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
+
+                      {/* Meta + actions */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', gap: 8, fontSize: 10.5, color: 'var(--text-muted)' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }} title="Peso"><HardDrive size={10} /> {formatBytes(project.size)}</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }} title="Última apertura"><Calendar size={10} /> {timeAgo(project.lastOpened)}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 3 }}>
+                          <button className="btn btn-ghost btn-icon" style={{ width: 22, height: 22 }} onClick={() => handleOpenProject(project.path)} title="Abrir en AE">
+                            <Play size={10} color="var(--accent)" fill="var(--accent)" />
+                          </button>
+                          {project.projectFolder ? (
+                            <button className="btn btn-ghost btn-icon" style={{ width: 22, height: 22 }} onClick={() => handleOpenProjectFolder(project.projectFolder!)} title="Abrir carpeta">
+                              <FolderOpen size={10} color="var(--blue)" />
+                            </button>
+                          ) : (
+                            <button className="btn btn-ghost btn-icon" style={{ width: 22, height: 22, opacity: migratingPath === project.path ? 0.5 : 1 }} onClick={() => handleMigrate(project)} title="Crear carpeta de proyecto" disabled={!!migratingPath}>
+                              {migratingPath === project.path ? <Loader size={10} className="spin-animation" /> : <FolderPlus size={10} color="#e8c540" />}
+                            </button>
+                          )}
+                          <div style={{ position: 'relative' }} className="group-selector-parent">
+                            <button className="btn btn-ghost btn-icon" style={{ width: 22, height: 22 }} title="Asignar a grupo"><Folder size={10} /></button>
+                            <div className="group-selector-dropdown" style={{ position: 'absolute', right: 0, top: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-float)', padding: 4, zIndex: 100, display: 'none', minWidth: 150 }}>
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 8px', fontWeight: 600 }}>ASIGNAR A:</div>
+                              {groups.map(g => (
+                                <button key={g.id} className="dropdown-item" style={{ width: '100%', textAlign: 'left', padding: '6px 8px', fontSize: 11.5, background: 'transparent', border: 'none', color: 'var(--text-primary)', borderRadius: 4, cursor: 'pointer', display: 'flex', gap: 6 }} onClick={() => handleAddToGroup(g.id, project.path)}>
+                                  <Folder size={11} color="var(--accent)" /> {g.name}
+                                </button>
+                              ))}
+                              {groups.length === 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '6px 8px' }}>Crea un grupo primero</div>}
+                            </div>
+                          </div>
+                          <button className="btn btn-ghost btn-icon hover-danger" style={{ width: 22, height: 22 }} onClick={() => handleRemoveRecent(project.path)} title="Quitar de recientes">
+                            <Trash2 size={10} />
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </AnimatePresence>
             </div>
           )}
         </div>
 
-        {/* RIGHT COLUMN: VISUAL GROUPS (Virtual Boards) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              Grupos Visuales
-            </h2>
-            <button 
-              className="btn btn-ghost btn-icon"
-              style={{ width: 26, height: 26, borderRadius: '50%' }}
-              onClick={() => setShowCreateGroupModal(true)}
-              title="Crear Nuevo Grupo"
-            >
-              <Plus size={15} />
-            </button>
-          </div>
+        {/* RIGHT: To-do + Groups */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* TO-DO WIDGET */}
+          <TodoWidget />
+
+          {/* GRUPOS */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Grupos</h2>
+              <button className="btn btn-ghost btn-icon" style={{ width: 22, height: 22, borderRadius: '50%' }} onClick={() => setShowCreateGroupModal(true)} title="Nuevo grupo"><Plus size={13} /></button>
+            </div>
+
             {groups.length === 0 ? (
-              <div style={{ 
-                border: '1px dashed var(--border)', 
-                borderRadius: 'var(--radius-md)', 
-                padding: '36px 16px', 
-                textAlign: 'center', 
-                color: 'var(--text-secondary)',
-                fontSize: 12
-              }}>
-                <div>No tienes grupos virtuales creados</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 10.5, marginTop: 4 }}>
-                  Crea uno para organizar visualmente tus proyectos.
-                </div>
-                <button 
-                  className="btn btn-ghost" 
-                  style={{ fontSize: 11, color: 'var(--accent)', marginTop: 8 }}
-                  onClick={() => setShowCreateGroupModal(true)}
-                >
-                  Nuevo Grupo
-                </button>
+              <div style={{ border: '1px dashed rgba(255,255,255,0.06)', borderRadius: 8, padding: '18px 12px', textAlign: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
+                <div style={{ marginBottom: 6 }}>Sin grupos aún</div>
+                <button className="btn btn-ghost" style={{ fontSize: 10.5, color: 'var(--accent)' }} onClick={() => setShowCreateGroupModal(true)}>+ Crear grupo</button>
               </div>
             ) : (
-              groups.map(group => {
-                const isCollapsed = collapsedGroups[group.id] || false;
-                const isOver = dragOverGroupId === group.id;
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {groups.map(group => {
+                  const isCollapsed = collapsedGroups[group.id] ?? false;
+                  const isOver = dragOverGroupId === group.id;
+                  const folderPapers = group.projectPaths.slice(0, 3).map(p => (
+                    <div key={p} onClick={e => { e.stopPropagation(); handleOpenProject(p); }} style={{ fontSize: '7px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2px', textAlign: 'center', width: '100%', height: '100%', lineHeight: 1.1, cursor: 'pointer' }} title={p.split('\\').pop()}>
+                      <Clapperboard size={10} color="var(--accent)" style={{ marginBottom: 1 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', whiteSpace: 'nowrap' }}>{(p.split('\\').pop() || '').replace('.aep', '').substring(0, 6)}</span>
+                    </div>
+                  ));
 
-                const folderPapers = group.projectPaths.slice(0, 3).map((path) => {
-                  const name = path.split('\\').pop() || '';
-                  const shortName = name.replace('.aep', '').substring(0, 8);
                   return (
-                    <div 
-                      key={path}
-                      onClick={(e) => { e.stopPropagation(); handleOpenProject(path); }}
-                      style={{
-                        fontSize: '8px',
-                        fontWeight: 700,
-                        color: 'var(--text-primary)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '2px',
-                        textAlign: 'center',
-                        width: '100%',
-                        height: '100%',
-                        lineHeight: 1.1,
-                        cursor: 'pointer'
-                      }}
-                      title={`Abrir ${name}`}
+                    <div key={group.id}
+                      onDragOver={e => handleDragOver(e, group.id)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={e => handleDrop(e, group.id)}
+                      style={{ background: isOver ? 'rgba(14,201,0,0.05)' : 'var(--bg-surface)', border: isOver ? '1px dashed var(--accent)' : '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10, transition: 'all 0.2s' }}
                     >
-                      <Clapperboard size={12} color="var(--accent)" style={{ marginBottom: 1 }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', whiteSpace: 'nowrap' }}>{shortName}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ flexShrink: 0, width: 50, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <FolderComponent color="#0EC900" size={0.5} items={folderPapers} isOpen={!isCollapsed} onToggle={() => toggleGroupCollapse(group.id)} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            {renamingGroupId === group.id ? (
+                              <input type="text" value={renamingGroupName} onChange={e => setRenamingGroupName(e.target.value)} onBlur={() => handleRenameGroup(group.id)} onKeyDown={e => e.key === 'Enter' && handleRenameGroup(group.id)} autoFocus style={{ background: 'var(--bg-elevated)', border: '1px solid var(--accent)', color: 'var(--text-primary)', fontSize: 11.5, padding: '2px 6px', borderRadius: 4, width: '80%' }} onClick={e => e.stopPropagation()} />
+                            ) : (
+                              <span onClick={() => toggleGroupCollapse(group.id)} style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}>{group.name}</span>
+                            )}
+                            <div style={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+                              <button className="btn btn-ghost btn-icon" style={{ width: 17, height: 17 }} onClick={e => { e.stopPropagation(); setRenamingGroupId(group.id); setRenamingGroupName(group.name); }} title="Renombrar"><Edit2 size={9} /></button>
+                              <button className="btn btn-ghost btn-icon hover-danger" style={{ width: 17, height: 17 }} onClick={e => { e.stopPropagation(); handleDeleteGroup(group.id, group.name); }} title="Eliminar"><Trash2 size={9} /></button>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{group.projectPaths.length} proyecto{group.projectPaths.length !== 1 ? 's' : ''}</div>
+                        </div>
+                      </div>
+
+                      {!isCollapsed && (
+                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          {group.projectPaths.length === 0 && (
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', padding: '6px 0', border: '1px dashed rgba(255,255,255,0.04)', borderRadius: 4 }}>Arrastrá proyectos aquí</div>
+                          )}
+                          {group.projectPaths.map(p => (
+                            <div key={p} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: 4, padding: '4px 7px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1, minWidth: 0 }} onClick={() => handleOpenProject(p)}>
+                                <Clapperboard size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
+                                <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} className="hover-accent">{p.split('\\').pop()}</span>
+                              </div>
+                              <button className="btn btn-ghost btn-icon hover-danger" style={{ width: 16, height: 16 }} onClick={() => handleRemoveFromGroup(group.id, p)} title="Quitar"><X size={8} /></button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
-                });
-
-                return (
-                  <div
-                    key={group.id}
-                    onDragOver={(e) => handleDragOver(e, group.id)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, group.id)}
-                    style={{
-                      background: isOver ? 'var(--accent-glow)' : 'var(--bg-surface)',
-                      border: isOver ? '1px dashed var(--accent)' : '1px solid var(--border)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: 12,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 12,
-                      transition: 'background-color 0.2s, border-color 0.2s',
-                    }}
-                  >
-                    {/* Group Header with FolderComponent */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      <div style={{ flexShrink: 0, width: 80, height: 70, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <FolderComponent 
-                          color="#0EC900"
-                          size={0.75}
-                          items={folderPapers}
-                          isOpen={!isCollapsed}
-                          onToggle={() => toggleGroupCollapse(group.id)}
-                        />
-                      </div>
-                      
-                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div 
-                            style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flex: 1, minWidth: 0 }}
-                            onClick={() => toggleGroupCollapse(group.id)}
-                          >
-                            {renamingGroupId === group.id ? (
-                              <input
-                                type="text"
-                                value={renamingGroupName}
-                                onChange={(e) => setRenamingGroupName(e.target.value)}
-                                onBlur={() => handleRenameGroup(group.id)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleRenameGroup(group.id)}
-                                autoFocus
-                                style={{
-                                  background: 'var(--bg-elevated)',
-                                  border: '1px solid var(--accent)',
-                                  color: 'var(--text-primary)',
-                                  fontSize: 12,
-                                  padding: '2px 6px',
-                                  borderRadius: 4,
-                                  width: '90%'
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            ) : (
-                              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {group.name} 
-                              </span>
-                            )}
-                          </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <button
-                              className="btn btn-ghost btn-icon"
-                              style={{ width: 22, height: 22 }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRenamingGroupId(group.id);
-                                setRenamingGroupName(group.name);
-                              }}
-                              title="Renombrar grupo"
-                            >
-                              <Edit2 size={11} />
-                            </button>
-                            <button
-                              className="btn btn-ghost btn-icon hover-danger"
-                              style={{ width: 22, height: 22 }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteGroup(group.id, group.name);
-                              }}
-                              title="Eliminar grupo"
-                            >
-                              <Trash2 size={11} />
-                            </button>
-                          </div>
-                        </div>
-                        
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {group.projectPaths.length} proyecto{group.projectPaths.length !== 1 ? 's' : ''}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Group Files */}
-                    {!isCollapsed && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
-                        {group.projectPaths.length === 0 && (
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 6px', border: '1px dashed rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)' }}>
-                            Arrastra proyectos aquí
-                          </div>
-                        )}
-                        {group.projectPaths.map(projPath => {
-                          const pName = projPath.split('\\').pop() || '';
-                          return (
-                            <div
-                              key={projPath}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: 'rgba(255,255,255,0.02)',
-                                border: '1px solid rgba(255,255,255,0.03)',
-                                borderRadius: 5,
-                                padding: '6px 10px',
-                              }}
-                            >
-                              <div 
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flex: 1, minWidth: 0 }}
-                                onClick={() => handleOpenProject(projPath)}
-                              >
-                                <Clapperboard size={12} color="var(--accent)" style={{ flexShrink: 0 }} />
-                                <span 
-                                  style={{ fontSize: 11.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                                  className="hover-accent"
-                                >
-                                  {pName}
-                                </span>
-                              </div>
-
-                              <button
-                                className="btn btn-ghost btn-icon hover-danger"
-                                style={{ width: 20, height: 20 }}
-                                onClick={() => handleRemoveFromGroup(group.id, projPath)}
-                                title="Quitar de este grupo"
-                              >
-                                <X size={10} />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+                })}
+              </div>
             )}
           </div>
         </div>
-
       </div>
 
-      {/* ─── MODAL: CREAR PROYECTO ─── */}
+      {/* ─── MODAL: CREAR PROYECTO ─────────────────────────────────────────── */}
       <AnimatePresence>
         {showCreateModal && (
-          <div style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}>
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              style={{
-                width: 440,
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-lg)',
-                padding: '24px 28px',
-                boxShadow: 'var(--shadow-float)'
-              }}
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              style={{ width: 460, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '24px 28px', boxShadow: 'var(--shadow-float)' }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1089,109 +783,34 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
                 </h3>
                 <button className="btn btn-ghost btn-icon" onClick={() => setShowCreateModal(false)}><X size={16} /></button>
               </div>
-
               <form onSubmit={handleCreateProject} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <label style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontWeight: 500 }}>Nombre del Proyecto</label>
-                  <input
-                    type="text"
-                    placeholder="ej. End Game Promo"
-                    value={projectName}
-                    onChange={(e) => setProjectName(e.target.value)}
-                    required
-                    autoFocus
-                    style={{
-                      background: 'var(--bg-elevated)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '8px 12px',
-                      color: 'var(--text-primary)',
-                      fontSize: 13,
-                      outline: 'none',
-                    }}
-                  />
+                  <input type="text" placeholder="ej. End Game Promo" value={projectName} onChange={e => setProjectName(e.target.value)} required autoFocus
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }} />
                 </div>
-
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <label style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontWeight: 500 }}>Directorio de Trabajo</label>
-
-                  {/* Subfolder chips */}
                   {loadingSubfolders ? (
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '6px 0' }}>Cargando carpetas...</div>
                   ) : (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {/* Chip raíz */}
-                      <button
-                        type="button"
-                        onClick={() => setProjectDir(BASE_DIR)}
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: 20,
-                          fontSize: 11,
-                          fontFamily: 'monospace',
-                          border: `1px solid ${projectDir === BASE_DIR ? 'var(--accent)' : 'var(--border)'}`,
-                          background: projectDir === BASE_DIR ? 'rgba(14,201,0,0.12)' : 'var(--bg-elevated)',
-                          color: projectDir === BASE_DIR ? 'var(--accent)' : 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s',
-                        }}
-                      >
+                      <button type="button" onClick={() => setProjectDir(BASE_DIR)} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontFamily: 'monospace', border: `1px solid ${projectDir === BASE_DIR ? 'var(--accent)' : 'var(--border)'}`, background: projectDir === BASE_DIR ? 'rgba(14,201,0,0.12)' : 'var(--bg-elevated)', color: projectDir === BASE_DIR ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 0.15s' }}>
                         {BASE_DIR.split('\\').pop() || BASE_DIR}
                       </button>
                       {motionSubfolders.map(sub => (
-                        <button
-                          key={sub}
-                          type="button"
-                          onClick={() => setProjectDir(sub)}
-                          style={{
-                            padding: '4px 10px',
-                            borderRadius: 20,
-                            fontSize: 11,
-                            fontFamily: 'monospace',
-                            border: `1px solid ${projectDir === sub ? 'var(--accent)' : 'var(--border)'}`,
-                            background: projectDir === sub ? 'rgba(14,201,0,0.12)' : 'var(--bg-elevated)',
-                            color: projectDir === sub ? 'var(--accent)' : 'var(--text-secondary)',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                          }}
-                        >
+                        <button key={sub} type="button" onClick={() => setProjectDir(sub)} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontFamily: 'monospace', border: `1px solid ${projectDir === sub ? 'var(--accent)' : 'var(--border)'}`, background: projectDir === sub ? 'rgba(14,201,0,0.12)' : 'var(--bg-elevated)', color: projectDir === sub ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 0.15s' }}>
                           {sub.replace(BASE_DIR + '\\', '')}
                         </button>
                       ))}
                     </div>
                   )}
-
-                  {/* Path actual editable */}
-                  <input
-                    type="text"
-                    value={projectDir}
-                    onChange={(e) => setProjectDir(e.target.value)}
-                    required
-                    style={{
-                      background: 'var(--bg-elevated)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '8px 12px',
-                      color: 'var(--text-primary)',
-                      fontSize: 12,
-                      fontFamily: 'monospace',
-                      outline: 'none',
-                    }}
-                  />
-                  {/* Folder structure preview */}
+                  <input type="text" value={projectDir} onChange={e => setProjectDir(e.target.value)} required
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
                   {projectName.trim() && (
-                    <div style={{
-                      background: 'var(--bg-elevated)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '10px 14px',
-                      fontFamily: 'monospace',
-                      fontSize: 11,
-                      color: 'var(--text-secondary)',
-                      lineHeight: 1.8,
-                    }}>
-                      <div style={{ color: 'var(--text-muted)', fontSize: 9.5, marginBottom: 6, fontFamily: 'inherit', letterSpacing: '0.06em' }}>ESTRUCTURA A CREAR:</div>
-                      <div style={{ color: 'var(--accent)' }}>📁 {projectDir.trim() || 'E:\\Motion'}\</div>
+                    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 9.5, marginBottom: 6, letterSpacing: '0.06em' }}>ESTRUCTURA A CREAR:</div>
+                      <div style={{ color: 'var(--accent)' }}>📁 {projectDir.trim() || BASE_DIR}\</div>
                       <div style={{ paddingLeft: 14, color: 'var(--text-primary)' }}>📁 <strong>{projectName.trim()}\</strong></div>
                       <div style={{ paddingLeft: 28, color: 'var(--blue)' }}>🎬 {projectName.trim()}.aep</div>
                       <div style={{ paddingLeft: 28, color: 'var(--text-secondary)' }}>📁 Assets\ → Images\ Video\ Audio\ Vector\</div>
@@ -1200,10 +819,9 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
                     </div>
                   )}
                 </div>
-
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
                   <button type="button" className="btn btn-default" onClick={() => setShowCreateModal(false)}>Cancelar</button>
-                  <button type="submit" className="btn btn-primary glow-card" disabled={creating} style={{ minWidth: 80 }}>
+                  <button type="submit" className="btn btn-primary glow-card" disabled={creating} style={{ minWidth: 130 }}>
                     {creating ? <Loader className="spin-animation" size={14} /> : 'Crear Proyecto'}
                   </button>
                 </div>
@@ -1213,31 +831,12 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
         )}
       </AnimatePresence>
 
-      {/* ─── MODAL: CREAR GRUPO ─── */}
+      {/* ─── MODAL: CREAR GRUPO ───────────────────────────────────────────── */}
       <AnimatePresence>
         {showCreateGroupModal && (
-          <div style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}>
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              style={{
-                width: 400,
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-lg)',
-                padding: '24px 28px',
-                boxShadow: 'var(--shadow-float)'
-              }}
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              style={{ width: 400, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '24px 28px', boxShadow: 'var(--shadow-float)' }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1245,32 +844,13 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
                 </h3>
                 <button className="btn btn-ghost btn-icon" onClick={() => setShowCreateGroupModal(false)}><X size={16} /></button>
               </div>
-
               <form onSubmit={handleCreateGroup} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <label style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontWeight: 500 }}>Nombre del Grupo</label>
-                  <input
-                    type="text"
-                    placeholder="ej. End Game"
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                    required
-                    autoFocus
-                    style={{
-                      background: 'var(--bg-elevated)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '8px 12px',
-                      color: 'var(--text-primary)',
-                      fontSize: 13,
-                      outline: 'none',
-                    }}
-                  />
-                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
-                    Organiza proyectos lógicamente en este grupo sin moverlos en el disco.
-                  </span>
+                  <input type="text" placeholder="ej. End Game" value={groupName} onChange={e => setGroupName(e.target.value)} required autoFocus
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }} />
+                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>Organiza proyectos lógicamente sin moverlos en el disco.</span>
                 </div>
-
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
                   <button type="button" className="btn btn-default" onClick={() => setShowCreateGroupModal(false)}>Cancelar</button>
                   <button type="submit" className="btn btn-primary" disabled={creatingGroup}>
@@ -1284,5 +864,109 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
       </AnimatePresence>
 
     </div>
+  );
+}
+
+// ── TO-DO WIDGET (localStorage) ───────────────────────────────────────────────
+interface TodoItem { id: string; text: string; done: boolean; }
+
+function TodoWidget() {
+  const [items, setItems] = useState<TodoItem[]>(() => {
+    try { return JSON.parse(localStorage.getItem('hub-todo') || '[]'); } catch { return []; }
+  });
+  const [input, setInput] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('hub-todo', JSON.stringify(items));
+  }, [items]);
+
+  const add = () => {
+    const t = input.trim();
+    if (!t) return;
+    setItems(prev => [...prev, { id: Date.now().toString(), text: t, done: false }]);
+    setInput('');
+  };
+
+  const toggle = (id: string) => setItems(prev => prev.map(i => i.id === id ? { ...i, done: !i.done } : i));
+  const remove = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
+  const clearDone = () => setItems(prev => prev.filter(i => !i.done));
+
+  const doneCount = items.filter(i => i.done).length;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.12, duration: 0.3 }}
+      style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}
+    >
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ fontSize: 15 }}>✅</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Hoy</span>
+          {items.length > 0 && (
+            <span style={{ fontSize: 10, background: 'rgba(14,201,0,0.14)', color: 'var(--accent)', padding: '1px 7px', borderRadius: 10, fontWeight: 600 }}>
+              {doneCount}/{items.length}
+            </span>
+          )}
+        </div>
+        {doneCount > 0 && (
+          <button onClick={clearDone}
+            style={{ fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', borderRadius: 4, transition: 'color 0.15s' }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+          >
+            Limpiar hechos
+          </button>
+        )}
+      </div>
+
+      {/* Input */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && add()}
+          placeholder="Agregar tarea del día..."
+          style={{ flex: 1, background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 7, padding: '6px 10px', color: 'var(--text-primary)', fontSize: 11.5, outline: 'none' }}
+        />
+        <button onClick={add}
+          style={{ padding: '5px 10px', borderRadius: 7, background: 'rgba(14,201,0,0.14)', border: '1px solid rgba(14,201,0,0.22)', color: 'var(--accent)', cursor: 'pointer', fontSize: 16, lineHeight: 1, fontWeight: 700 }}
+        >+</button>
+      </div>
+
+      {/* Tasks */}
+      {items.length === 0 ? (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '10px 0' }}>Sin tareas por ahora 🎬</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 190, overflowY: 'auto' }}>
+          <AnimatePresence>
+            {items.map(item => (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 8 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 5px', borderRadius: 6, background: item.done ? 'rgba(255,255,255,0.012)' : 'transparent' }}
+              >
+                {/* Checkbox */}
+                <button onClick={() => toggle(item.id)} style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0, border: item.done ? 'none' : '1.5px solid rgba(255,255,255,0.2)', background: item.done ? 'var(--accent)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
+                  {item.done && <span style={{ fontSize: 9, color: '#000', fontWeight: 900 }}>✓</span>}
+                </button>
+                <span style={{ flex: 1, fontSize: 11.5, color: item.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: item.done ? 'line-through' : 'none', transition: 'all 0.2s' }}>
+                  {item.text}
+                </span>
+                <button onClick={() => remove(item.id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.12)', fontSize: 14, lineHeight: 1, padding: '0 2px', borderRadius: 3, transition: 'color 0.15s' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.12)')}
+                >×</button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+    </motion.div>
   );
 }

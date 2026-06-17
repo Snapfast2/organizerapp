@@ -1018,8 +1018,8 @@ export default function FileOrgApp() {
         </div>
       </header>
 
-      {/* â”€â”€â”€ SIDEBAR â”€â”€â”€ */}
-      <aside className="sidebar">
+      {/* ─── SIDEBAR ─── (hidden on hub) */}
+      {currentPath !== 'hub' && <aside className="sidebar">
         <div className="sidebar-scroll-area" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
           {/* â”€â”€ NavegaciÃ³n â”€â”€ */}
           <SidebarSection title="NavegaciÃ³n" defaultOpen>
@@ -1104,11 +1104,11 @@ export default function FileOrgApp() {
             )}
           </div>
         </div>
-      </aside>
+      </aside>}
 
 
-      {/* â”€â”€â”€ MAIN AREA â”€â”€â”€ */}
-      <main className="main-area" onContextMenu={e => e.preventDefault()}>
+      {/* ─── MAIN AREA ─── */}
+      <main className="main-area" style={currentPath === 'hub' ? { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : undefined} onContextMenu={e => e.preventDefault()}>
         {currentPath === 'hub' ? (
           <AEProjectHub navigate={navigate} toast={toast} />
         ) : (

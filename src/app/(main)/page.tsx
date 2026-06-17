@@ -477,7 +477,7 @@ export default function FileOrgApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'undo', undoAction: lastAction })
       });
-      toast('AcciÃ³n deshecha exitosamente', 'success');
+      toast('Acción deshecha exitosamente', 'success');
       refresh();
     } catch {
       toast('Error al deshacer', 'error');
@@ -583,7 +583,7 @@ export default function FileOrgApp() {
         body: JSON.stringify({ action: 'unzip', paths: [path], destPath: currentPath })
       });
       if (!res.ok) throw new Error('Unzip failed');
-      toast('Archivo extraÃ­do exitosamente', 'success');
+      toast('Archivo extraído exitosamente', 'success');
       refresh();
     } catch {
       toast('Error al extraer archivo', 'error');
@@ -905,7 +905,14 @@ export default function FileOrgApp() {
 
   return (
     <ClickSpark sparkColor="#4ade80" sparkSize={6} sparkRadius={20} sparkCount={4} duration={300} extraScale={0.6}>
-      <div className={`app-shell${isElectron ? ' has-titlebar' : ''}`} onClick={() => { clearSelection(); closeContextMenu(); }}>
+      <div 
+        className={`app-shell${isElectron ? ' has-titlebar' : ''}`} 
+        style={currentPath === 'hub' ? { 
+          gridTemplateColumns: '0px 1fr',
+          gridTemplateRows: isElectron ? '32px 0px 1fr' : '0px 0px 1fr'
+        } : undefined} 
+        onClick={() => { clearSelection(); closeContextMenu(); }}
+      >
 
       {/* â”€â”€â”€ ELECTRON TITLE BAR (Discord style) â”€â”€â”€ */}
       {isElectron && (
@@ -916,7 +923,7 @@ export default function FileOrgApp() {
               className="titlebar-nav-btn"
               onClick={goBack}
               disabled={!canGoBack}
-              title="AtrÃ¡s"
+              title="Atrás"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M10 3L5 8L10 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -957,8 +964,8 @@ export default function FileOrgApp() {
         </div>
       )}
 
-      {/* â”€â”€â”€ HEADER â”€â”€â”€ */}
-      <header className="header">
+      {/* ─── HEADER ─── (only for file explorer) */}
+      {currentPath !== 'hub' && <header className="header">
         {!isElectron && <div className="header-logo"><FolderOpen size={20} color="var(--accent)" strokeWidth={2.5} /> MooMotion</div>}
         <div className="header-search">
           <button 
@@ -1011,18 +1018,18 @@ export default function FileOrgApp() {
           >
             {isScanningAE ? <RefreshCw size={16} className="spin-animation" color="var(--accent)" /> : <Clapperboard size={16} color="var(--accent)" />}
           </button>
-          <button className="btn btn-ghost btn-icon" onClick={() => setShowStats(true)} title="EstadÃ­sticas de disco"><BarChart2 size={16} /></button>
+          <button className="btn btn-ghost btn-icon" onClick={() => setShowStats(true)} title="Estadísticas de disco"><BarChart2 size={16} /></button>
           <button className="btn btn-primary" style={{ padding: '0 12px', height: 30, fontSize: 11.5 }} onClick={() => setShowOrganize(true)}>
             <Wand2 size={13} /> Auto-Organizar
           </button>
         </div>
-      </header>
+      </header>}
 
       {/* ─── SIDEBAR ─── (hidden on hub) */}
       {currentPath !== 'hub' && <aside className="sidebar">
         <div className="sidebar-scroll-area" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-          {/* â”€â”€ NavegaciÃ³n â”€â”€ */}
-          <SidebarSection title="NavegaciÃ³n" defaultOpen>
+          {/* ─── Navegación ─── */}
+          <SidebarSection title="Navegación" defaultOpen>
             <TreeNode
               key="hub"
               path="hub"
@@ -1043,7 +1050,7 @@ export default function FileOrgApp() {
             />
           </SidebarSection>
 
-          {/* â”€â”€ Ubicaciones â”€â”€ */}
+          {/* ─── Ubicaciones ─── */}
           <SidebarSection title="Ubicaciones" defaultOpen>
             {drives.map(d => (
               <TreeNode
@@ -1058,16 +1065,16 @@ export default function FileOrgApp() {
             ))}
           </SidebarSection>
 
-          {/* â”€â”€ Accesos RÃ¡pidos â”€â”€ */}
-          <SidebarSection title="Accesos RÃ¡pidos" defaultOpen>
+          {/* ─── Accesos Rápidos ─── */}
+          <SidebarSection title="Accesos Rápidos" defaultOpen>
             {quickAccess.map(qa => {
               let Icon = Folder;
               if (qa.name === 'Escritorio') Icon = Monitor;
               else if (qa.name === 'Descargas') Icon = ArrowDown;
               else if (qa.name === 'Documentos') Icon = FileText;
-              else if (qa.name === 'ImÃ¡genes') Icon = ImageIcon;
+              else if (qa.name === 'Imágenes') Icon = ImageIcon;
               else if (qa.name === 'Videos') Icon = Film;
-              else if (qa.name === 'MÃºsica') Icon = Music;
+              else if (qa.name === 'Música') Icon = Music;
               return (
                 <TreeNode
                   key={qa.path}
@@ -1110,7 +1117,11 @@ export default function FileOrgApp() {
       {/* ─── MAIN AREA ─── */}
       <main className="main-area" style={currentPath === 'hub' ? { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : undefined} onContextMenu={e => e.preventDefault()}>
         {currentPath === 'hub' ? (
-          <AEProjectHub navigate={navigate} toast={toast} />
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ width: '100%', maxWidth: 1100, padding: '0 24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <AEProjectHub navigate={navigate} toast={toast} />
+            </div>
+          </div>
         ) : (
           <>
         <FileToolbar

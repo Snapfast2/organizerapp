@@ -476,7 +476,7 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 28, height: '100%', overflowY: 'auto' }}>
+    <div style={{ padding: '28px 0', display: 'flex', flexDirection: 'column', gap: 28, minHeight: '100%' }}>
 
       {/* ─── HERO ─────────────────────────────────────────────────────────── */}
       <motion.div

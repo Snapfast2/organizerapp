@@ -70,6 +70,9 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
   const [projectName, setProjectName] = useState('');
   const [projectDir, setProjectDir] = useState('E:\\Motion');
   const [creating, setCreating] = useState(false);
+  const [motionSubfolders, setMotionSubfolders] = useState<string[]>([]);
+  const [loadingSubfolders, setLoadingSubfolders] = useState(false);
+  const BASE_DIR = 'E:\\Motion';
 
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -85,6 +88,7 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
   
   // Color label picker open for project path
   const [labelPickerFor, setLabelPickerFor] = useState<string | null>(null);
+  const [labelPickerPos, setLabelPickerPos] = useState<{ x: number; y: number; above: boolean }>({ x: 0, y: 0, above: false });
 
   // Toggle states for grouped lists
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -143,6 +147,25 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
     } catch {
       toast('Error al abrir la ubicación', 'error');
     }
+  };
+
+  const openCreateModal = async () => {
+    setProjectName('');
+    setProjectDir(BASE_DIR);
+    setShowCreateModal(true);
+    setLoadingSubfolders(true);
+    try {
+      const res = await fetch(`/api/fs?path=${encodeURIComponent(BASE_DIR)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const dirs = ((data.entries ?? []) as Array<{ name: string; isDir: boolean; path: string }>)
+          .filter(e => e.isDir)
+          .map(e => e.path)
+          .sort();
+        setMotionSubfolders(dirs);
+      }
+    } catch { /* si falla, simplemente no hay chips */ }
+    finally { setLoadingSubfolders(false); }
   };
 
   const handleCreateProject = async (e: React.FormEvent) => {
@@ -475,7 +498,7 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
           <button 
             className="btn btn-primary glow-card" 
             style={{ padding: '0 20px', height: 42, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => openCreateModal()}
           >
             <Plus size={16} strokeWidth={2.5} /> Crear Proyecto
           </button>
@@ -515,7 +538,7 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
               <button 
                 className="btn btn-ghost" 
                 style={{ fontSize: 12, color: 'var(--accent)' }}
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => openCreateModal()}
               >
                 Crear tu primer proyecto
               </button>
@@ -545,9 +568,19 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
                       transition: 'border-color 0.2s, box-shadow 0.2s',
                       position: 'relative',
                     }}
-                    whileHover={{ 
-                      borderColor: 'var(--accent-dim)',
-                      boxShadow: 'var(--shadow-card), 0 0 10px rgba(14,201,0,0.05)'
+                    onMouseEnter={e => {
+                      const labelColor = getLabelColor(project.colorLabel);
+                      const el = e.currentTarget as HTMLElement;
+                      el.style.border = `1px solid ${labelColor}88`;
+                      el.style.borderLeft = `3px solid ${labelColor}`;
+                      el.style.boxShadow = `0 0 14px ${labelColor}22`;
+                    }}
+                    onMouseLeave={e => {
+                      const labelColor = getLabelColor(project.colorLabel);
+                      const el = e.currentTarget as HTMLElement;
+                      el.style.border = '1px solid var(--border)';
+                      el.style.borderLeft = `3px solid ${labelColor}`;
+                      el.style.boxShadow = '';
                     }}
                   >
                     {/* Click outside handler */}
@@ -562,7 +595,16 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
                       <div style={{ position: 'relative', flexShrink: 0 }}>
                         <div 
                           style={{ cursor: 'pointer', lineHeight: 0 }}
-                          onClick={(e) => { e.stopPropagation(); setLabelPickerFor(labelPickerFor === project.path ? null : project.path); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (labelPickerFor === project.path) {
+                              setLabelPickerFor(null);
+                            } else {
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                              setLabelPickerPos({ x: rect.left, y: rect.bottom + 6, above: rect.bottom + 220 > window.innerHeight });
+                              setLabelPickerFor(project.path);
+                            }
+                          }}
                           title="Click para cambiar etiqueta de color"
                         >
                           <AepIcon color={getLabelColor(project.colorLabel)} size={36} />
@@ -574,10 +616,12 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.9 }}
                             style={{
-                              position: 'absolute',
-                              top: 'calc(100% + 6px)',
-                              left: 0,
-                              zIndex: 200,
+                              position: 'fixed',
+                              top: labelPickerPos.above
+                                ? labelPickerPos.y - (7 * 34 + 40) // aprox altura del menú
+                                : labelPickerPos.y,
+                              left: labelPickerPos.x,
+                              zIndex: 9999,
                               background: 'var(--bg-elevated)',
                               border: '1px solid var(--border)',
                               borderRadius: 10,
@@ -1070,6 +1114,54 @@ export default function AEProjectHub({ navigate, toast }: AEProjectHubProps) {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <label style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontWeight: 500 }}>Directorio de Trabajo</label>
+
+                  {/* Subfolder chips */}
+                  {loadingSubfolders ? (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '6px 0' }}>Cargando carpetas...</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {/* Chip raíz */}
+                      <button
+                        type="button"
+                        onClick={() => setProjectDir(BASE_DIR)}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 20,
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          border: `1px solid ${projectDir === BASE_DIR ? 'var(--accent)' : 'var(--border)'}`,
+                          background: projectDir === BASE_DIR ? 'rgba(14,201,0,0.12)' : 'var(--bg-elevated)',
+                          color: projectDir === BASE_DIR ? 'var(--accent)' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {BASE_DIR.split('\\').pop() || BASE_DIR}
+                      </button>
+                      {motionSubfolders.map(sub => (
+                        <button
+                          key={sub}
+                          type="button"
+                          onClick={() => setProjectDir(sub)}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 20,
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                            border: `1px solid ${projectDir === sub ? 'var(--accent)' : 'var(--border)'}`,
+                            background: projectDir === sub ? 'rgba(14,201,0,0.12)' : 'var(--bg-elevated)',
+                            color: projectDir === sub ? 'var(--accent)' : 'var(--text-secondary)',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {sub.replace(BASE_DIR + '\\', '')}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Path actual editable */}
                   <input
                     type="text"
                     value={projectDir}

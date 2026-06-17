@@ -1,38 +1,53 @@
 {
   "recentProjects": [
     {
+      "path": "E:\\Motion\\AshenOnes\\Tutorial_Motion\\Tutorial_Motion.aep",
+      "name": "Tutorial_Motion.aep",
+      "lastOpened": "2026-06-16T16:41:16.834Z",
+      "colorLabel": "red",
+      "projectFolder": "E:\\Motion\\AshenOnes\\Tutorial_Motion"
+    },
+    {
       "path": "E:\\Motion\\AshenOnes\\HeroScreen_Recruit\\HeroScreen_Recruit.aep",
       "name": "HeroScreen_Recruit.aep",
-      "lastOpened": "2026-05-29T00:15:07.082Z"
+      "lastOpened": "2026-06-16T16:19:32.308Z",
+      "colorLabel": "green",
+      "projectFolder": "E:\\Motion\\AshenOnes\\HeroScreen_Recruit"
     },
     {
       "path": "E:\\Motion\\HeroScreen1\\HeroScreen1.aep",
       "name": "HeroScreen1.aep",
-      "lastOpened": "2026-05-28T23:58:30.057Z"
+      "lastOpened": "2026-05-28T23:58:30.057Z",
+      "colorLabel": "green",
+      "projectFolder": "E:\\Motion\\HeroScreen1"
     },
     {
       "path": "E:\\Motion\\Farm the Tomato\\Farm the Tomato.aep",
       "name": "Farm the Tomato.aep",
       "lastOpened": "2026-05-27T14:28:00.766Z",
-      "projectFolder": "E:\\Motion\\Farm the Tomato"
+      "projectFolder": "E:\\Motion\\Farm the Tomato",
+      "colorLabel": "green"
     },
     {
       "path": "E:\\Motion\\PaLosde30\\PaLosde30.aep",
       "name": "PaLosde30.aep",
       "lastOpened": "2026-05-27T14:26:15.401Z",
-      "projectFolder": "E:\\Motion\\PaLosde30"
+      "projectFolder": "E:\\Motion\\PaLosde30",
+      "colorLabel": "green"
     },
     {
       "path": "E:\\Motion\\End Game test\\End Game test.aep",
       "name": "End Game test.aep",
       "lastOpened": "2026-05-27T05:32:12.637Z",
-      "projectFolder": "E:\\Motion\\End Game test"
+      "projectFolder": "E:\\Motion\\End Game test",
+      "colorLabel": "green"
     },
     {
       "path": "E:\\Motion\\LuminalTest\\LuminalTest.aep",
       "name": "LuminalTest.aep",
       "lastOpened": "2026-05-27T03:52:57.200Z",
-      "projectFolder": "E:\\Motion\\LuminalTest"
+      "projectFolder": "E:\\Motion\\LuminalTest",
+      "colorLabel": "green"
     }
   ],
   "groups": [

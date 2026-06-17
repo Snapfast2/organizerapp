@@ -82,7 +82,7 @@ export function TreeNode({ path, label, Icon, isActive, onNavigate, depth = 0, i
           paddingBottom: 3,
           borderRadius: 5,
           cursor: 'pointer',
-          backgroundColor: isDragOver ? 'rgba(74,222,128,0.2)' : isActive ? 'rgba(74,222,128,0.1)' : 'transparent',
+          backgroundColor: isDragOver ? 'rgba(74,222,128,0.2)' : isActive ? 'rgba(74,222,128,0.1)' : 'rgba(0,0,0,0)',
           position: 'relative',
           userSelect: 'none',
         }}

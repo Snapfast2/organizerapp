@@ -233,27 +233,14 @@ export default function FileOrgApp() {
     }
   };
 
-  // Scroll listener for scroll-to-top button
-  useEffect(() => {
-    const el = fileContentRef.current;
-    if (!el) return;
-    const onScroll = () => setShowScrollTop(el.scrollTop > 300);
-    el.addEventListener('scroll', onScroll);
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
-
-  // Infinite scroll: load more when sentinel becomes visible
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setVisibleCount(prev => prev + 100); },
-      { root: fileContentRef.current, rootMargin: '200px' }
-    );
-    obs.observe(sentinel);
-    return () => obs.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Intentionally empty â€” callback uses only stable setState, sentinel ref checked above
+  // Scroll: scroll-to-top button + infinite scroll — handled directly via onScroll prop in JSX
+  const handleFileContentScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    setShowScrollTop(el.scrollTop > 300);
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 400) {
+      setVisibleCount(prev => prev + 100);
+    }
+  };
 
   // Reset visible count when navigating to a new folder
   useEffect(() => { setVisibleCount(100); }, [currentPath]);
@@ -1150,7 +1137,7 @@ export default function FileOrgApp() {
             setAITagEntries(targets);
           }}
         />
-        <div className="file-content" ref={fileContentRef} onClick={clearSelection}>
+        <div className="file-content" ref={fileContentRef} onScroll={handleFileContentScroll} onClick={clearSelection}>
           {showDuplicates ? (
             <DuplicateView 
               cwd={currentPath} 
@@ -1184,6 +1171,7 @@ export default function FileOrgApp() {
                 onSort={handleSort}
                 onInlineRename={handleInlineRename}
                 onSetInlineRenameEntry={setInlineRenameEntry}
+                sentinelRef={sentinelRef}
               />
             </>
           )}
@@ -1264,7 +1252,7 @@ export default function FileOrgApp() {
                       key={f.name + i}
                       initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                       style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 8px', borderRadius: 8,
-                        background: f.status === 'copying' ? 'var(--accent-dim)' : 'transparent',
+                        background: f.status === 'copying' ? 'var(--accent-dim)' : 'rgba(0,0,0,0)',
                         fontSize: 13 }}
                     >
                       <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span>

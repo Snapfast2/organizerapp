@@ -38,6 +38,7 @@ export interface FileListProps {
   onSort: (field: SortField) => void;
   onInlineRename: (filePath: string, newName: string) => void | Promise<void>;
   onSetInlineRenameEntry: (entry: FileEntry | null) => void;
+  sentinelRef?: React.RefObject<HTMLDivElement>;
 }
 
 const SORT_LABELS: Record<string, string> = { 
@@ -49,7 +50,8 @@ export default function FileList({
   selected, focusedPath, inlineRenameEntry, returningItems, aeLinks,
   sortBy, sortDesc,
   onToggleSelect, onSetFocusedPath, onClickEntry, onContextMenu,
-  onDragStart, onDragOver, onDrop, onSort, onInlineRename, onSetInlineRenameEntry
+  onDragStart, onDragOver, onDrop, onSort, onInlineRename, onSetInlineRenameEntry,
+  sentinelRef,
 }: FileListProps) {
 
   // The renderGridCard function extracted from page.tsx
@@ -78,8 +80,8 @@ export default function FileList({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ 
           opacity: 1, scale: 1, 
-          boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : 'none', 
-          borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'transparent' 
+          boxShadow: isReturning ? '0 0 15px rgba(0,255,100,0.6)' : '0 0 0px rgba(0,0,0,0)', 
+          borderColor: isReturning ? 'rgba(0,255,100,0.8)' : 'rgba(0,0,0,0)' 
         }}
         transition={{ duration: 0.15 }}
       >
@@ -243,6 +245,8 @@ export default function FileList({
           Mostrando {Math.min(visibleCount, totalEntries)} de {totalEntries} — seguí bajando para ver más
         </div>
       )}
+      {/* Sentinel para infinite scroll */}
+      <div ref={sentinelRef} style={{ height: 1 }} />
     </>
   );
 }
